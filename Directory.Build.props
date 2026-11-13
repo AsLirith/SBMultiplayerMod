@@ -1,0 +1,13 @@
+<Project>
+  <PropertyGroup>
+    <!-- Dossier d'installation du jeu. Surchargeable : dotnet build -p:GameDir=/autre/chemin -->
+    <GameDir Condition="'$(GameDir)' == ''">/run/media/aslirith/JeuxSATA/Steam/steamapps/common/STUNTBOOST</GameDir>
+    <GameLibDir>$(GameDir)/libraries</GameLibDir>
+    <!-- Dossier où le mod est déployé après chaque build (pas d'espace : plus simple pour DOTNET_STARTUP_HOOKS) -->
+    <ModDeployDir>$(GameDir)/SBMultiplayer</ModDeployDir>
+
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+</Project>
