@@ -34,7 +34,8 @@ internal static class IngameScenePatch
             }
 
             scene.Add(new DebugProbe(scene));
-            ModLog.Info("Sonde ajoutée à une nouvelle scène de niveau");
+            scene.Add(new Ghosts.DelayedSelfGhost(scene));
+            ModLog.Info("Sonde et ghost retardé ajoutés à une nouvelle scène de niveau");
         }
         catch (Exception e)
         {

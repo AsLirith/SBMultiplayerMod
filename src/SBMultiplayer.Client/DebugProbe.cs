@@ -10,9 +10,7 @@ namespace SBMultiplayer.Client;
 /// </summary>
 internal sealed class DebugProbe : IUpdate, ICheckpointStorage, IGoalReached
 {
-    // Board.GetGhostState() est internal : on passe par un délégué Harmony (rapide, résolu une seule fois).
-    private static readonly Func<Board, GhostState> GetGhostState =
-        AccessTools.MethodDelegate<Func<Board, GhostState>>(AccessTools.Method(typeof(Board), "GetGhostState"));
+    private static readonly Func<Board, GhostState> GetGhostState = Ghosts.GameAccess.GetGhostState;
 
     private readonly Scene scene;
     private Board? board;
