@@ -63,6 +63,8 @@ internal static class MultiplayerMenu
                     close();
                     MultiplayerClient.Instance.SetSpectating(!MultiplayerClient.Instance.IsSpectating);
                 })),
+            Section(Tr.HostSection),
+            BuildHostRow(close),
             Section(Tr.SettingsSection),
             Line(
                 Button(Tr.DisplayTitle, OpenDisplay),
@@ -70,6 +72,39 @@ internal static class MultiplayerMenu
                 Button(Tr.AdminTitle, AdminMenu.Open)),
             Text(Tr.KeysHint(cfg.MenuKey, cfg.RejoinKey, cfg.ChatKey)),
             Button(Tr.Back, close));
+    }
+
+    // ---------- Host a game ----------
+
+    private static Element BuildHostRow(Action close)
+    {
+        if (HostedServer.IsRunning)
+        {
+            var addresses = HostedServer.LocalAddresses().Select(a => $"{a}:{HostedServer.Port}").ToList();
+            return Stack(
+                Text(Tr.HostRunning(HostedServer.Port)),
+                Text(Tr.HostAddresses(addresses.Count > 0 ? string.Join(", ", addresses) : "?", HostedServer.Port)),
+                Button(Tr.HostStop, () =>
+                {
+                    close();
+                    MultiplayerClient.Instance.StopHosting();
+                }));
+        }
+        TextInput port = Input(ModConfig.Current.HostPort.ToString(), 300f, 5);
+        void Host()
+        {
+            if (!int.TryParse(port.Text.Trim(), out int p) || p < 1 || p > 65535)
+            {
+                Notifications.Warn(Tr.HostBadPort);
+                return;
+            }
+            ModConfig.Current.HostPort = p;
+            ModConfig.Save();
+            close();
+            MultiplayerClient.Instance.HostGame(p);
+        }
+        port.OnEnter += () => { Host(); return true; };
+        return Line(Text(Tr.HostPortLabel), Field(port), Button(Tr.HostButton, Host));
     }
 
     // ---------- Display: how other players are shown ----------

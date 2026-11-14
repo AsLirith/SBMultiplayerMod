@@ -8,6 +8,7 @@ Unofficial multiplayer mod for [STUNTBOOST](https://store.steampowered.com/app/2
 
 - **Game modes**: **Free** ride, **Time Attack** (unlimited retries, best time), **Rounds** (synchronized start with a countdown, one attempt per round, points by race time), **Cup** (finalists and match point) and **Elimination** (the slowest players are knocked out each round).
 - **Server settings editable in game** by admins (mode, map rotation, timings, points), optionally saved to the config file.
+- **Host from the game** (F8 > Host a game): you're the admin of your game, no extra program needed.
 - **Dedicated server** (console app, no game needed): map rotation, live leaderboard, results screen, match points, results export (JSON/CSV), optional password.
 - **Other players' ghosts** in real time, smoothly interpolated, with **their own skin** and **their name** when they're close.
 - **Official levels and Workshop maps**: the round's map is loaded automatically (Workshop maps are downloaded if needed), instant retry when you cross the finish line instead of the end screen.
@@ -36,7 +37,7 @@ To uninstall, remove the launch option. The log file is `SBMultiplayer/SBMultipl
 
 ## Hosting a server
 
-See [docs/hosting.md](docs/hosting.md) (firewall, port forwarding, Tailscale…), or grab the server zip from the [releases](../../releases/latest).
+The simplest: **F8 > Host a game** in the game. For a dedicated server, see [docs/hosting.md](docs/hosting.md) (firewall, port forwarding, Tailscale…), or grab the server zip from the [releases](../../releases/latest).
 
 ```sh
 dotnet SBMultiplayer.Server.dll --init-config server.json   # commented template: maps, passwords, durations...

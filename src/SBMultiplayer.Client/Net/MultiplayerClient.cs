@@ -283,8 +283,49 @@ internal sealed class MultiplayerClient : INetEventListener
 
     // ---------- Actions (menu, touches) ----------
 
+    /// <summary>Address used instead of the configured one while hosting a game (127.0.0.1:port), and its admin password.</summary>
+    private string? hostAddress;
+    private string? hostAdminPassword;
+
+    /// <summary>Hosting from F8: starts the in-game server, then connects to it as admin.</summary>
+    public void HostGame(int port)
+    {
+        string? error = HostedServer.Start(port);
+        if (error != null)
+        {
+            Notifications.Warn(Tr.HostFailed(error));
+            return;
+        }
+        hostAddress = $"127.0.0.1:{port}";
+        hostAdminPassword = HostedServer.AdminPassword;
+        ConnectNow();
+        Notifications.Good(Tr.HostStarted(port));
+    }
+
+    public void StopHosting()
+    {
+        if (!HostedServer.IsRunning)
+        {
+            return;
+        }
+        hostAddress = null;
+        hostAdminPassword = null;
+        Disconnect();
+        HostedServer.Stop();
+        Notifications.Info(Tr.HostStopped);
+    }
+
     /// <summary>(Re)connexion avec l'adresse et le pseudo de la configuration.</summary>
     public void Connect()
+    {
+        if (HostedServer.IsRunning)
+        {
+            StopHosting(); // connecting elsewhere ends the hosted game
+        }
+        ConnectNow();
+    }
+
+    private void ConnectNow()
     {
         userDisconnected = false;
         if (server != null)
@@ -475,7 +516,11 @@ internal sealed class MultiplayerClient : INetEventListener
                 };
                 net.Start();
                 // Fermeture du jeu : on prévient le serveur au lieu de le laisser attendre le timeout.
-                AppDomain.CurrentDomain.ProcessExit += (_, _) => net.Stop(sendDisconnectMessages: true);
+                AppDomain.CurrentDomain.ProcessExit += (_, _) =>
+                {
+                    net.Stop(sendDisconnectMessages: true);
+                    HostedServer.Stop();
+                };
             }
 
             playerName = ResolvePlayerName();
@@ -490,7 +535,9 @@ internal sealed class MultiplayerClient : INetEventListener
             {
                 // no save yet (first launch): the skin is sent later by TrackLocalSkin
             }
-            var (host, port) = ModConfig.Current.ParseServer();
+            var (host, port) = hostAddress != null
+                ? (hostAddress[..hostAddress.LastIndexOf(':')], int.Parse(hostAddress[(hostAddress.LastIndexOf(':') + 1)..]))
+                : ModConfig.Current.ParseServer();
             serverAddress = $"{host}:{port}";
             ModLog.Info($"Connexion à {serverAddress} en tant que « {playerName} »…");
             server = net.Connect(host, port, ProtocolInfo.ConnectionData(ModConfig.Current.ServerPassword));
@@ -631,6 +678,11 @@ internal sealed class MultiplayerClient : INetEventListener
                 case MessageType.Welcome:
                 {
                     LocalId = reader.GetInt();
+                    if (hostAdminPassword != null)
+                    {
+                        string pw = hostAdminPassword;
+                        Send(w => Msg.AdminLogin(w, pw), DeliveryMethod.ReliableOrdered); // the host is the admin of its game
+                    }
                     int count = reader.GetInt();
                     Players.Clear();
                     for (int i = 0; i < count; i++)

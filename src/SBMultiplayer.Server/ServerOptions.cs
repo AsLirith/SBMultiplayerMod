@@ -65,13 +65,6 @@ public sealed class ServerOptions
 
     public double EchoDelaySeconds { get; set; } = 2.0;
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() },
-        ReadCommentHandling = JsonCommentHandling.Skip,
-        AllowTrailingCommas = true,
-        PropertyNameCaseInsensitive = true,
-    };
 
     public MatchSettings ToMatchSettings() => new()
     {
@@ -120,7 +113,7 @@ public sealed class ServerOptions
     /// <summary>Writes the current settings to a config file, keeping the comments of the template.</summary>
     public void Save(string path)
     {
-        static string J(object v) => JsonSerializer.Serialize(v);
+        static string J(string v) => JsonSerializer.Serialize(v, ServerJson.Default.String);
         static string N(double v) => v.ToString(System.Globalization.CultureInfo.InvariantCulture);
         string text = Template
             .Replace("\"ServerName\": \"SBMultiplayer server\"", $"\"ServerName\": {J(ServerName)}")
@@ -144,8 +137,9 @@ public sealed class ServerOptions
         File.WriteAllText(path, text);
     }
 
+    /// <summary>Reads a config file (comments and trailing commas allowed). Source-generated JSON: no reflection needed.</summary>
     public static ServerOptions Load(string path) =>
-        JsonSerializer.Deserialize<ServerOptions>(File.ReadAllText(path), JsonOptions)
+        JsonSerializer.Deserialize(File.ReadAllText(path), ServerJson.Default.ServerOptions)
         ?? throw new InvalidDataException($"Empty config file: {path}");
 
     /// <summary>Commented configuration template, written by <c>--init-config</c>.</summary>
@@ -208,4 +202,16 @@ public sealed class ServerOptions
           "ResultsDirectory": "results"
         }
         """;
+}
+
+/// <summary>JSON metadata generated at compile time, so the server also works where reflection-based JSON is disabled.</summary>
+[System.Text.Json.Serialization.JsonSourceGenerationOptions(
+    UseStringEnumConverter = true,
+    ReadCommentHandling = JsonCommentHandling.Skip,
+    AllowTrailingCommas = true,
+    PropertyNameCaseInsensitive = true)]
+[System.Text.Json.Serialization.JsonSerializable(typeof(ServerOptions))]
+[System.Text.Json.Serialization.JsonSerializable(typeof(string))]
+internal partial class ServerJson : System.Text.Json.Serialization.JsonSerializerContext
+{
 }

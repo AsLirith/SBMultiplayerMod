@@ -12,7 +12,7 @@ out=src/SBMultiplayer.Client/bin/Release/net8.0
 
 rm -rf dist/pkg
 mkdir -p dist/pkg/SBMultiplayer
-cp "$out"/{SBMultiplayer.Client.dll,0Harmony.dll,LiteNetLib.dll,SBMultiplayer.Protocol.dll} dist/pkg/SBMultiplayer/
+cp "$out"/{SBMultiplayer.Client.dll,0Harmony.dll,LiteNetLib.dll,SBMultiplayer.Protocol.dll,SBMultiplayer.Server.dll} dist/pkg/SBMultiplayer/
 cp packaging/INSTALL.txt dist/pkg/
 
 python3 -c "import shutil, sys; shutil.make_archive(sys.argv[1], 'zip', 'dist/pkg')" "dist/SBMultiplayer-$version"

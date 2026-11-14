@@ -1174,5 +1174,8 @@ public sealed class GameServer : INetEventListener
         }
     }
 
-    private static void Log(string message) => Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] {message}");
+    /// <summary>Where the server writes its log: the console for the dedicated server, the mod's log when hosted in game.</summary>
+    public static Action<string> LogSink { get; set; } = line => Console.WriteLine(line);
+
+    private static void Log(string message) => LogSink($"[{DateTime.Now:HH:mm:ss}] {message}");
 }

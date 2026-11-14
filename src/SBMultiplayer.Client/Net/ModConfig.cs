@@ -15,6 +15,9 @@ internal sealed class ModConfig
     /// <summary>Pseudo affiché. Vide = pseudo Steam.</summary>
     public string PlayerName { get; set; } = "";
 
+    /// <summary>UDP port used when hosting a game from the F8 menu.</summary>
+    public int HostPort { get; set; } = ProtocolInfo.DefaultPort;
+
     /// <summary>Mot de passe du serveur (vide si le serveur est ouvert).</summary>
     public string ServerPassword { get; set; } = "";
 

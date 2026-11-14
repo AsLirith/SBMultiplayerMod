@@ -252,6 +252,20 @@ internal static class Tr
         T($"SBMultiplayer v{version}: incompatible with this game version, update the mod",
           $"SBMultiplayer v{version} : incompatible avec cette version du jeu, mets le mod à jour");
 
+    // ---------- Héberger une partie ----------
+    public static string HostSection => T("Host a game", "Héberger une partie");
+    public static string HostPortLabel => T("UDP port", "Port UDP");
+    public static string HostButton => T("Host", "Héberger");
+    public static string HostStop => T("Stop hosting", "Arrêter la partie");
+    public static string HostBadPort => T("Invalid port (1-65535)", "Port invalide (1-65535)");
+    public static string HostFailed(string error) => T($"Could not host the game: {error}", $"Impossible d'héberger la partie : {error}");
+    public static string HostStarted(int port) => T($"Your game is hosted on port {port}: you're its admin (F8 > Admin)", $"Ta partie est hébergée sur le port {port} : tu en es l'admin (F8 > Admin)");
+    public static string HostStopped => T("Hosted game stopped", "Partie hébergée arrêtée");
+    public static string HostRunning(int port) => T($"You're hosting a game on UDP port {port}, and you're its admin.", $"Tu héberges une partie sur le port UDP {port}, et tu en es l'admin.");
+    public static string HostAddresses(string local, int port) => T(
+        $"Friends connect to: {local} (local network), or your public IP:{port} (internet, open the port on your router)",
+        $"Tes amis se connectent à : {local} (réseau local), ou ton IP publique:{port} (internet, ouvre le port sur ta box)");
+
     // ---------- Panneau : pause et match ----------
     public static string PausedHeader => T("PAUSED", "PAUSE");
     public static string MatchStandings => T("Match", "Match");
