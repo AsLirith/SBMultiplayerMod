@@ -35,18 +35,24 @@ internal sealed class MultiplayerOverlay
 
         Viewport vp = sb.GraphicsDevice.Viewport;
         float textScale = vp.Height / 1080f * cfg.NameTagScale;
-        var (viewProjection, _) = GameAccess.GetCamera(scene);
+        var (viewProjection, cameraPosition) = GameAccess.GetCamera(scene);
+        // Spectating: our board stays on the start line, so distances are measured from the camera.
+        Vector3 reference = Spectator.IsWatching ? cameraPosition : local;
 
         sb.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp);
         try
         {
             foreach (RemotePlayer p in shownPlayers)
             {
+                if (Spectator.IsWatching && p.Id == Spectator.TargetId)
+                {
+                    continue; // we're looking through their camera: their name would sit in the middle of the screen
+                }
                 if (!p.TryGetPose(extrapolation, out Vector3 pos, out _))
                 {
                     continue;
                 }
-                float distance = Vector3.Distance(pos, local);
+                float distance = Vector3.Distance(pos, reference);
                 if (distance > cfg.NameTagMaxDistance)
                 {
                     continue;

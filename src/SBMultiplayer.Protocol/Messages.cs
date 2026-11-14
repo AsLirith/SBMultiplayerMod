@@ -5,7 +5,7 @@ namespace SBMultiplayer.Protocol;
 public static class ProtocolInfo
 {
     /// <summary>À incrémenter à chaque changement incompatible du format des messages.</summary>
-    public const int Version = 8;
+    public const int Version = 9;
 
     public const int DefaultPort = 24800;
 
@@ -162,6 +162,9 @@ public enum MessageType : byte
 
     /// <summary>S→C (admins) et C→S (admins), fiable. Réglages du match en JSON.</summary>
     Settings = 20,
+
+    /// <summary>C→S (sans id) et S→C (avec id), fiable. Passage en spectateur ou retour dans la partie.</summary>
+    Spectate = 21,
 }
 
 public enum RoundPhase : byte
@@ -260,9 +263,10 @@ public readonly record struct Vec3(float X, float Y, float Z);
 
 /// <param name="Time">Horloge de l'émetteur, en secondes. Seuls les écarts entre deux états comptent.</param>
 /// <param name="Segment">Incrémenté à chaque téléportation (restart, respawn) : pas d'interpolation entre deux segments.</param>
-public readonly record struct PlayerState(double Time, Vec3 Position, Vec3 Orientation, ushort Segment);
+/// <param name="CamPosition">Caméra du joueur (position et pitch/yaw/roll) : les spectateurs voient ce qu'il voit.</param>
+public readonly record struct PlayerState(double Time, Vec3 Position, Vec3 Orientation, ushort Segment, Vec3 CamPosition = default, Vec3 CamOrientation = default);
 
-public readonly record struct PlayerInfo(int Id, string Name, string MapKey, int Skin);
+public readonly record struct PlayerInfo(int Id, string Name, string MapKey, int Skin, bool IsSpectator = false);
 
 /// <summary>Sérialisation des messages. Chaque message commence par son <see cref="MessageType"/>.</summary>
 public static class Msg
@@ -600,10 +604,25 @@ public static class Msg
         Put(w, s.Position);
         Put(w, s.Orientation);
         w.Put(s.Segment);
+        Put(w, s.CamPosition);
+        Put(w, s.CamOrientation);
     }
 
     public static PlayerState GetState(NetDataReader r) =>
-        new(r.GetDouble(), GetVec3(r), GetVec3(r), r.GetUShort());
+        new(r.GetDouble(), GetVec3(r), GetVec3(r), r.GetUShort(), GetVec3(r), GetVec3(r));
+
+    /// <summary>C→S (sans id) et S→C (avec id), fiable : le joueur passe spectateur, ou revient dans la partie.</summary>
+    public static NetDataWriter Spectate(NetDataWriter w, int? id, bool spectating)
+    {
+        w.Reset();
+        w.Put((byte)MessageType.Spectate);
+        if (id.HasValue)
+        {
+            w.Put(id.Value);
+        }
+        w.Put(spectating);
+        return w;
+    }
 
     public static void Put(NetDataWriter w, in PlayerInfo p)
     {
@@ -611,10 +630,11 @@ public static class Msg
         w.Put(p.Name);
         w.Put(p.MapKey);
         w.Put(p.Skin);
+        w.Put(p.IsSpectator);
     }
 
     public static PlayerInfo GetPlayerInfo(NetDataReader r) =>
-        new(r.GetInt(), r.GetString(ProtocolInfo.MaxNameLength * 4), r.GetString(256), r.GetInt());
+        new(r.GetInt(), r.GetString(ProtocolInfo.MaxNameLength * 4), r.GetString(256), r.GetInt(), r.GetBool());
 
     private static void Put(NetDataWriter w, in Vec3 v)
     {

@@ -35,6 +35,7 @@ internal sealed class RemotePlayer : IGhostPoseSource
         Name = info.Name;
         mapKey = info.MapKey;
         Skin = info.Skin;
+        IsSpectator = info.IsSpectator;
     }
 
     /// <summary>Skin de planche du joueur (id du jeu). Modifié par le thread réseau.</summary>
@@ -89,7 +90,9 @@ internal sealed class RemotePlayer : IGhostPoseSource
             buffer.Add(new Snapshot(s.Time,
                 new Vector3(s.Position.X, s.Position.Y, s.Position.Z),
                 new Vector3(s.Orientation.X, s.Orientation.Y, s.Orientation.Z),
-                s.Segment));
+                s.Segment,
+                new Vector3(s.CamPosition.X, s.CamPosition.Y, s.CamPosition.Z),
+                new Vector3(s.CamOrientation.X, s.CamOrientation.Y, s.CamOrientation.Z)));
         }
     }
 
@@ -107,4 +110,22 @@ internal sealed class RemotePlayer : IGhostPoseSource
             return buffer.TrySample(remoteTime, out position, out orientation);
         }
     }
+
+    /// <summary>The player's own camera, interpolated like their board (spectators see what they see).</summary>
+    public bool TryGetCamera(out Vector3 position, out Vector3 orientation)
+    {
+        lock (gate)
+        {
+            if (clockOffset is not double offset)
+            {
+                position = default;
+                orientation = default;
+                return false;
+            }
+            return buffer.TrySampleCamera(NetClock.Now - offset - InterpolationDelay, out position, out orientation);
+        }
+    }
+
+    /// <summary>The player is spectating: no ghost, can't be followed. Written by the network thread.</summary>
+    public volatile bool IsSpectator;
 }

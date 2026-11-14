@@ -31,6 +31,13 @@ internal static class GameAccess
     private static readonly MethodInfo DepsCamera = AccessTools.PropertyGetter(DepsType, "camera");
     private static readonly MethodInfo DepsProjection = AccessTools.PropertyGetter(DepsType, "projection");
 
+    /// <summary>The level scene's camera stack (the last camera of the list is the one shown).</summary>
+    public static IngameCameras? GetIngameCameras(Scene scene)
+    {
+        object? deps = Scene3DType.IsInstanceOfType(scene) ? SceneDeps.GetValue(scene) : null;
+        return deps == null ? null : DepsCamera.Invoke(deps, null) as IngameCameras;
+    }
+
     /// <summary>Matrice vue × projection et position de la caméra de la scène.</summary>
     public static (Matrix ViewProjection, Vector3 CameraPosition) GetCamera(Scene scene)
     {

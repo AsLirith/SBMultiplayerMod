@@ -99,6 +99,11 @@ internal static class StartGate
     /// </summary>
     public static bool AllowPopupUpdate(Action release)
     {
+        if (Spectator.IsWatching && CheckpointManager is { IsInFirstCheckpoint: true })
+        {
+            lastHeldTick = tick;
+            return false; // spectating or eliminated: stay frozen on the start line, in every mode
+        }
         if (!Applies || CheckpointManager is not { IsInFirstCheckpoint: true })
         {
             return true; // Time Attack, other map, or respawn at a checkpoint: normal behaviour
@@ -156,7 +161,7 @@ internal static class StartGate
     {
         tick++;
         RoundInfo info = client.Round.Current.Info;
-        if (Applies && info.Phase == RoundPhase.Preparing && IsHeldOnStartLine && readySentFor != info.RoundId && !IsEliminated)
+        if (Applies && info.Phase == RoundPhase.Preparing && IsHeldOnStartLine && readySentFor != info.RoundId && !IsEliminated && !client.IsSpectating)
         {
             readySentFor = info.RoundId;
             client.SendReady(info.RoundId);

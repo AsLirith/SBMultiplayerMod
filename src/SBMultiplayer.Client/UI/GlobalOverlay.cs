@@ -42,7 +42,11 @@ internal sealed class GlobalOverlay : SE.IDrawBatch2
                 {
                     DrawChat(sb, vp, scale); // also when disconnected: connection errors stay visible
                 }
-                if (MultiplayerClient.Instance.IsReady && StartGate.Applies)
+                if (Spectator.IsWatching && GameAccess.IsIngameScene(GameAccess.CurrentScene))
+                {
+                    DrawSpectatorBanner(sb, vp, scale);
+                }
+                else if (MultiplayerClient.Instance.IsReady && StartGate.Applies)
                 {
                     DrawStartStatus(sb, vp, scale);
                 }
@@ -71,6 +75,17 @@ internal sealed class GlobalOverlay : SE.IDrawBatch2
         {
             text.DrawCentered(sb, item.Text, vp.Width / 2f, ref y, item.Color, s, alpha);
         }
+    }
+
+    /// <summary>Spectator / eliminated: who we follow and the controls, at the bottom of the screen.</summary>
+    private void DrawSpectatorBanner(SpriteBatch sb, Viewport vp, float scale)
+    {
+        float s = scale * 0.75f;
+        float y = vp.Height * 0.86f;
+        string title = StartGate.IsEliminated ? Tr.EliminatedTag.ToUpperInvariant() : Tr.SpectatorTitle;
+        string? name = Spectator.Target?.Name;
+        text.DrawCentered(sb, name != null ? $"{title} - {Tr.Following(name)}" : $"{title} - {Tr.NobodyToFollow}", vp.Width / 2f, ref y, Color.White, s);
+        text.DrawCentered(sb, Tr.SpectatorKeys, vp.Width / 2f, ref y, Color.LightGray, s * 0.8f);
     }
 
     /// <summary>Rounds mode: waiting for players, countdown, "GO!", or why we're waiting on the start line.</summary>

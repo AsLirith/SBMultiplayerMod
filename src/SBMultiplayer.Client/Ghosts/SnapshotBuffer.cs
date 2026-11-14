@@ -10,7 +10,9 @@ namespace SBMultiplayer.Client.Ghosts;
 /// <param name="Orientation">(pitch, yaw, roll) comme <c>SE.GhostState.Orientation</c>.</param>
 /// <param name="Segment">Incrémenté à chaque téléportation (restart, respawn) : on n'interpole jamais entre deux segments.
 /// Plus robuste qu'un simple drapeau quand des paquets se perdent ou arrivent dans le désordre.</param>
-internal readonly record struct Snapshot(double Time, Vector3 Position, Vector3 Orientation, ushort Segment);
+/// <param name="CamPosition">Camera of the player (position, pitch/yaw/roll), for spectators following them.</param>
+internal readonly record struct Snapshot(double Time, Vector3 Position, Vector3 Orientation, ushort Segment,
+    Vector3 CamPosition = default, Vector3 CamOrientation = default);
 
 /// <summary>
 /// Tampon d'états horodatés, triés par temps, avec interpolation.
@@ -59,8 +61,15 @@ internal sealed class SnapshotBuffer
 
     public void Clear() => snapshots.Clear();
 
-    /// <summary>État interpolé au temps demandé. Hors des bornes, on garde l'état le plus proche.</summary>
-    public bool TrySample(double time, out Vector3 position, out Vector3 orientation)
+    /// <summary>État interpolé de la planche au temps demandé. Hors des bornes, on garde l'état le plus proche.</summary>
+    public bool TrySample(double time, out Vector3 position, out Vector3 orientation) =>
+        TrySample(time, static s => (s.Position, s.Orientation), out position, out orientation);
+
+    /// <summary>Caméra du joueur interpolée au temps demandé (vue des spectateurs).</summary>
+    public bool TrySampleCamera(double time, out Vector3 position, out Vector3 orientation) =>
+        TrySample(time, static s => (s.CamPosition, s.CamOrientation), out position, out orientation);
+
+    private bool TrySample(double time, Func<Snapshot, (Vector3 Position, Vector3 Orientation)> pick, out Vector3 position, out Vector3 orientation)
     {
         position = default;
         orientation = default;
@@ -71,12 +80,12 @@ internal sealed class SnapshotBuffer
 
         if (time <= snapshots[0].Time)
         {
-            (position, orientation) = (snapshots[0].Position, snapshots[0].Orientation);
+            (position, orientation) = pick(snapshots[0]);
             return true;
         }
         if (time >= snapshots[^1].Time)
         {
-            (position, orientation) = (snapshots[^1].Position, snapshots[^1].Orientation);
+            (position, orientation) = pick(snapshots[^1]);
             return true;
         }
 
@@ -88,16 +97,16 @@ internal sealed class SnapshotBuffer
         }
         Snapshot a = snapshots[bi - 1];
         Snapshot b = snapshots[bi];
-
+        var (pa, ra) = pick(a);
         if (a.Segment != b.Segment)
         {
-            (position, orientation) = (a.Position, a.Orientation);
+            (position, orientation) = (pa, ra);
             return true;
         }
-
+        var (pb, rb) = pick(b);
         float t = (float)((time - a.Time) / (b.Time - a.Time));
-        position = Vector3.Lerp(a.Position, b.Position, t);
-        orientation = Vector3Extension.LerpRotation(a.Orientation, b.Orientation, t);
+        position = Vector3.Lerp(pa, pb, t);
+        orientation = Vector3Extension.LerpRotation(ra, rb, t);
         return true;
     }
 }

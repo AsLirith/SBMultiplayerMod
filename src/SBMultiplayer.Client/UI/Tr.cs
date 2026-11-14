@@ -220,6 +220,18 @@ internal static class Tr
         _ => "",
     };
 
+    // ---------- Spectateur ----------
+    public static string SpectateButton => T("Spectate", "Spectateur");
+    public static string PlayButton => T("Play again", "Rejouer");
+    public static string YouAreSpectating => T("You're spectating: invisible to the others, not counted in rounds", "Tu es spectateur : invisible pour les autres, hors des manches");
+    public static string YouAreBackInGame => T("You're back in the game", "Tu es de retour dans la partie");
+    public static string PlayerSpectating(string name) => T($"{name} is spectating", $"{name} est spectateur");
+    public static string PlayerBackInGame(string name) => T($"{name} is back in the game", $"{name} est de retour dans la partie");
+    public static string SpectatorTitle => T("SPECTATOR", "SPECTATEUR");
+    public static string Following(string name) => T($"following {name}", $"suit {name}");
+    public static string NobodyToFollow => T("nobody to follow on this map", "personne à suivre sur cette map");
+    public static string SpectatorKeys => T("Left / Right: change player    F: free camera", "Gauche / Droite : changer de joueur    F : caméra libre");
+
     // ---------- Panneau : pause et match ----------
     public static string PausedHeader => T("PAUSED", "PAUSE");
     public static string MatchStandings => T("Match", "Match");

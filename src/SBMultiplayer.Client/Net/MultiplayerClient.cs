@@ -80,6 +80,28 @@ internal sealed class MultiplayerClient : INetEventListener
 
     public bool IsUserDisconnected => userDisconnected;
 
+    /// <summary>Spectator by choice (F8): invisible to the others, not counted in rounds.</summary>
+    public bool IsSpectating { get; private set; }
+
+    public void SetSpectating(bool spectating)
+    {
+        if (spectating == IsSpectating)
+        {
+            return;
+        }
+        IsSpectating = spectating;
+        if (IsReady)
+        {
+            Send(w => Msg.Spectate(w, null, spectating), DeliveryMethod.ReliableOrdered);
+        }
+        Notifications.Info(spectating ? Tr.YouAreSpectating : Tr.YouAreBackInGame);
+        // Back to the start line: frozen there while spectating, fresh run when coming back.
+        if (GameAccess.IsIngameScene(GameAccess.CurrentScene))
+        {
+            GameAccess.RetryCurrentLevel();
+        }
+    }
+
     /// <summary>Connecté en admin sur ce serveur.</summary>
     public bool IsAdmin { get; private set; }
 
@@ -179,6 +201,17 @@ internal sealed class MultiplayerClient : INetEventListener
         if (Pressed(keys, ModConfig.Current.RejoinKey))
         {
             RejoinRound();
+        }
+        if (Spectator.IsWatching)
+        {
+            if (Pressed(keys, "Right"))
+            {
+                Spectator.Cycle(+1);
+            }
+            if (Pressed(keys, "Left"))
+            {
+                Spectator.Cycle(-1);
+            }
         }
         previousKeys = keys;
     }
@@ -480,7 +513,7 @@ internal sealed class MultiplayerClient : INetEventListener
 
     public void SendState(in PlayerState state)
     {
-        if (IsReady)
+        if (IsReady && !IsSpectating)
         {
             PlayerState s = state;
             Send(w => Msg.State(w, null, s), DeliveryMethod.Unreliable);
@@ -590,6 +623,10 @@ internal sealed class MultiplayerClient : INetEventListener
                     {
                         Send(w => Msg.MapChanged(w, null, mapKey), DeliveryMethod.ReliableOrdered);
                     }
+                    if (IsSpectating)
+                    {
+                        Send(w => Msg.Spectate(w, null, true), DeliveryMethod.ReliableOrdered);
+                    }
                     break;
                 }
                 case MessageType.PlayerJoined:
@@ -613,6 +650,17 @@ internal sealed class MultiplayerClient : INetEventListener
                     {
                         p.SetMap(key);
                         ModLog.Info($"{p.Name} (#{id}) → {(key == "" ? "menu" : key)}");
+                    }
+                    break;
+                }
+                case MessageType.Spectate:
+                {
+                    int id = reader.GetInt();
+                    bool spectating = reader.GetBool();
+                    if (Players.TryGetValue(id, out RemotePlayer? p))
+                    {
+                        p.IsSpectator = spectating;
+                        Notifications.Info(spectating ? Tr.PlayerSpectating(p.Name) : Tr.PlayerBackInGame(p.Name));
                     }
                     break;
                 }

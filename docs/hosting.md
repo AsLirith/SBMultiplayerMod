@@ -63,6 +63,10 @@ A player's current map key (e.g. `o:1:2001`) is shown in the server console when
 - **Cup**: like Rounds, but reaching `CupPointsLimit` points makes you a **finalist** (your points stop there). A finalist who wins a round **wins the cup**. Then a new match starts.
 - **Elimination**: like Rounds, but each round the last `EliminatedPerRound` players are **eliminated** (players who gave up count as last, and at least one player always survives). Eliminated players watch the others from the start line. The last player standing wins, then a new match starts.
 
+## Spectators
+
+Players can spectate from the F8 menu ("Spectate"): they stay frozen on the start line, are invisible to the others, aren't waited for or counted in rounds, and their times don't count. They watch through the followed player's own camera (Left / Right to switch player) or the game's free camera (F). In Elimination mode, eliminated players spectate automatically. Useful for casters and organizers.
+
 ## Changing the settings in game
 
 Admins can change the match settings without restarting the server: **F8 > Admin**, then:

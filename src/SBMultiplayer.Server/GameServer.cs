@@ -29,7 +29,11 @@ public sealed class GameServer : INetEventListener
         public bool HasSaidHello { get; set; }
         public int Skin { get; set; }
         public bool IsAdmin { get; set; }
-        public PlayerInfo Info => new(Id, Name, MapKey, Skin);
+        public bool IsSpectator { get; set; }
+        public PlayerInfo Info => new(Id, Name, MapKey, Skin, IsSpectator);
+
+        /// <summary>Takes part in rounds: connected, not spectating.</summary>
+        public bool IsPlaying => HasSaidHello && !IsSpectator;
         public Queue<double> RecentChat { get; } = new();
     }
 
@@ -201,7 +205,7 @@ public sealed class GameServer : INetEventListener
         else if (phase == RoundPhase.Preparing)
         {
             // Everyone on the start line (or waited long enough): countdown, then start.
-            int connected = players.Values.Count(p => p.HasSaidHello && !eliminated.Contains(p.Name));
+            int connected = players.Values.Count(p => p.IsPlaying && !eliminated.Contains(p.Name));
             if ((ready.Count >= connected && ready.Count > 0) || Now >= phaseEnd)
             {
                 BeginCountdown();
@@ -307,13 +311,34 @@ public sealed class GameServer : INetEventListener
     private void OnReady(Player p, int readyRoundId)
     {
         if (!IsRoundsMode || readyRoundId != roundId || phase != RoundPhase.Preparing || !Msg.MapMatches(p.MapKey, CurrentMap)
-            || eliminated.Contains(p.Name))
+            || eliminated.Contains(p.Name) || p.IsSpectator)
         {
             return;
         }
         if (ready.Add(p.Id))
         {
             BroadcastRound(); // updates the "ready x/y" counter
+        }
+    }
+
+    /// <summary>A player becomes a spectator (or comes back): out of the ready wait and the current race.</summary>
+    private void OnSpectate(Player p, bool spectating)
+    {
+        if (p.IsSpectator == spectating)
+        {
+            return;
+        }
+        p.IsSpectator = spectating;
+        if (spectating)
+        {
+            ready.Remove(p.Id);
+            participants.Remove(p.Id); // the round doesn't wait for them anymore
+        }
+        Log($"{p.Name} {(spectating ? "is now spectating" : "is back in the game")}");
+        Broadcast(Msg.Spectate(writer, p.Id, spectating), DeliveryMethod.ReliableOrdered, except: p);
+        if (phase != RoundPhase.Free)
+        {
+            BroadcastRound(); // ready x/y counters
         }
     }
 
@@ -438,7 +463,7 @@ public sealed class GameServer : INetEventListener
             BroadcastEvent(ServerEvents.Eliminated, string.Join(", ", out_));
         }
 
-        var remaining = players.Values.Where(p => p.HasSaidHello && !eliminated.Contains(p.Name)).ToList();
+        var remaining = players.Values.Where(p => p.IsPlaying && !eliminated.Contains(p.Name)).ToList();
         if (remaining.Count <= 1 && !matchOver)
         {
             matchOver = true;
@@ -465,7 +490,7 @@ public sealed class GameServer : INetEventListener
             RoundInMap: roundInMap,
             RoundsPerMap: IsRoundsMode ? Math.Max(1, options.RoundsPerMap) : 1,
             ReadyCount: ready.Count,
-            PlayerCount: players.Values.Count(p => p.HasSaidHello && !eliminated.Contains(p.Name)),
+            PlayerCount: players.Values.Count(p => p.IsPlaying && !eliminated.Contains(p.Name)),
             PointsLimit: options.Mode == GameMode.Cup ? options.CupPointsLimit : 0);
 
     private void BroadcastRound() => Broadcast(Msg.Round(writer, CurrentRoundInfo()), DeliveryMethod.ReliableOrdered, except: null);
@@ -491,6 +516,10 @@ public sealed class GameServer : INetEventListener
         if (phase != RoundPhase.Playing || finishRoundId != roundId)
         {
             reject = "outside of a round";
+        }
+        else if (p.IsSpectator)
+        {
+            reject = "spectating";
         }
         else if (IsRoundsMode && (!participants.Contains(p.Id) || gaveUp.Contains(p.Id) || best.ContainsKey(p.Id)))
         {
@@ -1013,6 +1042,9 @@ public sealed class GameServer : INetEventListener
                 case MessageType.GiveUp:
                     OnGiveUp(p, reader.GetInt());
                     break;
+                case MessageType.Spectate:
+                    OnSpectate(p, reader.GetBool());
+                    break;
                 case MessageType.Settings:
                 {
                     var (settings, save) = Msg.GetSettings(reader);
@@ -1089,6 +1121,10 @@ public sealed class GameServer : INetEventListener
     private void OnState(Player p, PlayerState state)
     {
         // Everyone receives every state; clients only show players on their own map.
+        if (p.IsSpectator)
+        {
+            return; // spectators are invisible
+        }
         Broadcast(Msg.State(writer, p.Id, state), DeliveryMethod.Unreliable, except: p);
         if (options.Echo)
         {

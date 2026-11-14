@@ -79,7 +79,9 @@ internal sealed class MultiplayerSceneHook : IUpdate, ICheckpointStorage, IGoalR
             client.SendState(new PlayerState(NetClock.Now,
                 new Vec3(s.Position.X, s.Position.Y, s.Position.Z),
                 new Vec3(s.Orientation.X, s.Orientation.Y, s.Orientation.Z),
-                segment));
+                segment,
+                new Vec3(s.CamPosition.X, s.CamPosition.Y, s.CamPosition.Z),
+                new Vec3(s.CamOrientation.X, s.CamOrientation.Y, s.CamOrientation.Z)));
         }
 
         SyncGhosts();
@@ -90,7 +92,7 @@ internal sealed class MultiplayerSceneHook : IUpdate, ICheckpointStorage, IGoalR
     {
         foreach (RemotePlayer p in client.Players.Values)
         {
-            bool shouldShow = UI.ModSettings.ShowOtherPlayers.Value && p.MapKey == mapKey;
+            bool shouldShow = UI.ModSettings.ShowOtherPlayers.Value && p.MapKey == mapKey && !p.IsSpectator;
             bool shown = ghosts.TryGetValue(p.Id, out var entry) && ReferenceEquals(entry.Player, p);
             if (shouldShow && !shown)
             {
@@ -164,6 +166,7 @@ internal sealed class MultiplayerSceneHook : IUpdate, ICheckpointStorage, IGoalR
             // Les autres joueurs sont aussi visibles pendant l'attente du départ.
             SyncGhosts();
         }
+        Spectator.Sync(scene); // spectator camera on top of the scene's cameras (also under the start-line popup)
         try
         {
             overlay.Draw(spriteBatch, scene, board == null ? null : localPosition, ghosts.Values.Select(g => g.Player), extrapolation);

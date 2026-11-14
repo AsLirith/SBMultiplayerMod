@@ -57,6 +57,11 @@ internal static class MultiplayerMenu
                 {
                     close();
                     MultiplayerClient.Instance.RejoinRound();
+                }),
+                Button(MultiplayerClient.Instance.IsSpectating ? Tr.PlayButton : Tr.SpectateButton, () =>
+                {
+                    close();
+                    MultiplayerClient.Instance.SetSpectating(!MultiplayerClient.Instance.IsSpectating);
                 })),
             Section(Tr.SettingsSection),
             Line(
