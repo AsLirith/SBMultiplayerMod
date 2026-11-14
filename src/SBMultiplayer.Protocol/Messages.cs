@@ -295,7 +295,7 @@ public readonly record struct HideSeekInfo(int RoundId, int[] Hunters, int[] Mic
 /// <summary>Hide and Seek rules shared by the server and the clients.</summary>
 public static class HideSeekRules
 {
-    /// <summary>Maximum distance between the hunter's board and a mouse to find it, in game units (cm; the player is ~1 cm tall).</summary>
+    /// <summary>Maximum distance between the hunter's board and a mouse to find it, in game units (the game's \"cm\": 1 unit = 1 board length, the player is about as tall).</summary>
     public const float TagRange = 15;
 
     /// <summary>
@@ -305,10 +305,10 @@ public static class HideSeekRules
     public const float AimTolerance = 2.5f;
 
     /// <summary>
-    /// Server check on the last known positions: much more generous, since a fast hunter moves tens of cm
-    /// between two states (30 per second) and the positions arrive with latency.
+    /// Server check on the last known positions, with a margin for latency: speeds are a few tens of units
+    /// per second (1 unit = 1 board length), so a hunter moves at most a few units between its last state and the click.
     /// </summary>
-    public const float ServerTagRange = 150;
+    public const float ServerTagRange = TagRange + 25;
 
     /// <summary>A mouse still in the air this long after the hiding time is frozen anyway.</summary>
     public const double MaxAirSecondsBeforeFreeze = 5;

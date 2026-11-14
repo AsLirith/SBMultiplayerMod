@@ -13,7 +13,7 @@ Line numbers refer to `_decompiled/STUNTBOOST/SE/` and change with every game up
 | Size | `STUNTBOOST.dll` ≈ 121k lines, `BytingLib.dll` ≈ 48k lines |
 | Obfuscation | None |
 | Tick | Fixed **60 Hz** (`Program.cs`: `new TargetGameSpeed(1.0 / 60.0, ...)`) |
-| World scale | 1 unit = 1 cm (the game displays speeds in "cm/s" = units per tick × 60; the player is ≈ 1.3 units tall) |
+| World scale | 1 unit = the game's "cm" = one board length (measured: 15 boards in 3 s at 5 cm/s; speeds are shown in "cm/s" = units per tick × 60; the player is about 1 unit tall) |
 | Steam | `Steamworks.NET`; no use of `SteamNetworking` / `SteamMatchmaking` |
 
 ## Loading the mod
