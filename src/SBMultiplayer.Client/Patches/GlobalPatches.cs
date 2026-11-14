@@ -60,3 +60,21 @@ internal static class LevelFinishedPatch
         return true;
     }
 }
+
+/// <summary>
+/// The game lists what disqualifies a run from the official leaderboards (shown in the "modded" notice in the
+/// top-left corner). It detects our Harmony library as "mod: 0Harmony": we show the mod's name and version instead.
+/// The list stays non-empty, so runs are still never uploaded.
+/// </summary>
+[HarmonyPatch(typeof(RunUploadBlockers), nameof(RunUploadBlockers.GetReasons))]
+internal static class ModdedNoticePatch
+{
+    private static void Postfix(List<string> __result)
+    {
+        int index = __result.IndexOf("mod: 0Harmony");
+        if (index >= 0)
+        {
+            __result[index] = $"mod: SBMultiplayer v{SBMultiplayer.Client.UI.MultiplayerMenu.Version}";
+        }
+    }
+}
