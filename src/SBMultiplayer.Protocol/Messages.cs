@@ -5,7 +5,7 @@ namespace SBMultiplayer.Protocol;
 public static class ProtocolInfo
 {
     /// <summary>À incrémenter à chaque changement incompatible du format des messages.</summary>
-    public const int Version = 1;
+    public const int Version = 2;
 
     public const int DefaultPort = 24800;
 
@@ -34,7 +34,34 @@ public enum MessageType : byte
 
     /// <summary>C→S (sans id) et S→C (avec id), non fiable. Position de la planche.</summary>
     State = 6,
+
+    /// <summary>S→C, fiable. Round en cours : map imposée, phase, temps restant.</summary>
+    RoundInfo = 7,
+
+    /// <summary>C→S, fiable. Arrivée franchie pendant un round.</summary>
+    Finish = 8,
+
+    /// <summary>S→C, fiable. Classement du round (meilleur temps de chacun).</summary>
+    Leaderboard = 9,
 }
+
+public enum RoundPhase : byte
+{
+    /// <summary>Pas de rounds : chacun roule où il veut (serveur sans liste de maps).</summary>
+    Free = 0,
+
+    /// <summary>Round en cours sur la map imposée.</summary>
+    Playing = 1,
+
+    /// <summary>Round terminé : affichage des résultats avant la map suivante.</summary>
+    Results = 2,
+}
+
+/// <param name="MapKey">Map imposée ("o:&lt;id&gt;" ou "o:&lt;id&gt;:&lt;version&gt;"), "" en phase Free.</param>
+/// <param name="RemainingSeconds">Temps restant dans la phase, au moment de l'envoi.</param>
+public readonly record struct RoundInfo(int RoundId, string MapKey, RoundPhase Phase, float RemainingSeconds, int MapIndex, int MapCount);
+
+public readonly record struct LeaderboardEntry(int PlayerId, string Name, uint BestMs);
 
 public readonly record struct Vec3(float X, float Y, float Z);
 
@@ -107,6 +134,64 @@ public static class Msg
         Put(w, s);
         return w;
     }
+
+    public static NetDataWriter Round(NetDataWriter w, in RoundInfo r)
+    {
+        w.Reset();
+        w.Put((byte)MessageType.RoundInfo);
+        w.Put(r.RoundId);
+        w.Put(r.MapKey);
+        w.Put((byte)r.Phase);
+        w.Put(r.RemainingSeconds);
+        w.Put(r.MapIndex);
+        w.Put(r.MapCount);
+        return w;
+    }
+
+    public static RoundInfo GetRound(NetDataReader r) =>
+        new(r.GetInt(), r.GetString(256), (RoundPhase)r.GetByte(), r.GetFloat(), r.GetInt(), r.GetInt());
+
+    public static NetDataWriter Finish(NetDataWriter w, int roundId, uint timeMs)
+    {
+        w.Reset();
+        w.Put((byte)MessageType.Finish);
+        w.Put(roundId);
+        w.Put(timeMs);
+        return w;
+    }
+
+    public static NetDataWriter Leaderboard(NetDataWriter w, int roundId, IReadOnlyCollection<LeaderboardEntry> entries)
+    {
+        w.Reset();
+        w.Put((byte)MessageType.Leaderboard);
+        w.Put(roundId);
+        w.Put(entries.Count);
+        foreach (LeaderboardEntry e in entries)
+        {
+            w.Put(e.PlayerId);
+            w.Put(e.Name);
+            w.Put(e.BestMs);
+        }
+        return w;
+    }
+
+    public static (int RoundId, List<LeaderboardEntry> Entries) GetLeaderboard(NetDataReader r)
+    {
+        int roundId = r.GetInt();
+        int count = Math.Clamp(r.GetInt(), 0, 256);
+        var list = new List<LeaderboardEntry>(count);
+        for (int i = 0; i < count; i++)
+        {
+            list.Add(new LeaderboardEntry(r.GetInt(), r.GetString(ProtocolInfo.MaxNameLength * 4), r.GetUInt()));
+        }
+        return (roundId, list);
+    }
+
+    /// <summary>Vrai si la map d'un joueur ("o:1:2001") correspond à l'entrée de rotation ("o:1" ou "o:1:2001").</summary>
+    public static bool MapMatches(string playerMapKey, string roundMapKey) =>
+        roundMapKey.Length > 0 && (playerMapKey == roundMapKey || playerMapKey.StartsWith(roundMapKey + ":", StringComparison.Ordinal));
+
+    public static string FormatTime(uint ms) => $"{ms / 60000}:{ms / 1000 % 60:00}.{ms % 1000:000}";
 
     public static void Put(NetDataWriter w, in PlayerState s)
     {

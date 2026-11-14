@@ -11,7 +11,7 @@ namespace SBMultiplayer.Client.Net;
 /// Ajouté à chaque scène de niveau. Envoie l'état de notre planche et affiche un ghost
 /// pour chaque joueur distant présent sur la même map.
 /// </summary>
-internal sealed class MultiplayerSceneHook : IUpdate, ICheckpointStorage, IDisposable
+internal sealed class MultiplayerSceneHook : IUpdate, ICheckpointStorage, IGoalReached, IDrawBatch, IDisposable
 {
     /// <summary>Un envoi tous les 2 ticks = 30 états par seconde.</summary>
     private const int SendEveryTicks = 2;
@@ -31,31 +31,48 @@ internal sealed class MultiplayerSceneHook : IUpdate, ICheckpointStorage, IDispo
     private int tick;
     private ushort segment;
     private bool disposed;
+    private Microsoft.Xna.Framework.Vector3 localPosition;
+    private readonly MultiplayerOverlay overlay = new();
 
     public MultiplayerSceneHook(Scene scene)
     {
         this.scene = scene;
     }
 
-    public void Update()
+    /// <summary>
+    /// Trouve la planche du joueur et déclare la map au serveur. Appelé depuis Update ET DrawBatch :
+    /// pendant l'intro ou l'attente du départ, la scène est dessinée avant sa première mise à jour.
+    /// </summary>
+    [System.Diagnostics.CodeAnalysis.MemberNotNullWhen(true, nameof(board))]
+    private bool EnsureBoard()
     {
-        client.EnsureConnected();
-
+        if (board != null)
+        {
+            return true;
+        }
+        board = scene.AllThings.OfType<Board>().FirstOrDefault();
         if (board == null)
         {
-            board = scene.AllThings.OfType<Board>().FirstOrDefault();
-            if (board == null)
-            {
-                return;
-            }
-            mapKey = ComputeMapKey(board);
-            client.SetMap(this, mapKey);
+            return false;
+        }
+        mapKey = ComputeMapKey(board);
+        localPosition = GameAccess.GetGhostState(board).Position;
+        client.SetMap(this, mapKey);
+        return true;
+    }
+
+    public void Update()
+    {
+        if (!EnsureBoard())
+        {
+            return;
         }
 
         tick++;
         if (tick % SendEveryTicks == 0)
         {
             GhostState s = GameAccess.GetGhostState(board);
+            localPosition = s.Position;
             client.SendState(new PlayerState(NetClock.Now,
                 new Vec3(s.Position.X, s.Position.Y, s.Position.Z),
                 new Vec3(s.Orientation.X, s.Orientation.Y, s.Orientation.Z),
@@ -110,6 +127,48 @@ internal sealed class MultiplayerSceneHook : IUpdate, ICheckpointStorage, IDispo
 
     public void StoreCheckpoint(ICheckpointInfo checkpointInfo)
     {
+    }
+
+    public void GoalReached()
+    {
+        // Le jeu ajuste le chrono (fraction de tick) juste APRÈS avoir prévenu les IGoalReached, puis
+        // arrête de mettre la scène à jour : on confie la lecture du temps final au tick global,
+        // qui s'exécute à la fin de ce même tick.
+        var round = client.Round.Current;
+        LevelTimer? timer = scene.AllThings.OfType<LevelTimer>().FirstOrDefault();
+        ModLog.Info($"Arrivée détectée (round {round.Info.RoundId}, {round.Info.Phase}, sur la map du round : {client.IsOnRoundMap})");
+        if (timer == null)
+        {
+            ModLog.Warn("Arrivée : chrono introuvable dans la scène");
+            return;
+        }
+        if (client.IsOnRoundMap && round.Info.Phase == RoundPhase.Playing)
+        {
+            client.QueueFinish(round.Info.RoundId, () => timer.Counter.MS);
+        }
+    }
+
+    public void DrawBatch(Microsoft.Xna.Framework.Graphics.SpriteBatch spriteBatch, float extrapolation)
+    {
+        // Pas de condition sur "board" : pendant l'intro ou après un reset, la scène est dessinée
+        // avant sa première mise à jour, et le panneau doit déjà s'afficher.
+        if (disposed || !client.IsReady)
+        {
+            return;
+        }
+        if (EnsureBoard())
+        {
+            // Les autres joueurs sont aussi visibles pendant l'attente du départ.
+            SyncGhosts();
+        }
+        try
+        {
+            overlay.Draw(spriteBatch, scene, board == null ? null : localPosition, ghosts.Values.Select(g => g.Player), extrapolation);
+        }
+        catch (Exception e)
+        {
+            overlay.Disable(e);
+        }
     }
 
     public void LoadCheckpoint(ICheckpointInfo checkpointInfo)

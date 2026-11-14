@@ -17,6 +17,18 @@ internal sealed class ModConfig
 
     public bool AutoConnect { get; set; } = true;
 
+    /// <summary>Distance max (en unités du jeu, 1 unité = 1 cm) pour afficher le pseudo d'un joueur. 0 = jamais.</summary>
+    public float NameTagMaxDistance { get; set; } = 30f;
+
+    /// <summary>Hauteur du pseudo au-dessus de la planche, en unités du jeu.</summary>
+    public float NameTagHeight { get; set; } = 0.8f;
+
+    /// <summary>Taille du texte des pseudos (1 = taille de la police du jeu en 1080p).</summary>
+    public float NameTagScale { get; set; } = 0.4f;
+
+    /// <summary>Panneau du round (temps restant, classement) en haut à droite.</summary>
+    public bool ShowRoundPanel { get; set; } = true;
+
     /// <summary>Debug : log de la position chaque seconde.</summary>
     public bool DebugProbe { get; set; }
 

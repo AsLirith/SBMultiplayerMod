@@ -18,6 +18,15 @@ for (int i = 0; i < args.Length; i++)
         case "--echo-delay":
             options.EchoDelaySeconds = double.Parse(args[++i], System.Globalization.CultureInfo.InvariantCulture);
             break;
+        case "--maps":
+            options.Maps = args[++i].Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+            break;
+        case "--round":
+            options.RoundSeconds = double.Parse(args[++i], System.Globalization.CultureInfo.InvariantCulture);
+            break;
+        case "--results":
+            options.ResultsSeconds = double.Parse(args[++i], System.Globalization.CultureInfo.InvariantCulture);
+            break;
         case "-h":
         case "--help":
             Console.WriteLine($"""
@@ -27,8 +36,11 @@ for (int i = 0; i < args.Length; i++)
                   --max-players <n>   joueurs max (défaut 32)
                   --echo              renvoie à chaque joueur sa propre planche retardée (test en solo)
                   --echo-delay <s>    retard de l'écho en secondes (défaut 2)
+                  --maps <liste>      rotation, ex. o:1,o:2,o:57 (id de niveau officiel ; vide = mode libre)
+                  --round <s>         durée d'un round en secondes (défaut 300)
+                  --results <s>       durée de l'écran de résultats (défaut 15)
 
-                Commandes console : list, quit
+                Commandes console : list, round, next, quit
                 """);
             return;
         default:
@@ -74,6 +86,12 @@ while (!cts.IsCancellationRequested)
                     Console.WriteLine("  " + line);
                 }
                 break;
+            case "round":
+                Console.WriteLine(server.DescribeRound());
+                break;
+            case "next":
+                server.SkipPhase();
+                break;
             case "quit":
             case "exit":
                 cts.Cancel();
@@ -81,7 +99,7 @@ while (!cts.IsCancellationRequested)
             case "":
                 break;
             default:
-                Console.WriteLine("Commandes : list, quit");
+                Console.WriteLine("Commandes : list, round, next, quit");
                 break;
         }
     }

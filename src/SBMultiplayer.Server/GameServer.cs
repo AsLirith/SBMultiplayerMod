@@ -15,15 +15,26 @@ public sealed class ServerOptions
     public bool Echo { get; set; }
 
     public double EchoDelaySeconds { get; set; } = 2.0;
+
+    /// <summary>Rotation de maps ("o:1", "o:57:2001"…). Vide = mode libre, sans rounds.</summary>
+    public List<string> Maps { get; set; } = new();
+
+    public double RoundSeconds { get; set; } = 300;
+
+    public double ResultsSeconds { get; set; } = 15;
 }
 
 /// <summary>
 /// Serveur relais : il ne simule pas la physique. Il tient la liste des joueurs, leur map,
-/// et relaie les états de chacun aux autres. Tout tourne sur un seul thread (PollEvents).
+/// relaie les états, et orchestre les rounds (map imposée, chrono, classement).
+/// Tout tourne sur un seul thread (Poll).
 /// </summary>
 public sealed class GameServer : INetEventListener
 {
     private const int EchoIdOffset = 1_000_000;
+
+    /// <summary>Marge acceptée entre la durée d'une run et le temps écoulé depuis le début du round (latence, chargement).</summary>
+    private const double FinishToleranceSeconds = 3;
 
     private sealed class Player
     {
@@ -42,6 +53,16 @@ public sealed class GameServer : INetEventListener
     private readonly Queue<(double Due, int PeerId, PlayerState State)> echoQueue = new();
     private readonly Stopwatch clock = Stopwatch.StartNew();
 
+    // ---------- État du round ----------
+    private RoundPhase phase = RoundPhase.Free;
+    private int roundId;
+    private int mapIndex = -1;
+    private double phaseStart;
+    private double phaseEnd;
+
+    /// <summary>Meilleur temps de chaque joueur sur le round en cours (le nom est gardé si le joueur part).</summary>
+    private readonly Dictionary<int, LeaderboardEntry> best = new();
+
     public GameServer(ServerOptions options)
     {
         this.options = options;
@@ -55,6 +76,10 @@ public sealed class GameServer : INetEventListener
 
     public int PlayerCount => players.Count;
 
+    private bool HasRotation => options.Maps.Count > 0;
+
+    private string CurrentMap => phase == RoundPhase.Free ? "" : options.Maps[mapIndex];
+
     public void Start()
     {
         if (!net.Start(options.Port))
@@ -62,6 +87,9 @@ public sealed class GameServer : INetEventListener
             throw new InvalidOperationException($"Impossible d'écouter sur le port UDP {options.Port}");
         }
         Log($"Serveur démarré sur le port UDP {options.Port} (protocole v{ProtocolInfo.Version}, {options.MaxPlayers} joueurs max{(options.Echo ? ", mode écho" : "")})");
+        Log(HasRotation
+            ? $"Rotation : {string.Join(", ", options.Maps)} — rounds de {options.RoundSeconds:0} s, résultats {options.ResultsSeconds:0} s"
+            : "Aucune map configurée : mode libre (--maps pour activer les rounds)");
     }
 
     public void Poll()
@@ -71,12 +99,135 @@ public sealed class GameServer : INetEventListener
         {
             FlushEcho();
         }
+        UpdateRound();
     }
 
     public void Stop() => net.Stop(sendDisconnectMessages: true);
 
     public IEnumerable<string> DescribePlayers() =>
         players.Values.Select(p => $"#{p.Id} {p.Name} — map: {(p.MapKey == "" ? "(menu)" : p.MapKey)} — ping {p.Peer.Ping} ms");
+
+    public string DescribeRound() => phase switch
+    {
+        RoundPhase.Free => "Mode libre",
+        _ => $"Round {roundId} — map {mapIndex + 1}/{options.Maps.Count} ({CurrentMap}) — {phase} — {Math.Max(0, phaseEnd - Now):0} s restantes",
+    };
+
+    /// <summary>Commande console : termine la phase en cours (round → résultats → map suivante).</summary>
+    public void SkipPhase()
+    {
+        if (phase != RoundPhase.Free)
+        {
+            phaseEnd = Now;
+        }
+    }
+
+    // ---------- Rounds ----------
+
+    private void UpdateRound()
+    {
+        bool anyone = players.Values.Any(p => p.HasSaidHello);
+        if (!HasRotation)
+        {
+            return;
+        }
+        if (!anyone)
+        {
+            if (phase != RoundPhase.Free)
+            {
+                Log("Plus personne : rotation en pause");
+                phase = RoundPhase.Free;
+                mapIndex = -1;
+            }
+            return;
+        }
+
+        if (phase == RoundPhase.Free)
+        {
+            StartRound((mapIndex + 1) % options.Maps.Count);
+        }
+        else if (Now >= phaseEnd)
+        {
+            if (phase == RoundPhase.Playing)
+            {
+                phase = RoundPhase.Results;
+                phaseStart = Now;
+                phaseEnd = Now + options.ResultsSeconds;
+                BroadcastRound();
+                LogResults();
+            }
+            else
+            {
+                StartRound((mapIndex + 1) % options.Maps.Count);
+            }
+        }
+    }
+
+    private void StartRound(int index)
+    {
+        mapIndex = index;
+        roundId++;
+        phase = RoundPhase.Playing;
+        phaseStart = Now;
+        phaseEnd = Now + options.RoundSeconds;
+        best.Clear();
+        Log($"Round {roundId} : {CurrentMap} ({options.RoundSeconds:0} s)");
+        BroadcastRound();
+        BroadcastLeaderboard();
+    }
+
+    private RoundInfo CurrentRoundInfo() =>
+        new(roundId, CurrentMap, phase, (float)Math.Max(0, phaseEnd - Now), Math.Max(0, mapIndex), options.Maps.Count);
+
+    private void BroadcastRound() => Broadcast(Msg.Round(writer, CurrentRoundInfo()), DeliveryMethod.ReliableOrdered, except: null);
+
+    private List<LeaderboardEntry> SortedLeaderboard() => best.Values.OrderBy(e => e.BestMs).ToList();
+
+    private void BroadcastLeaderboard() =>
+        Broadcast(Msg.Leaderboard(writer, roundId, SortedLeaderboard()), DeliveryMethod.ReliableOrdered, except: null);
+
+    private void OnFinish(Player p, int finishRoundId, uint timeMs)
+    {
+        string reject = "";
+        double elapsed = Now - phaseStart;
+        if (phase != RoundPhase.Playing || finishRoundId != roundId)
+        {
+            reject = "hors round";
+        }
+        else if (!Msg.MapMatches(p.MapKey, CurrentMap))
+        {
+            reject = $"mauvaise map ({p.MapKey})";
+        }
+        else if (timeMs == 0 || timeMs / 1000.0 > elapsed + FinishToleranceSeconds)
+        {
+            // Une run ne peut pas durer plus longtemps que le round n'a duré.
+            reject = $"temps impossible ({Msg.FormatTime(timeMs)} alors que le round dure depuis {elapsed:0.0} s)";
+        }
+
+        if (reject != "")
+        {
+            Log($"Temps refusé pour {p.Name} : {reject}");
+            return;
+        }
+
+        bool improved = !best.TryGetValue(p.Id, out LeaderboardEntry previous) || timeMs < previous.BestMs;
+        Log($"{p.Name} : {Msg.FormatTime(timeMs)}{(improved ? " (meilleur temps)" : "")}");
+        if (improved)
+        {
+            best[p.Id] = new LeaderboardEntry(p.Id, p.Name, timeMs);
+            BroadcastLeaderboard();
+        }
+    }
+
+    private void LogResults()
+    {
+        var board = SortedLeaderboard();
+        Log($"Résultats du round {roundId} ({CurrentMap}) :" + (board.Count == 0 ? " aucun temps" : ""));
+        for (int i = 0; i < board.Count; i++)
+        {
+            Log($"  {i + 1}. {board[i].Name} — {Msg.FormatTime(board[i].BestMs)}");
+        }
+    }
 
     // ---------- Événements LiteNetLib ----------
 
@@ -138,6 +289,9 @@ public sealed class GameServer : INetEventListener
                 case MessageType.State:
                     OnState(p, Msg.GetState(reader));
                     break;
+                case MessageType.Finish:
+                    OnFinish(p, reader.GetInt(), reader.GetUInt());
+                    break;
                 default:
                     Log($"Message inattendu {type} de #{p.Id}");
                     break;
@@ -160,7 +314,7 @@ public sealed class GameServer : INetEventListener
     {
     }
 
-    // ---------- Logique ----------
+    // ---------- Logique joueurs ----------
 
     private void OnHello(Player p, NetPacketReader reader)
     {
@@ -180,6 +334,13 @@ public sealed class GameServer : INetEventListener
             p.Peer.Send(Msg.PlayerJoined(writer, new PlayerInfo(EchoIdOffset + p.Id, $"Echo {p.Name}", p.MapKey)), DeliveryMethod.ReliableOrdered);
         }
         Log($"{p.Name} (#{p.Id}) a rejoint la partie ({players.Count} connecté(s))");
+
+        // Round en cours : le nouveau venu reçoit la map imposée et le classement.
+        if (phase != RoundPhase.Free)
+        {
+            p.Peer.Send(Msg.Round(writer, CurrentRoundInfo()), DeliveryMethod.ReliableOrdered);
+            p.Peer.Send(Msg.Leaderboard(writer, roundId, SortedLeaderboard()), DeliveryMethod.ReliableOrdered);
+        }
     }
 
     private void OnMapChanged(Player p, string mapKey)

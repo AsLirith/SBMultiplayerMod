@@ -27,12 +27,104 @@ internal sealed class MultiplayerClient : INetEventListener
 
     public ConcurrentDictionary<int, RemotePlayer> Players { get; } = new();
 
+    public RoundState Round { get; } = new();
+
+    /// <summary>Round dont on a déjà chargé la map (pour ne la charger qu'une fois par round).</summary>
+    private int loadedRoundId;
+
+    /// <summary>Le jeu a fini de démarrer (menu ou niveau affiché) : on peut lui imposer une map.</summary>
+    private bool gameReady;
+
+    public string CurrentMapKey => mapKey;
+
+    /// <summary>Vrai si on est sur la map du round en cours (classement, retry automatique…).</summary>
+    public bool IsOnRoundMap
+    {
+        get
+        {
+            var r = Round.Current;
+            return IsReady && r.IsRound && Msg.MapMatches(mapKey, r.Info.MapKey);
+        }
+    }
+
     public int? LocalId { get; private set; }
 
     public bool IsReady => server != null && LocalId.HasValue;
 
     /// <summary>Objet (scène) qui a déclaré la map courante ; seul lui peut la remettre à "" en partant.</summary>
     public object? MapOwner { get; private set; }
+
+    /// <summary>Appelé à chaque tick du jeu, quelle que soit la scène (voir GlobalTickPatch).</summary>
+    public void GlobalTick(BytingLib.Scene? currentScene)
+    {
+        if (!gameReady)
+        {
+            gameReady = currentScene?.GetType().Name == "LevelSelectionScene" || Ghosts.GameAccess.IsIngameScene(currentScene);
+            if (!gameReady)
+            {
+                return;
+            }
+            ModLog.Info($"Jeu prêt ({currentScene?.GetType().Name})");
+        }
+
+        EnsureConnected();
+        FlushPendingFinish();
+
+        // Nouveau round : on charge la map imposée (une seule fois par round).
+        var r = Round.Current;
+        if (IsReady && r.Info.Phase == RoundPhase.Playing && r.Info.RoundId != loadedRoundId)
+        {
+            loadedRoundId = r.Info.RoundId;
+            LoadRoundMap(r.Info.MapKey);
+        }
+    }
+
+    private static void LoadRoundMap(string key)
+    {
+        // Format : "o:<id>" ou "o:<id>:<version>" (maps officielles uniquement pour l'instant).
+        string[] parts = key.Split(':');
+        if (parts.Length >= 2 && parts[0] == "o" && uint.TryParse(parts[1], out uint id))
+        {
+            uint? version = parts.Length >= 3 && uint.TryParse(parts[2], out uint v) ? v : null;
+            try
+            {
+                Ghosts.GameAccess.StartOfficialLevel(id, version, quickRetry: false);
+            }
+            catch (Exception e)
+            {
+                ModLog.Error($"Impossible de charger la map {key}", e);
+            }
+        }
+        else
+        {
+            ModLog.Warn($"Map de round non supportée : {key}");
+        }
+    }
+
+    private (int RoundId, Func<uint> ReadMs)? pendingFinish;
+
+    /// <summary>Arrivée franchie : le temps sera lu et envoyé à la fin du tick (chrono alors définitif).</summary>
+    public void QueueFinish(int roundId, Func<uint> readMs) => pendingFinish = (roundId, readMs);
+
+    private void FlushPendingFinish()
+    {
+        if (pendingFinish is not { } finish)
+        {
+            return;
+        }
+        pendingFinish = null;
+        uint ms = finish.ReadMs();
+        ModLog.Info($"Arrivée en {Msg.FormatTime(ms)} (round {finish.RoundId}) → envoi au serveur");
+        SendFinish(finish.RoundId, ms);
+    }
+
+    public void SendFinish(int roundId, uint timeMs)
+    {
+        if (IsReady)
+        {
+            Send(w => Msg.Finish(w, roundId, timeMs), DeliveryMethod.ReliableOrdered);
+        }
+    }
 
     /// <summary>À appeler régulièrement depuis le thread du jeu : (re)connecte si nécessaire.</summary>
     public void EnsureConnected()
@@ -140,6 +232,8 @@ internal sealed class MultiplayerClient : INetEventListener
         server = null;
         LocalId = null;
         Players.Clear();
+        Round.Reset();
+        loadedRoundId = 0;
     }
 
     public void OnNetworkReceive(NetPeer peer, NetPacketReader reader, byte channel, DeliveryMethod method)
@@ -187,6 +281,19 @@ internal sealed class MultiplayerClient : INetEventListener
                         p.SetMap(key);
                         ModLog.Info($"{p.Name} (#{id}) → {(key == "" ? "menu" : key)}");
                     }
+                    break;
+                }
+                case MessageType.RoundInfo:
+                {
+                    RoundInfo info = Msg.GetRound(reader);
+                    Round.SetInfo(info);
+                    ModLog.Info($"Round {info.RoundId} : {info.Phase} sur {(info.MapKey == "" ? "-" : info.MapKey)}, {info.RemainingSeconds:0} s");
+                    break;
+                }
+                case MessageType.Leaderboard:
+                {
+                    var (roundId, entries) = Msg.GetLeaderboard(reader);
+                    Round.SetLeaderboard(roundId, entries);
                     break;
                 }
                 case MessageType.State:
