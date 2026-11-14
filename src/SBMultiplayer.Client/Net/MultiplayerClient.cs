@@ -141,7 +141,7 @@ internal sealed class MultiplayerClient : INetEventListener
         }
 
         HandleHotkeys();
-        AdminMenu.Tick();
+        PopupMenu.Tick();
         StartGate.Tick(this);
         TrackLocalSkin();
         EnsureConnected();

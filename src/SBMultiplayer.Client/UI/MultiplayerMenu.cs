@@ -1,128 +1,112 @@
 using BytingLib;
 using BytingLib.UI;
-using Microsoft.Xna.Framework;
-using Microsoft.Xna.Framework.Input;
 using SBMultiplayer.Client.Ghosts;
 using SBMultiplayer.Client.Net;
 using SBMultiplayer.Protocol;
+using static SBMultiplayer.Client.UI.PopupMenu;
 
 namespace SBMultiplayer.Client.UI;
 
 /// <summary>
-/// Écran « Multijoueur » (touche F8 par défaut), construit avec les éléments d'interface du jeu
-/// (mêmes sliders, cases à cocher et boutons que ses écrans d'options), ouvert en popup.
+/// F8 menu: connection (server, password, name) and links to the "Display", "Interface" and "Admin" screens.
+/// Each screen stays short; settings apply immediately and are saved in SBMultiplayer.json.
 /// </summary>
 internal static class MultiplayerMenu
 {
-    private static readonly Color InputBackground = new(0x5F, 0x5A, 0x59); // Colors.DarkBrighter du jeu
-
-    private static bool isOpen;
-
     public static string Version => typeof(MultiplayerMenu).Assembly.GetName().Version?.ToString(3) ?? "?";
 
-    public static void Open()
-    {
-        if (isOpen || GameAccess.Game == null)
-        {
-            return;
-        }
-        try
-        {
-            GameAccess.ShowPopup(Create);
-        }
-        catch (Exception e)
-        {
-            isOpen = false;
-            ModLog.Error("Impossible d'ouvrir le menu multijoueur", e);
-            Notifications.Warn(Tr.MenuOpenFailed);
-        }
-    }
+    public static void Open() => Show("main", BuildMain);
 
-    private static Scene Create(Action close)
+    // ---------- Main screen: connection ----------
+
+    private static Element BuildMain(Action close, Scene scene)
     {
-        isOpen = true;
         ModConfig cfg = ModConfig.Current;
-        SE.UIAssets ui = GameAccess.UiAssets;
-        SE.OptionsUI options = GameAccess.OptionsUi;
-        var buttonStyle = new Style { ButtonAnimation = ui.ButtonAnimation, ButtonPadding = new Padding(32f, 16f) };
-
-        var scene = new Scene();
-        CanvasScale canvas = GameAccess.CreateCanvas();
-
         var status = new Label(StatusText());
-        float inputHeight = ui.FontSmall.Value.LineSpacing;
-        var serverInput = new TextInput(GameAccess.UpdateSpeed, cfg.Server, 1100f, inputHeight) { MaxTextLength = 80 };
-        var nameInput = new TextInput(GameAccess.UpdateSpeed, cfg.PlayerName, 1100f, inputHeight) { MaxTextLength = ProtocolInfo.MaxNameLength };
-        var passwordInput = new TextInput(GameAccess.UpdateSpeed, cfg.ServerPassword, 1100f, inputHeight) { MaxTextLength = 64 };
+        scene.Add(new StatusUpdater(status));
+
+        TextInput server = Input(cfg.Server, 1100f, 80);
+        TextInput password = Input(cfg.ServerPassword, 1100f, 64);
+        TextInput name = Input(cfg.PlayerName, 1100f, ProtocolInfo.MaxNameLength);
 
         void ApplyAndConnect()
         {
-            cfg.Server = serverInput.Text.Trim();
-            cfg.PlayerName = nameInput.Text.Trim();
-            cfg.ServerPassword = passwordInput.Text;
+            cfg.Server = server.Text.Trim();
+            cfg.ServerPassword = password.Text;
+            cfg.PlayerName = name.Text.Trim();
             ModConfig.ForgetEnvironmentOverride();
             ModConfig.Save();
             MultiplayerClient.Instance.Connect();
         }
-        serverInput.OnEnter += () => { ApplyAndConnect(); return true; };
-        nameInput.OnEnter += () => { ApplyAndConnect(); return true; };
-        passwordInput.OnEnter += () => { ApplyAndConnect(); return true; };
+        foreach (TextInput input in new[] { server, password, name })
+        {
+            input.OnEnter += () => { ApplyAndConnect(); return true; };
+        }
 
-        Element Button(string text, Action onClick) => GameAccess.CreateButton(onClick).SetStyle(buttonStyle).Add(new Label(text));
-
-        Element panel = new PanelStack(28f).SetStyle(ui.TextSmallStyle).AddMaybeNull(
-            new Label(Tr.MenuTitle(Version)).SetStyle(ui.StrongStyle),
+        return Stack(
+            Title(Tr.MenuTitle(Version)),
             status,
-            Row(Tr.ServerField, Field(serverInput)),
-            Row(Tr.PasswordField, Field(passwordInput)),
-            Row(Tr.NameField, Field(nameInput)),
-            new PanelStack(24f, vertical: false).Add(
+            Section(Tr.ConnectionSection),
+            Row(Tr.ServerField, Field(server)),
+            Row(Tr.PasswordField, Field(password)),
+            Row(Tr.NameField, Field(name)),
+            Line(
                 Button(Tr.Connect, ApplyAndConnect),
                 Button(Tr.Disconnect, () => MultiplayerClient.Instance.Disconnect()),
                 Button(Tr.JoinRound, () =>
                 {
                     close();
                     MultiplayerClient.Instance.RejoinRound();
-                }),
+                })),
+            Section(Tr.SettingsSection),
+            Line(
+                Button(Tr.DisplayTitle, OpenDisplay),
+                Button(Tr.InterfaceTitle, OpenInterface),
                 Button(Tr.AdminTitle, AdminMenu.Open)),
-            options.GetCheckboxRow(Tr.ShowOtherPlayers, ModSettings.ShowOtherPlayers),
-            options.GetSliderRow(Tr.OtherPlayersOpacity, ModSettings.GhostOpacity,
-                f => MathF.Round(float.Parse(f) * 100f) + "%", 0.1f, 1f, 0.1f),
-            options.GetCheckboxRow(Tr.ShowNameTags, ModSettings.ShowNameTags),
-            options.GetSliderRow(Tr.NameTagDistance, ModSettings.NameTagMaxDistance,
-                f => MathF.Round(float.Parse(f)) + " cm", 10f, 300f, 10f),
-            options.GetCheckboxRow(Tr.ShowSplits, ModSettings.ShowSplits),
-            options.GetCheckboxRow(Tr.ShowChat, ModSettings.ShowChat),
-            options.GetSliderRow(Tr.ChatSize, ModSettings.ChatScale,
-                f => MathF.Round(float.Parse(f) * 100f) + "%", 0.5f, 2f, 0.1f),
-            options.GetCheckboxRow(Tr.NotificationsOnTop, ModSettings.NotificationsOnTop),
-            options.GetCheckboxRow(Tr.RoundPanel, ModSettings.ShowRoundPanel),
-            options.GetSliderRow(Tr.RoundPanelSize, ModSettings.RoundPanelScale,
-                f => MathF.Round(float.Parse(f) * 100f) + "%", 0.3f, 1.2f, 0.1f),
-            new Label(Tr.KeysHint(cfg.MenuKey, cfg.RejoinKey, cfg.ChatKey)),
-            Button(Tr.Back, close)
-        ).SetChildrenWidthToMaxChildWidth().SetNavigationStartToFirstNavigatable();
-
-        canvas.Add(GameAccess.CreateMainPanel(panel));
-        scene.Add(canvas);
-        scene.Add(new MenuUpdater(status, close));
-        scene.OnDispose += () => isOpen = false;
-        return scene;
+            Text(Tr.KeysHint(cfg.MenuKey, cfg.RejoinKey, cfg.ChatKey)),
+            Button(Tr.Back, close));
     }
 
-    private static Element Row(string label, Element field) =>
-        new PanelStack(32f, vertical: false).Add(new Label(label, 700f) { Anchor = new Vector2(0f, 0.5f) }, field);
+    // ---------- Display: how other players are shown ----------
 
-    private static Element Field(TextInput input) =>
-        new Panel(0f, 0f, InputBackground, null, new Padding(16f)).Add(input);
+    private static void OpenDisplay() => Show("display", (close, _) =>
+    {
+        SE.OptionsUI o = GameAccess.OptionsUi;
+        return Stack(
+            Title(Tr.DisplayTitle),
+            o.GetCheckboxRow(Tr.ShowOtherPlayers, ModSettings.ShowOtherPlayers),
+            o.GetSliderRow(Tr.OtherPlayersOpacity, ModSettings.GhostOpacity, Percent, 0.1f, 1f, 0.1f),
+            o.GetCheckboxRow(Tr.ShowNameTags, ModSettings.ShowNameTags),
+            o.GetSliderRow(Tr.NameTagDistance, ModSettings.NameTagMaxDistance, f => MathF.Round(float.Parse(f)) + " cm", 10f, 300f, 10f),
+            Button(Tr.Back, close)
+        ).SetChildrenWidthToMaxChildWidth();
+    });
+
+    // ---------- Interface: HUD elements of the mod ----------
+
+    private static void OpenInterface() => Show("interface", (close, _) =>
+    {
+        SE.OptionsUI o = GameAccess.OptionsUi;
+        return Stack(
+            Title(Tr.InterfaceTitle),
+            o.GetCheckboxRow(Tr.ShowSplits, ModSettings.ShowSplits),
+            Section(Tr.ChatTitle),
+            o.GetCheckboxRow(Tr.ShowChat, ModSettings.ShowChat),
+            o.GetSliderRow(Tr.ChatSize, ModSettings.ChatScale, Percent, 0.5f, 2f, 0.1f),
+            o.GetCheckboxRow(Tr.NotificationsOnTop, ModSettings.NotificationsOnTop),
+            Section(Tr.RoundPanel),
+            o.GetCheckboxRow(Tr.RoundPanel, ModSettings.ShowRoundPanel),
+            o.GetSliderRow(Tr.RoundPanelSize, ModSettings.RoundPanelScale, Percent, 0.3f, 1.2f, 0.1f),
+            Button(Tr.Back, close)
+        ).SetChildrenWidthToMaxChildWidth();
+    });
 
     private static string StatusText()
     {
         MultiplayerClient c = MultiplayerClient.Instance;
         if (c.IsReady)
         {
-            int n = c.Players.Count;
-            return Tr.StatusConnected(c.ServerAddress, c.PlayerName, n);
+            return Tr.StatusConnected(c.ServerAddress, c.PlayerName, c.Players.Count);
         }
         if (c.IsConnecting)
         {
@@ -131,11 +115,9 @@ internal static class MultiplayerMenu
         return c.IsUserDisconnected ? Tr.StatusDisconnected : Tr.StatusOffline;
     }
 
-    /// <summary>Met à jour le statut et ferme le menu avec Échap.</summary>
-    private sealed class MenuUpdater(Label status, Action close) : IUpdate
+    private sealed class StatusUpdater(Label status) : IUpdate
     {
         private int tick;
-        private bool escapeWasDown = true; // ignore l'Échap éventuellement encore enfoncé à l'ouverture
 
         public void Update()
         {
@@ -147,12 +129,6 @@ internal static class MultiplayerMenu
                     status.Text = text;
                 }
             }
-            bool escapeDown = Keyboard.GetState().IsKeyDown(Keys.Escape);
-            if (escapeDown && !escapeWasDown)
-            {
-                close();
-            }
-            escapeWasDown = escapeDown;
         }
     }
 }

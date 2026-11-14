@@ -176,7 +176,8 @@ internal static class Tr
     public static string SettingsRestartWarning => T("Changing the mode or the maps restarts the match.", "Changer le mode ou les maps relance le match.");
     public static string SettingsSaveToFile => T("Also save to the server's config file", "Enregistrer aussi dans le fichier de config du serveur");
     public static string SettingsApply => T("Apply", "Appliquer");
-    public static string SettingsRoundSeconds => T("Round duration / time limit", "Durée du round / limite de temps");
+    public static string SettingsRoundSeconds => T("Round duration", "Durée du round");
+    public static string SettingsTimeLimit => T("Time limit after the start", "Limite de temps après le départ");
     public static string SettingsResultsSeconds => T("Results screen", "Écran de résultats");
     public static string SettingsRoundsPerMap => T("Rounds per map (Rounds, Cup, Elimination)", "Manches par map (Rounds, Cup, Élimination)");
     public static string SettingsFinishTimeout => T("End of round after the 1st finisher", "Fin de manche après le 1er arrivé");
@@ -186,6 +187,34 @@ internal static class Tr
     public static string SettingsEliminatedPerRound => T("Elimination: eliminated per round", "Élimination : éliminés par manche");
     public static string SettingsPointsTable => T("Points by rank", "Points par place");
     public static string SettingsBadPoints => T("Points: whole numbers separated by commas", "Points : des nombres entiers séparés par des virgules");
+
+    // ---------- Menus : sections et sous-écrans ----------
+    public static string ConnectionSection => T("Connection", "Connexion");
+    public static string SettingsSection => T("Settings", "Réglages");
+    public static string DisplayTitle => T("Display", "Affichage");
+    public static string InterfaceTitle => T("Interface", "Interface");
+    public static string AdminRoundSection => T("Round", "Round");
+    public static string AdminMatchSection => T("Match", "Match");
+    public static string AdminServerSection => T("Server settings", "Paramètres du serveur");
+    public static string AdminChangeMap => T("Change map", "Changer de map");
+    public static string AdminPlayersButton => T("Players", "Joueurs");
+    public static string AdminNoOtherPlayers => T("No other player connected", "Aucun autre joueur connecté");
+    public static string SettingsModeSection => T("Game mode", "Mode de jeu");
+    public static string SettingsMapsSection => T("Map rotation", "Rotation de maps");
+    public static string SettingsApplySection => T("Apply", "Appliquer");
+    public static string SettingsDurationsSection => T("Durations", "Durées");
+    public static string SettingsMatchSection => T("Match", "Match");
+    public static string SettingsFreeModeNothing => T("Nothing to set in Free mode: change the mode in \"Mode and maps\".", "Rien à régler en mode Libre : change le mode dans \"Mode et maps\".");
+
+    public static string ModeDescription(SBMultiplayer.Protocol.GameMode mode) => mode switch
+    {
+        SBMultiplayer.Protocol.GameMode.Free => T("No rounds: everyone rides wherever they want.", "Pas de rounds : chacun roule où il veut."),
+        SBMultiplayer.Protocol.GameMode.TimeAttack => T("Unlimited retries during the round, the best time wins.", "Retries illimités pendant le round, le meilleur temps gagne."),
+        SBMultiplayer.Protocol.GameMode.Rounds => T("Synchronized start, one attempt per round, points by race time.", "Départ synchronisé, une tentative par manche, points selon le temps."),
+        SBMultiplayer.Protocol.GameMode.Cup => T("Like Rounds; reach the points limit to become a finalist, then win a round to win the cup.", "Comme Rounds ; atteins la limite de points pour être finaliste, puis gagne une manche pour remporter la Cup."),
+        SBMultiplayer.Protocol.GameMode.Elimination => T("Like Rounds; the slowest players are eliminated each round until one is left.", "Comme Rounds ; les plus lents sont éliminés à chaque manche jusqu'au dernier."),
+        _ => "",
+    };
 
     // ---------- Panneau : pause et match ----------
     public static string PausedHeader => T("PAUSED", "PAUSE");
