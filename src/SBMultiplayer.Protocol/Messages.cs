@@ -138,14 +138,33 @@ public static class Msg
 
     private static Vec3 GetVec3(NetDataReader r) => new(r.GetFloat(), r.GetFloat(), r.GetFloat());
 
-    /// <summary>Nettoie un pseudo reçu : longueur bornée, pas de caractères de contrôle.</summary>
+    /// <summary>
+    /// Nettoie un pseudo reçu : longueur bornée (en caractères visibles), et suppression des caractères
+    /// de contrôle et de format invisibles (contrôles bidi, caractères « tag », espaces de largeur nulle…)
+    /// qui permettent d'usurper un pseudo ou de casser l'affichage.
+    /// </summary>
     public static string SanitizeName(string? name)
     {
-        string clean = new string((name ?? "").Where(c => !char.IsControl(c)).ToArray()).Trim();
-        if (clean.Length > ProtocolInfo.MaxNameLength)
+        var sb = new System.Text.StringBuilder();
+        int count = 0;
+        foreach (System.Text.Rune rune in (name ?? "").EnumerateRunes())
         {
-            clean = clean[..ProtocolInfo.MaxNameLength];
+            var category = System.Text.Rune.GetUnicodeCategory(rune);
+            if (category is System.Globalization.UnicodeCategory.Control
+                or System.Globalization.UnicodeCategory.Format
+                or System.Globalization.UnicodeCategory.PrivateUse
+                or System.Globalization.UnicodeCategory.Surrogate
+                or System.Globalization.UnicodeCategory.OtherNotAssigned)
+            {
+                continue;
+            }
+            if (count++ == ProtocolInfo.MaxNameLength)
+            {
+                break;
+            }
+            sb.Append(rune.ToString());
         }
+        string clean = sb.ToString().Trim();
         return clean.Length == 0 ? "Joueur" : clean;
     }
 }
