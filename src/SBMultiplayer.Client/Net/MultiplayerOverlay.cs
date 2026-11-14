@@ -120,8 +120,8 @@ internal sealed class MultiplayerOverlay
         bool results = round.Info.Phase == RoundPhase.Results;
         int remaining = (int)Math.Ceiling(round.RemainingSeconds);
         string header = results
-            ? $"Résultats — map suivante dans {remaining} s"
-            : $"Map {round.Info.MapIndex + 1}/{round.Info.MapCount} — {remaining / 60}:{remaining % 60:00}";
+            ? $"Résultats - map suivante dans {remaining} s"
+            : $"{GameAccess.DescribeMap(round.Info.MapKey)} ({round.Info.MapIndex + 1}/{round.Info.MapCount}) - {remaining / 60}:{remaining % 60:00}";
         DrawRightAligned(sb, header, right, ref y, results ? Gold : Color.White, s * 1.15f);
         if (!client.IsOnRoundMap && !results)
         {
@@ -151,7 +151,7 @@ internal sealed class MultiplayerOverlay
         }
         if (myIndex >= MaxLeaderboardLines)
         {
-            DrawRightAligned(sb, "…", right, ref y, Color.LightGray, s);
+            DrawRightAligned(sb, "...", right, ref y, Color.LightGray, s);
             DrawEntry(sb, board, myIndex, me, right, ref y, s);
         }
     }
@@ -172,6 +172,9 @@ internal sealed class MultiplayerOverlay
         DrawOutlined(sb, printable, new Vector2(right - size.X, y), color, s, 1f);
         y += font.LineSpacing * s;
     }
+
+    // NB : la police du jeu n'a pas tous les caractères (pas de « — » ni de « … ») : s'en tenir à l'ASCII
+    // et aux lettres accentuées courantes dans les textes du mod.
 
     /// <summary>Texte avec un contour sombre, lisible sur n'importe quel décor.</summary>
     private void DrawOutlined(SpriteBatch sb, string text, Vector2 pos, Color color, float s, float alpha)

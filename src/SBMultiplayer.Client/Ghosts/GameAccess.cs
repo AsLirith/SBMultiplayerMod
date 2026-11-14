@@ -86,6 +86,33 @@ internal static class GameAccess
         return true;
     }
 
+    private static readonly Dictionary<string, string> MapLabels = new();
+
+    /// <summary>Nom lisible d'une map de round : "o:5" → "A5 Jump" (code et nom affichés par le jeu).</summary>
+    public static string DescribeMap(string mapKey)
+    {
+        if (MapLabels.TryGetValue(mapKey, out string? label))
+        {
+            return label;
+        }
+        label = mapKey;
+        string[] parts = mapKey.Split(':');
+        if (Game != null && parts.Length >= 2 && parts[0] == "o" && uint.TryParse(parts[1], out uint id)
+            && Game.levelOrder.GetLevelByID(id) is { } level)
+        {
+            try
+            {
+                label = $"{Challenge.LevelToKey(level).ToUpperInvariant()} {level.DisplayName}";
+            }
+            catch (Exception e)
+            {
+                ModLog.Warn($"Nom de la map {mapKey} indisponible : {e.Message}");
+            }
+        }
+        MapLabels[mapKey] = label;
+        return label;
+    }
+
     /// <summary>Relance le niveau courant sans intro (utilisé à la place de l'écran de fin en round).</summary>
     public static void RetryCurrentLevel()
     {
