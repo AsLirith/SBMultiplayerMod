@@ -5,7 +5,7 @@ namespace SBMultiplayer.Protocol;
 public static class ProtocolInfo
 {
     /// <summary>À incrémenter à chaque changement incompatible du format des messages.</summary>
-    public const int Version = 6;
+    public const int Version = 7;
 
     public const int DefaultPort = 24800;
 
@@ -54,6 +54,15 @@ public static class ServerEvents
     public const string PlayerKicked = "PLAYER_KICKED";
     public const string MatchReset = "MATCH_RESET";
     public const string AdminLoggedIn = "ADMIN_LOGGED_IN";
+    public const string SettingsChanged = "SETTINGS_CHANGED";
+    /// <summary>Argument : nom du vainqueur de la Cup.</summary>
+    public const string CupWon = "CUP_WON";
+    /// <summary>Argument : nom du vainqueur de l'élimination.</summary>
+    public const string EliminationWon = "ELIMINATION_WON";
+    /// <summary>Argument : noms des joueurs éliminés, séparés par des virgules.</summary>
+    public const string Eliminated = "ELIMINATED";
+    /// <summary>Argument : nom du nouveau finaliste (Cup).</summary>
+    public const string Finalist = "FINALIST";
 }
 
 /// <summary>Replies to chat commands, sent to the issuer only and translated by the client. Argument depends on the code.</summary>
@@ -73,6 +82,9 @@ public static class CommandResults
     /// <summary>Argument: the unknown command.</summary>
     public const string Unknown = "UNKNOWN";
     public const string TooFast = "TOO_FAST";
+    /// <summary>Argument: what is wrong.</summary>
+    public const string InvalidSettings = "INVALID_SETTINGS";
+    public const string NoConfigFile = "NO_CONFIG_FILE";
 }
 
 public enum AdminCommand : byte
@@ -147,6 +159,9 @@ public enum MessageType : byte
 
     /// <summary>C→S, fiable. Abandon de la manche (modes synchronisés).</summary>
     GiveUp = 19,
+
+    /// <summary>S→C (admins) et C→S (admins), fiable. Réglages du match en JSON.</summary>
+    Settings = 20,
 }
 
 public enum RoundPhase : byte
@@ -171,19 +186,75 @@ public enum GameMode : byte
 
     /// <summary>Départ synchronisé, une seule tentative par manche, points selon le temps de course.</summary>
     Rounds = 1,
+
+    /// <summary>Comme Rounds ; à la limite de points on devient finaliste, et un finaliste qui gagne une manche remporte la Cup.</summary>
+    Cup = 2,
+
+    /// <summary>Départ synchronisé ; les derniers de chaque manche sont éliminés jusqu'au vainqueur.</summary>
+    Elimination = 3,
+
+    /// <summary>Pas de rounds : chacun roule où il veut (même avec une liste de maps).</summary>
+    Free = 4,
+}
+
+public static class GameModes
+{
+    /// <summary>Modes à départ synchronisé (une tentative par manche).</summary>
+    public static bool IsSynchronized(this GameMode mode) => mode is GameMode.Rounds or GameMode.Cup or GameMode.Elimination;
+}
+
+public enum StandingStatus : byte
+{
+    Normal = 0,
+    /// <summary>Cup : a atteint la limite de points.</summary>
+    Finalist = 1,
+    /// <summary>Élimination : éliminé du match.</summary>
+    Eliminated = 2,
+    /// <summary>Vainqueur du match (Cup ou Élimination).</summary>
+    Winner = 3,
+}
+
+/// <summary>
+/// Réglages de match modifiables en jeu par un admin. Échangés en JSON (<see cref="Msg.Settings"/>) :
+/// ajouter un champ ne casse pas le format.
+/// </summary>
+public sealed class MatchSettings
+{
+    public GameMode Mode { get; set; } = GameMode.TimeAttack;
+    public List<string> Maps { get; set; } = new();
+    public double RoundSeconds { get; set; } = 300;
+    public double ResultsSeconds { get; set; } = 15;
+    public int RoundsPerMap { get; set; } = 3;
+    public double FinishTimeoutSeconds { get; set; } = 15;
+    public double PrepareTimeoutSeconds { get; set; } = 20;
+    public double CountdownSeconds { get; set; } = 3;
+    public List<int> PointsTable { get; set; } = new() { 10, 8, 6, 5, 4, 3, 2, 1 };
+    public int CupPointsLimit { get; set; } = 100;
+    public int EliminatedPerRound { get; set; } = 1;
+
+    /// <summary>Serialization metadata generated at compile time (no reflection needed).</summary>
+    public static System.Text.Json.Serialization.Metadata.JsonTypeInfo<MatchSettings> JsonInfo => ProtocolJson.Default.MatchSettings;
+}
+
+[System.Text.Json.Serialization.JsonSourceGenerationOptions(UseStringEnumConverter = true)]
+[System.Text.Json.Serialization.JsonSerializable(typeof(MatchSettings))]
+internal partial class ProtocolJson : System.Text.Json.Serialization.JsonSerializerContext
+{
 }
 
 /// <param name="MapKey">Map imposée ("o:&lt;id&gt;" ou "o:&lt;id&gt;:&lt;version&gt;"), "" en phase Free.</param>
 /// <param name="RemainingSeconds">Temps restant dans la phase, au moment de l'envoi.</param>
 /// <param name="StartIn">Modes synchronisés, phase Playing : secondes avant le départ au moment de l'envoi (≤ 0 = déjà parti).</param>
 /// <param name="RoundInMap">Numéro de la manche sur cette map (à partir de 1), et nombre de manches par map.</param>
+/// <param name="PointsLimit">Cup : limite de points pour devenir finaliste.</param>
 public readonly record struct RoundInfo(int RoundId, string MapKey, RoundPhase Phase, float RemainingSeconds, int MapIndex, int MapCount, bool Paused,
-    GameMode Mode = GameMode.TimeAttack, float StartIn = 0, int RoundInMap = 1, int RoundsPerMap = 1, int ReadyCount = 0, int PlayerCount = 0);
+    GameMode Mode = GameMode.TimeAttack, float StartIn = 0, int RoundInMap = 1, int RoundsPerMap = 1, int ReadyCount = 0, int PlayerCount = 0,
+    int PointsLimit = 0);
 
 public readonly record struct LeaderboardEntry(int PlayerId, string Name, uint BestMs);
 
 /// <param name="RoundsPlayed">Nombre de rounds où le joueur a réalisé un temps.</param>
-public readonly record struct StandingEntry(string Name, int Points, int RoundsPlayed);
+public readonly record struct StandingEntry(string Name, int Points, int RoundsPlayed, StandingStatus Status = StandingStatus.Normal);
 
 public readonly record struct Vec3(float X, float Y, float Z);
 
@@ -287,12 +358,29 @@ public static class Msg
         w.Put(r.RoundsPerMap);
         w.Put(r.ReadyCount);
         w.Put(r.PlayerCount);
+        w.Put(r.PointsLimit);
         return w;
     }
 
     public static RoundInfo GetRound(NetDataReader r) =>
         new(r.GetInt(), r.GetString(256), (RoundPhase)r.GetByte(), r.GetFloat(), r.GetInt(), r.GetInt(), r.GetBool(),
-            (GameMode)r.GetByte(), r.GetFloat(), r.GetInt(), r.GetInt(), r.GetInt(), r.GetInt());
+            (GameMode)r.GetByte(), r.GetFloat(), r.GetInt(), r.GetInt(), r.GetInt(), r.GetInt(), r.GetInt());
+
+    /// <summary>S→C (admins) : réglages actuels. C→S : réglages à appliquer (+ enregistrer dans le fichier de config).</summary>
+    public static NetDataWriter Settings(NetDataWriter w, MatchSettings settings, bool saveToFile)
+    {
+        w.Reset();
+        w.Put((byte)MessageType.Settings);
+        w.Put(System.Text.Json.JsonSerializer.Serialize(settings, MatchSettings.JsonInfo));
+        w.Put(saveToFile);
+        return w;
+    }
+
+    public static (MatchSettings Settings, bool SaveToFile) GetSettings(NetDataReader r)
+    {
+        var settings = System.Text.Json.JsonSerializer.Deserialize(r.GetString(16384), MatchSettings.JsonInfo) ?? new MatchSettings();
+        return (settings, r.GetBool());
+    }
 
     /// <summary>C→S : le joueur est sur la ligne de départ de la manche (modes synchronisés).</summary>
     public static NetDataWriter Ready(NetDataWriter w, int roundId)
@@ -427,6 +515,7 @@ public static class Msg
             w.Put(e.Name);
             w.Put(e.Points);
             w.Put(e.RoundsPlayed);
+            w.Put((byte)e.Status);
         }
         return w;
     }
@@ -437,7 +526,7 @@ public static class Msg
         var list = new List<StandingEntry>(count);
         for (int i = 0; i < count; i++)
         {
-            list.Add(new StandingEntry(r.GetString(ProtocolInfo.MaxNameLength * 4), r.GetInt(), r.GetInt()));
+            list.Add(new StandingEntry(r.GetString(ProtocolInfo.MaxNameLength * 4), r.GetInt(), r.GetInt(), (StandingStatus)r.GetByte()));
         }
         return list;
     }

@@ -86,6 +86,17 @@ internal sealed class MultiplayerClient : INetEventListener
     /// <summary>Rotation de maps du serveur (reçue avec le statut admin).</summary>
     public IReadOnlyList<string> AdminMaps { get; private set; } = Array.Empty<string>();
 
+    /// <summary>Réglages du match du serveur (reçus quand on est admin).</summary>
+    public MatchSettings? ServerSettings { get; private set; }
+
+    public void SendSettings(MatchSettings settings, bool saveToFile)
+    {
+        if (IsReady && IsAdmin)
+        {
+            Send(w => Msg.Settings(w, settings, saveToFile), DeliveryMethod.ReliableOrdered);
+        }
+    }
+
     /// <summary>Incrémenté quand le statut admin change (le menu se reconstruit).</summary>
     public int AdminVersion { get; private set; }
 
@@ -340,7 +351,7 @@ internal sealed class MultiplayerClient : INetEventListener
             return; // hors round : affiché par les intermédiaires uniquement
         }
         ModLog.Info($"Arrivée en {Msg.FormatTime(ms)} (round {finish.RoundId}) → envoi au serveur");
-        if (Round.Current.Info.Mode == GameMode.Rounds)
+        if (Round.Current.Info.Mode.IsSynchronized())
         {
             StartGate.MarkFinished();
         }
@@ -648,6 +659,9 @@ internal sealed class MultiplayerClient : INetEventListener
                     Notifications.Show(Tr.CommandReply(code, arg), new Microsoft.Xna.Framework.Color(255, 170, 80));
                     break;
                 }
+                case MessageType.Settings:
+                    ServerSettings = Msg.GetSettings(reader).Settings;
+                    break;
                 case MessageType.MatchStandings:
                     Round.Standings = Msg.GetStandings(reader);
                     break;

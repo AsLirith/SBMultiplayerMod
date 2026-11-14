@@ -21,12 +21,14 @@ Every setting can also be given (or overridden) on the command line:
 | `--password <text>` | `Password` | (none) | Password required to join |
 | `--admin-password <text>` | `AdminPassword` | (none) | Password to use the in-game admin panel (F8 > Admin) |
 | `--maps <list>` | `Maps` | (none) | Map rotation, e.g. `o:1,o:2,o:57` (official level IDs). Without it, the server runs in free mode: no rounds, everyone rides wherever they want |
-| `--mode <mode>` | `Mode` | `TimeAttack` | `TimeAttack` or `Rounds` (see [Game modes](#game-modes)) |
+| `--mode <mode>` | `Mode` | `TimeAttack` | `Free`, `TimeAttack`, `Rounds`, `Cup` or `Elimination` (see [Game modes](#game-modes)) |
 | `--round <s>` | `RoundSeconds` | 300 | Time Attack: round duration. Rounds: time limit after the start |
 | `--rounds-per-map <n>` | `RoundsPerMap` | 3 | Rounds mode: rounds played on each map |
 | | `FinishTimeoutSeconds` | 15 | Rounds mode: the round ends this long after the first finisher |
 | | `PrepareTimeoutSeconds` | 20 | Rounds mode: maximum wait for everyone to be on the start line |
 | | `CountdownSeconds` | 3 | Rounds mode: countdown before the start |
+| | `CupPointsLimit` | 100 | Cup mode: points needed to become a finalist |
+| | `EliminatedPerRound` | 1 | Elimination mode: players eliminated each round |
 | `--results <s>` | `ResultsSeconds` | 15 | Results screen duration in seconds |
 | | `PointsTable` | 10, 8, 6, 5, 4, 3, 2, 1 | Match points by rank at the end of each round |
 | | `ResultsDirectory` | `results` | Where results are exported (empty = no export) |
@@ -36,6 +38,7 @@ A player's current map key (e.g. `o:1:2001`) is shown in the server console when
 
 ## Game modes
 
+- **Free**: no rounds, everyone rides wherever they want (the map rotation is kept for later).
 - **Time Attack** (default): during the round, everyone retries as much as they want; the best time of each player counts.
 - **Rounds**: synchronized start, one attempt per round.
   1. Everyone loads the map and waits on the start line ("Waiting for players x/y"). The countdown starts when everyone is ready, or after `PrepareTimeoutSeconds`.
@@ -46,6 +49,17 @@ A player's current map key (e.g. `o:1:2001`) is shown in the server console when
   6. After `RoundsPerMap` rounds, the next map starts.
 
   Players who arrive after the start wait on the start line until the next round.
+- **Cup**: like Rounds, but reaching `CupPointsLimit` points makes you a **finalist** (your points stop there). A finalist who wins a round **wins the cup**. Then a new match starts.
+- **Elimination**: like Rounds, but each round the last `EliminatedPerRound` players are **eliminated** (players who gave up count as last, and at least one player always survives). Eliminated players watch the others from the start line. The last player standing wins, then a new match starts.
+
+## Changing the settings in game
+
+Admins can change the match settings without restarting the server: **F8 > Admin**, then:
+
+- **Mode and maps**: game mode, and the map rotation as level codes (`A1, A5, B2`…, or "Add the map I'm on");
+- **Timings and points**: round duration / time limit, results screen, rounds per map, end of round after the first finisher, wait for players, countdown, Cup points limit, eliminated per round, points by rank.
+
+Durations and points apply from the next round. Changing the mode or the maps restarts the match on the first map. With "Also save to the server's config file", the config file (`--config`) is rewritten with the new values, keeping its comments; values given on the command line are saved too.
 
 ## Running a match
 

@@ -32,7 +32,7 @@ internal sealed class RoundState
         // Nouveau round : l'ancien classement n'a plus de sens.
         var board = info.RoundId == old.Info.RoundId ? old.Leaderboard : new List<LeaderboardEntry>();
         double now = NetClock.Now;
-        double? goAt = info.Mode == GameMode.Rounds && info.Phase == RoundPhase.Playing
+        double? goAt = info.Mode.IsSynchronized() && info.Phase == RoundPhase.Playing
             ? now + info.StartIn - oneWayLatencySeconds
             : null;
         current = new Snapshot(info, now, board) { GoAt = goAt };

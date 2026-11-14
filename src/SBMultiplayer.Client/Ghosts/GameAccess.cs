@@ -138,6 +138,40 @@ internal static class GameAccess
     public static BytingLib.UI.Element CreateMainPanel(BytingLib.UI.Element content) =>
         (BytingLib.UI.Element)CreateMainPanelMethod.Invoke(UiAssets, new object[] { content })!;
 
+    /// <summary>Level code shown in the game's menus ("A5") for a map key ("o:2"), or the key itself if unknown.</summary>
+    public static string MapKeyToCode(string mapKey)
+    {
+        string[] parts = mapKey.Split(':');
+        if (Game != null && parts.Length >= 2 && parts[0] == "o" && uint.TryParse(parts[1], out uint id)
+            && Game.levelOrder.GetLevelByID(id) is { } level)
+        {
+            return Challenge.LevelToKey(level).ToUpperInvariant();
+        }
+        return mapKey;
+    }
+
+    /// <summary>Map key ("o:2") from a level code ("A5", case-insensitive) or a key; null if unknown.</summary>
+    public static string? CodeToMapKey(string codeOrKey)
+    {
+        string s = codeOrKey.Trim();
+        if (System.Text.RegularExpressions.Regex.IsMatch(s, @"^o:\d+(:\d+)?$"))
+        {
+            return s;
+        }
+        if (Game == null)
+        {
+            return null;
+        }
+        foreach (Level level in Game.levelOrder.GetLevels(normalOrBonus: null))
+        {
+            if (string.Equals(Challenge.LevelToKey(level), s, StringComparison.OrdinalIgnoreCase))
+            {
+                return $"o:{level.ID}";
+            }
+        }
+        return null;
+    }
+
     private static readonly Dictionary<string, string> MapLabels = new();
 
     /// <summary>Nom lisible d'une map de round : "o:5" → "A5 Jump" (code et nom affichés par le jeu).</summary>

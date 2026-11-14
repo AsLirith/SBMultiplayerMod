@@ -21,7 +21,7 @@ internal static class SplitTracker
     private static void EnsureContext(string mapKey, int roundId)
     {
         // Rounds mode: one attempt per round, so the reference is our best run on this map over the match.
-        bool rounds = MultiplayerClient.Instance.Round.Current.Info.Mode == SBMultiplayer.Protocol.GameMode.Rounds;
+        bool rounds = SBMultiplayer.Protocol.GameModes.IsSynchronized(MultiplayerClient.Instance.Round.Current.Info.Mode);
         string key = rounds ? $"rounds|{mapKey}" : $"{roundId}|{mapKey}";
         if (key != context)
         {

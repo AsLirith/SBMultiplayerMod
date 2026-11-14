@@ -50,7 +50,16 @@ public sealed class GameServer : INetEventListener
     private double pausedRemaining;
 
     // ---------- Rounds mode (synchronized start) ----------
-    private bool IsRoundsMode => options.Mode == GameMode.Rounds;
+    /// <summary>Synchronized-start modes: Rounds, Cup, Elimination.</summary>
+    private bool IsRoundsMode => options.Mode.IsSynchronized();
+
+    /// <summary>Elimination mode: eliminated players (by name).</summary>
+    private readonly HashSet<string> eliminated = new(StringComparer.Ordinal);
+
+    /// <summary>Cup / Elimination: the match has a winner; a new match starts after the results.</summary>
+    private bool matchOver;
+
+    private readonly string? configPath;
     private int roundInMap = 1;
     private double? startAt;
     private double? firstFinishAt;
@@ -64,9 +73,10 @@ public sealed class GameServer : INetEventListener
     /// <summary>Match standings, by player name (players get a new id when they reconnect).</summary>
     private readonly Dictionary<string, StandingEntry> standings = new();
 
-    public GameServer(ServerOptions options)
+    public GameServer(ServerOptions options, string? configPath = null)
     {
         this.options = options;
+        this.configPath = configPath;
         net = new NetManager(this)
         {
             AutoRecycle = true,
@@ -77,7 +87,7 @@ public sealed class GameServer : INetEventListener
 
     public int PlayerCount => players.Count;
 
-    private bool HasRotation => options.Maps.Count > 0;
+    private bool HasRotation => options.Maps.Count > 0 && options.Mode != GameMode.Free;
 
     private string CurrentMap => phase == RoundPhase.Free ? "" : options.Maps[mapIndex];
 
@@ -93,11 +103,18 @@ public sealed class GameServer : INetEventListener
             + (options.Password != "" ? ", password protected" : "")
             + (options.AdminPassword != "" ? ", in-game admin enabled" : "")
             + (options.Echo ? ", echo mode" : "") + ")");
+        LogSettings();
+    }
+
+    private void LogSettings()
+    {
         Log(HasRotation
             ? (IsRoundsMode
-                ? $"Rounds mode - rotation: {string.Join(", ", options.Maps)} - {options.RoundsPerMap} rounds per map, {options.RoundSeconds:0} s limit, {options.ResultsSeconds:0} s results"
+                ? $"{options.Mode} mode - rotation: {string.Join(", ", options.Maps)} - {options.RoundsPerMap} rounds per map, {options.RoundSeconds:0} s limit, {options.ResultsSeconds:0} s results"
+                  + (options.Mode == GameMode.Cup ? $", {options.CupPointsLimit} points to become a finalist" : "")
+                  + (options.Mode == GameMode.Elimination ? $", {options.EliminatedPerRound} eliminated per round" : "")
                 : $"Time Attack - rotation: {string.Join(", ", options.Maps)} - {options.RoundSeconds:0} s rounds, {options.ResultsSeconds:0} s results")
-            : "No maps configured: free mode (set Maps in the config or use --maps to enable rounds)");
+            : "Free mode: no rounds, everyone rides wherever they want");
     }
 
     public void Poll()
@@ -151,6 +168,14 @@ public sealed class GameServer : INetEventListener
     {
         if (!HasRotation)
         {
+            if (phase != RoundPhase.Free)
+            {
+                // Switched to free mode: tell the clients the rounds are over.
+                phase = RoundPhase.Free;
+                mapIndex = -1;
+                paused = false;
+                BroadcastRound();
+            }
             return;
         }
         if (!players.Values.Any(p => p.HasSaidHello))
@@ -176,7 +201,7 @@ public sealed class GameServer : INetEventListener
         else if (phase == RoundPhase.Preparing)
         {
             // Everyone on the start line (or waited long enough): countdown, then start.
-            int connected = players.Values.Count(p => p.HasSaidHello);
+            int connected = players.Values.Count(p => p.HasSaidHello && !eliminated.Contains(p.Name));
             if ((ready.Count >= connected && ready.Count > 0) || Now >= phaseEnd)
             {
                 BeginCountdown();
@@ -202,6 +227,13 @@ public sealed class GameServer : INetEventListener
     /// <summary>After the results: next round on the same map (Rounds mode), or next map.</summary>
     private void AdvanceAfterResults()
     {
+        if (matchOver)
+        {
+            // Cup or Elimination won: new match, from the next map.
+            ResetMatch();
+            StartRound((mapIndex + 1) % options.Maps.Count, newMap: true);
+            return;
+        }
         if (IsRoundsMode && roundInMap < Math.Max(1, options.RoundsPerMap))
         {
             roundInMap++;
@@ -274,7 +306,8 @@ public sealed class GameServer : INetEventListener
 
     private void OnReady(Player p, int readyRoundId)
     {
-        if (!IsRoundsMode || readyRoundId != roundId || phase != RoundPhase.Preparing || !Msg.MapMatches(p.MapKey, CurrentMap))
+        if (!IsRoundsMode || readyRoundId != roundId || phase != RoundPhase.Preparing || !Msg.MapMatches(p.MapKey, CurrentMap)
+            || eliminated.Contains(p.Name))
         {
             return;
         }
@@ -306,16 +339,123 @@ public sealed class GameServer : INetEventListener
         ExportResults();
     }
 
+    private int PointsForRank(int rank) => rank < options.PointsTable.Count ? options.PointsTable[rank] : 0;
+
     private void AwardPoints()
+    {
+        switch (options.Mode)
+        {
+            case GameMode.Cup:
+                AwardCupPoints();
+                break;
+            case GameMode.Elimination:
+                ApplyElimination();
+                break;
+            default:
+                List<LeaderboardEntry> board = SortedLeaderboard();
+                for (int rank = 0; rank < board.Count; rank++)
+                {
+                    string name = board[rank].Name;
+                    standings.TryGetValue(name, out StandingEntry previous);
+                    standings[name] = new StandingEntry(name, previous.Points + PointsForRank(rank), previous.RoundsPlayed + 1);
+                }
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Cup: points by rank; reaching the limit makes you a finalist (points stop there).
+    /// A player who was already a finalist and wins the round wins the cup.
+    /// </summary>
+    private void AwardCupPoints()
     {
         List<LeaderboardEntry> board = SortedLeaderboard();
         for (int rank = 0; rank < board.Count; rank++)
         {
-            int points = rank < options.PointsTable.Count ? options.PointsTable[rank] : 0;
             string name = board[rank].Name;
             standings.TryGetValue(name, out StandingEntry previous);
-            standings[name] = new StandingEntry(name, previous.Points + points, previous.RoundsPlayed + 1);
+            if (previous.Status == StandingStatus.Finalist)
+            {
+                if (rank == 0 && !matchOver)
+                {
+                    matchOver = true;
+                    standings[name] = previous with { Status = StandingStatus.Winner, RoundsPlayed = previous.RoundsPlayed + 1 };
+                    Log($"{name} wins the cup!");
+                    BroadcastEvent(ServerEvents.CupWon, name);
+                }
+                else
+                {
+                    standings[name] = previous with { RoundsPlayed = previous.RoundsPlayed + 1 };
+                }
+                continue;
+            }
+            int points = previous.Points + PointsForRank(rank);
+            bool finalist = points >= options.CupPointsLimit;
+            standings[name] = new StandingEntry(name, finalist ? options.CupPointsLimit : points, previous.RoundsPlayed + 1,
+                finalist ? StandingStatus.Finalist : StandingStatus.Normal);
+            if (finalist)
+            {
+                Log($"{name} is now a finalist");
+                BroadcastEvent(ServerEvents.Finalist, name);
+            }
         }
+    }
+
+    /// <summary>
+    /// Elimination: the last EliminatedPerRound players are eliminated (players who gave up count as last),
+    /// but at least one player always survives. Points = rounds survived. Last player standing wins.
+    /// </summary>
+    private void ApplyElimination()
+    {
+        var finishers = SortedLeaderboard().Where(e => participants.Contains(e.PlayerId)).Select(e => e.Name).ToList();
+        var racers = participants.Where(players.ContainsKey).Select(id => players[id].Name).ToList();
+        if (finishers.Count == 0)
+        {
+            return; // nobody finished: nobody is eliminated this round
+        }
+
+        // The last N players are eliminated; players who gave up count as last (all of them are eliminated).
+        // Slowest finishers complete the quota, but at least one player always survives.
+        var out_ = racers.Where(n => !finishers.Contains(n)).ToList();
+        int survivorsIfDnfOut = racers.Count - out_.Count;
+        int slowest = Math.Min(Math.Max(0, options.EliminatedPerRound - out_.Count), Math.Max(0, survivorsIfDnfOut - 1));
+        out_.AddRange(finishers.Skip(finishers.Count - slowest));
+
+        foreach (string name in racers)
+        {
+            standings.TryGetValue(name, out StandingEntry previous);
+            bool isOut = out_.Contains(name);
+            if (isOut)
+            {
+                eliminated.Add(name);
+            }
+            standings[name] = new StandingEntry(name, previous.Points + (isOut ? 0 : 1), previous.RoundsPlayed + 1,
+                isOut ? StandingStatus.Eliminated : StandingStatus.Normal);
+        }
+        if (out_.Count > 0)
+        {
+            Log($"Eliminated: {string.Join(", ", out_)}");
+            BroadcastEvent(ServerEvents.Eliminated, string.Join(", ", out_));
+        }
+
+        var remaining = players.Values.Where(p => p.HasSaidHello && !eliminated.Contains(p.Name)).ToList();
+        if (remaining.Count <= 1 && !matchOver)
+        {
+            matchOver = true;
+            string winner = remaining.FirstOrDefault()?.Name ?? finishers[0];
+            standings.TryGetValue(winner, out StandingEntry w);
+            standings[winner] = w with { Name = winner, Status = StandingStatus.Winner };
+            Log($"{winner} wins the elimination!");
+            BroadcastEvent(ServerEvents.EliminationWon, winner);
+        }
+    }
+
+    private void ResetMatch()
+    {
+        standings.Clear();
+        eliminated.Clear();
+        matchOver = false;
+        BroadcastStandings();
     }
 
     private RoundInfo CurrentRoundInfo() =>
@@ -325,7 +465,8 @@ public sealed class GameServer : INetEventListener
             RoundInMap: roundInMap,
             RoundsPerMap: IsRoundsMode ? Math.Max(1, options.RoundsPerMap) : 1,
             ReadyCount: ready.Count,
-            PlayerCount: players.Values.Count(p => p.HasSaidHello));
+            PlayerCount: players.Values.Count(p => p.HasSaidHello && !eliminated.Contains(p.Name)),
+            PointsLimit: options.Mode == GameMode.Cup ? options.CupPointsLimit : 0);
 
     private void BroadcastRound() => Broadcast(Msg.Round(writer, CurrentRoundInfo()), DeliveryMethod.ReliableOrdered, except: null);
 
@@ -421,11 +562,11 @@ public sealed class GameServer : INetEventListener
             File.WriteAllText(Path.Combine(options.ResultsDirectory, $"{stamp}_round{roundId}_{safeMap}.json"),
                 JsonSerializer.Serialize(round, ExportJson));
 
-            var csv = new StringBuilder("Rank,Name,Points,RoundsPlayed\n");
+            var csv = new StringBuilder("Rank,Name,Points,RoundsPlayed,Status\n");
             int rank = 1;
             foreach (StandingEntry e in SortedStandings())
             {
-                csv.Append(rank++).Append(',').Append(CsvField(e.Name)).Append(',').Append(e.Points).Append(',').Append(e.RoundsPlayed).Append('\n');
+                csv.Append(rank++).Append(',').Append(CsvField(e.Name)).Append(',').Append(e.Points).Append(',').Append(e.RoundsPlayed).Append(',').Append(e.Status).Append('\n');
             }
             File.WriteAllText(Path.Combine(options.ResultsDirectory, "match_standings.csv"), csv.ToString());
         }
@@ -460,6 +601,67 @@ public sealed class GameServer : INetEventListener
             Log($"Failed admin login from {p.Name} (#{p.Id})");
         }
         p.Peer.Send(Msg.AdminStatus(writer, p.IsAdmin, p.IsAdmin ? options.Maps : Array.Empty<string>()), DeliveryMethod.ReliableOrdered);
+        if (p.IsAdmin)
+        {
+            p.Peer.Send(Msg.Settings(writer, options.ToMatchSettings(), saveToFile: false), DeliveryMethod.ReliableOrdered);
+        }
+    }
+
+    /// <summary>An admin changed the match settings in game.</summary>
+    private void OnSettings(Player p, MatchSettings settings, bool saveToFile)
+    {
+        if (!p.IsAdmin)
+        {
+            Reply(p, CommandResults.NotAdmin, "");
+            return;
+        }
+        GameMode oldMode = options.Mode;
+        var oldMaps = new List<string>(options.Maps);
+        string? error = options.Apply(settings);
+        if (error != null)
+        {
+            Reply(p, CommandResults.InvalidSettings, error);
+            return;
+        }
+        Log($"Settings changed by {p.Name}");
+        LogSettings();
+
+        if (saveToFile)
+        {
+            if (configPath == null)
+            {
+                Reply(p, CommandResults.NoConfigFile, "");
+            }
+            else
+            {
+                try
+                {
+                    options.Save(configPath);
+                    Log($"Settings saved to {configPath}");
+                }
+                catch (Exception e)
+                {
+                    Log($"Could not save {configPath}: {e.Message}");
+                    Reply(p, CommandResults.InvalidSettings, e.Message);
+                }
+            }
+        }
+
+        // A new mode or map list restarts the match; durations and points apply from the next round.
+        if (options.Mode != oldMode || !options.Maps.SequenceEqual(oldMaps))
+        {
+            ResetMatch();
+            if (HasRotation)
+            {
+                StartRound(0, newMap: true);
+            }
+        }
+        BroadcastEvent(ServerEvents.SettingsChanged, p.Name);
+        foreach (Player admin in players.Values.Where(o => o.IsAdmin))
+        {
+            admin.Peer.Send(Msg.AdminStatus(writer, true, options.Maps), DeliveryMethod.ReliableOrdered);
+            admin.Peer.Send(Msg.Settings(writer, options.ToMatchSettings(), saveToFile: false), DeliveryMethod.ReliableOrdered);
+        }
     }
 
     private void OnAdminCommand(Player p, AdminCommand command, int argument)
@@ -573,8 +775,7 @@ public sealed class GameServer : INetEventListener
                 break;
 
             case AdminCommand.ResetMatch:
-                standings.Clear();
-                BroadcastStandings();
+                ResetMatch();
                 BroadcastEvent(ServerEvents.MatchReset, by);
                 break;
 
@@ -812,6 +1013,12 @@ public sealed class GameServer : INetEventListener
                 case MessageType.GiveUp:
                     OnGiveUp(p, reader.GetInt());
                     break;
+                case MessageType.Settings:
+                {
+                    var (settings, save) = Msg.GetSettings(reader);
+                    OnSettings(p, settings, save);
+                    break;
+                }
                 default:
                     Log($"Unexpected message {type} from #{p.Id}");
                     break;

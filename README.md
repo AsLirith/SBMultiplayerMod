@@ -6,7 +6,8 @@ Unofficial multiplayer mod for [STUNTBOOST](https://store.steampowered.com/app/2
 
 ## Features
 
-- **Two game modes**: **Time Attack** (unlimited retries, best time) and **Rounds** (synchronized start with a countdown, one attempt per round, points by race time).
+- **Game modes**: **Free** ride, **Time Attack** (unlimited retries, best time), **Rounds** (synchronized start with a countdown, one attempt per round, points by race time), **Cup** (finalists and match point) and **Elimination** (the slowest players are knocked out each round).
+- **Server settings editable in game** by admins (mode, map rotation, timings, points), optionally saved to the config file.
 - **Dedicated server** (console app, no game needed): map rotation, live leaderboard, results screen, match points, results export (JSON/CSV), optional password.
 - **Other players' ghosts** in real time, smoothly interpolated, with **their own skin** and **their name** when they're close.
 - **Round map loaded automatically**, instant retry when you cross the finish line instead of the end screen.

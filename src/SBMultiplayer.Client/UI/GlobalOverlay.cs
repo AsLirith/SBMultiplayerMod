@@ -94,6 +94,11 @@ internal sealed class GlobalOverlay : SE.IDrawBatch2
         string? message = null;
         float size = scale * 0.9f;
         Color color = Color.White;
+        if (StartGate.IsEliminated)
+        {
+            text.DrawCentered(sb, Tr.EliminatedWaiting, cx, ref y, new Color(255, 120, 120), size);
+            return;
+        }
         switch (StartGate.State)
         {
             case StartGate.RunState.Waiting when round.Info.Phase == RoundPhase.Preparing:
@@ -237,10 +242,26 @@ internal sealed class GlobalOverlay : SE.IDrawBatch2
             y += text.LineHeight(s) * 0.5f;
             text.DrawRightAligned(sb, Tr.MatchStandings, right, ref y, Gold, s * 1.05f);
             string myName = client.PlayerName;
+            bool elimination = round.Info.Mode == GameMode.Elimination;
             for (int i = 0; i < Math.Min(standings.Count, MaxLeaderboardLines); i++)
             {
                 StandingEntry e = standings[i];
-                text.DrawRightAligned(sb, $"{i + 1}. {e.Name}   {Tr.Points(e.Points)}", right, ref y, e.Name == myName ? Gold : Color.Gainsboro, s);
+                string value = elimination ? Tr.RoundsSurvived(e.Points) : round.Info.PointsLimit > 0 ? $"{e.Points}/{round.Info.PointsLimit}" : Tr.Points(e.Points);
+                string status = e.Status switch
+                {
+                    StandingStatus.Finalist => "  " + Tr.FinalistTag,
+                    StandingStatus.Eliminated => "  " + Tr.EliminatedTag,
+                    StandingStatus.Winner => "  " + Tr.WinnerTag,
+                    _ => "",
+                };
+                Color color = e.Status switch
+                {
+                    StandingStatus.Winner => new Color(255, 230, 120),
+                    StandingStatus.Eliminated => new Color(150, 150, 150),
+                    StandingStatus.Finalist => new Color(140, 220, 255),
+                    _ => e.Name == myName ? Gold : Color.Gainsboro,
+                };
+                text.DrawRightAligned(sb, $"{i + 1}. {e.Name}   {value}{status}", right, ref y, color, s);
             }
         }
     }

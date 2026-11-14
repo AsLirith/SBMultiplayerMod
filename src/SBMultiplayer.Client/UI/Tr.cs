@@ -73,6 +73,8 @@ internal static class Tr
         SBMultiplayer.Protocol.CommandResults.BadMap => T($"Unknown map number (the rotation has {arg} maps)", $"Numéro de map inconnu (la rotation compte {arg} maps)"),
         SBMultiplayer.Protocol.CommandResults.Unknown => T($"Unknown command {arg} (see /help)", $"Commande inconnue {arg} (voir /help)"),
         SBMultiplayer.Protocol.CommandResults.TooFast => T("You're sending messages too fast", "Tu envoies des messages trop vite"),
+        SBMultiplayer.Protocol.CommandResults.InvalidSettings => T($"Settings refused: {arg}", $"Paramètres refusés : {arg}"),
+        SBMultiplayer.Protocol.CommandResults.NoConfigFile => T("Settings applied, but not saved: the server wasn't started with a config file (--config)", "Paramètres appliqués, mais pas enregistrés : le serveur n'a pas été lancé avec un fichier de config (--config)"),
         _ => $"{code} {arg}",
     };
     public static string Back => T("Back", "Retour");
@@ -131,6 +133,11 @@ internal static class Tr
         SBMultiplayer.Protocol.ServerEvents.PlayerKicked => T($"{arg} was kicked", $"{arg} a été expulsé"),
         SBMultiplayer.Protocol.ServerEvents.MatchReset => T($"Match scores reset by {arg}", $"Scores du match remis à zéro par {arg}"),
         SBMultiplayer.Protocol.ServerEvents.AdminLoggedIn => T($"{arg} is now admin", $"{arg} est maintenant admin"),
+        SBMultiplayer.Protocol.ServerEvents.SettingsChanged => T($"Server settings changed by {arg}", $"Paramètres du serveur modifiés par {arg}"),
+        SBMultiplayer.Protocol.ServerEvents.CupWon => T($"{arg} wins the cup!", $"{arg} remporte la Cup !"),
+        SBMultiplayer.Protocol.ServerEvents.EliminationWon => T($"{arg} wins the elimination!", $"{arg} remporte l'élimination !"),
+        SBMultiplayer.Protocol.ServerEvents.Eliminated => T($"Eliminated: {arg}", $"Éliminé(s) : {arg}"),
+        SBMultiplayer.Protocol.ServerEvents.Finalist => T($"{arg} is now a finalist", $"{arg} est finaliste"),
         _ => $"{code} {arg}",
     };
 
@@ -142,6 +149,43 @@ internal static class Tr
     public static string FinishedWaiting => T("Finished - waiting for the other players", "Arrivé - en attente des autres joueurs");
     public static string LateWaiting => T("Round already started - you'll race in the next one", "Manche déjà commencée - tu joueras la suivante");
     public static string RoundOf(int n, int total) => T($"Round {n}/{total}", $"Manche {n}/{total}");
+    public static string EliminatedWaiting => T("Eliminated - watch the others until the next match", "Éliminé - regarde les autres jusqu'au prochain match");
+    public static string FinalistTag => T("FINALIST", "FINALISTE");
+    public static string EliminatedTag => T("out", "éliminé");
+    public static string WinnerTag => T("WINNER", "VAINQUEUR");
+    public static string RoundsSurvived(int n) => T($"{n} round{(n > 1 ? "s" : "")}", $"{n} manche{(n > 1 ? "s" : "")}");
+
+    public static string ModeName(SBMultiplayer.Protocol.GameMode mode) => mode switch
+    {
+        SBMultiplayer.Protocol.GameMode.Free => T("Free", "Libre"),
+        SBMultiplayer.Protocol.GameMode.TimeAttack => "Time Attack",
+        SBMultiplayer.Protocol.GameMode.Rounds => "Rounds",
+        SBMultiplayer.Protocol.GameMode.Cup => "Cup",
+        SBMultiplayer.Protocol.GameMode.Elimination => T("Elimination", "Élimination"),
+        _ => mode.ToString(),
+    };
+
+    // ---------- Réglages du serveur (admins) ----------
+    public static string SettingsModeAndMapsTitle => T("Mode and maps", "Mode et maps");
+    public static string SettingsTimingsTitle => T("Timings and points", "Délais et points");
+    public static string SettingsModeLabel(string mode) => T($"Game mode: {mode}", $"Mode de jeu : {mode}");
+    public static string SettingsMapsField => T("Map rotation (level codes separated by commas, e.g. A1, A5, B2):", "Rotation de maps (codes de niveau séparés par des virgules, ex. A1, A5, B2) :");
+    public static string SettingsAddCurrentMap => T("Add the map I'm on", "Ajouter la map où je suis");
+    public static string SettingsNoCurrentMap => T("You're not on an official level", "Tu n'es pas sur un niveau officiel");
+    public static string SettingsUnknownMap(string code) => T($"Unknown level \"{code}\"", $"Niveau inconnu \"{code}\"");
+    public static string SettingsRestartWarning => T("Changing the mode or the maps restarts the match.", "Changer le mode ou les maps relance le match.");
+    public static string SettingsSaveToFile => T("Also save to the server's config file", "Enregistrer aussi dans le fichier de config du serveur");
+    public static string SettingsApply => T("Apply", "Appliquer");
+    public static string SettingsRoundSeconds => T("Round duration / time limit", "Durée du round / limite de temps");
+    public static string SettingsResultsSeconds => T("Results screen", "Écran de résultats");
+    public static string SettingsRoundsPerMap => T("Rounds per map (Rounds, Cup, Elimination)", "Manches par map (Rounds, Cup, Élimination)");
+    public static string SettingsFinishTimeout => T("End of round after the 1st finisher", "Fin de manche après le 1er arrivé");
+    public static string SettingsPrepareTimeout => T("Max wait for players", "Attente max des joueurs");
+    public static string SettingsCountdown => T("Start countdown", "Compte à rebours du départ");
+    public static string SettingsCupLimit => T("Cup: points to become a finalist", "Cup : points pour être finaliste");
+    public static string SettingsEliminatedPerRound => T("Elimination: eliminated per round", "Élimination : éliminés par manche");
+    public static string SettingsPointsTable => T("Points by rank", "Points par place");
+    public static string SettingsBadPoints => T("Points: whole numbers separated by commas", "Points : des nombres entiers séparés par des virgules");
 
     // ---------- Panneau : pause et match ----------
     public static string PausedHeader => T("PAUSED", "PAUSE");

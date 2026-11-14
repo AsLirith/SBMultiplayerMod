@@ -105,7 +105,7 @@ foreach (var apply in overrides)
     apply(options);
 }
 
-var server = new GameServer(options);
+var server = new GameServer(options, configPath);
 server.Start();
 
 using var cts = new CancellationTokenSource();

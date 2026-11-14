@@ -59,8 +59,23 @@ internal static class StartGate
         {
             MultiplayerClient client = MultiplayerClient.Instance;
             RoundInfo info = client.Round.Current.Info;
-            return info.Mode == GameMode.Rounds && info.Phase is RoundPhase.Preparing or RoundPhase.Playing or RoundPhase.Results
+            return info.Mode.IsSynchronized() && info.Phase is RoundPhase.Preparing or RoundPhase.Playing or RoundPhase.Results
                 && client.IsOnRoundMap;
+        }
+    }
+
+    /// <summary>Elimination mode: we've been eliminated from the current match.</summary>
+    public static bool IsEliminated
+    {
+        get
+        {
+            MultiplayerClient client = MultiplayerClient.Instance;
+            if (client.Round.Current.Info.Mode != GameMode.Elimination)
+            {
+                return false;
+            }
+            string me = client.PlayerName;
+            return client.Round.Standings.Any(e => e.Name == me && e.Status == StandingStatus.Eliminated);
         }
     }
 
@@ -91,6 +106,10 @@ internal static class StartGate
         SyncRound();
         lastHeldTick = tick;
         RoundState.Snapshot round = MultiplayerClient.Instance.Round.Current;
+        if (IsEliminated)
+        {
+            return false; // eliminated: watch the others from the start line until the next match
+        }
 
         switch (state)
         {
@@ -137,7 +156,7 @@ internal static class StartGate
     {
         tick++;
         RoundInfo info = client.Round.Current.Info;
-        if (Applies && info.Phase == RoundPhase.Preparing && IsHeldOnStartLine && readySentFor != info.RoundId)
+        if (Applies && info.Phase == RoundPhase.Preparing && IsHeldOnStartLine && readySentFor != info.RoundId && !IsEliminated)
         {
             readySentFor = info.RoundId;
             client.SendReady(info.RoundId);

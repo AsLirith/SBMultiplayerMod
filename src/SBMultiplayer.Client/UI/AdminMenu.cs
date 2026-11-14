@@ -85,7 +85,10 @@ internal static class AdminMenu
                 Button(Tr.AdminRestart, () => client.Admin(AdminCommand.RestartRound)),
                 Button(Tr.AdminPause, () => client.Admin(AdminCommand.TogglePause)),
                 Button(Tr.AdminExtend, () => client.Admin(AdminCommand.Extend, 60))));
-            content.Add(Button(Tr.AdminResetMatch, () => client.Admin(AdminCommand.ResetMatch)));
+            content.Add(Line(
+                Button(Tr.AdminResetMatch, () => client.Admin(AdminCommand.ResetMatch)),
+                Button(Tr.SettingsModeAndMapsTitle, ServerSettingsMenu.OpenModeAndMaps),
+                Button(Tr.SettingsTimingsTitle, ServerSettingsMenu.OpenTimingsAndPoints)));
 
             IReadOnlyList<string> maps = client.AdminMaps;
             if (maps.Count == 0)
