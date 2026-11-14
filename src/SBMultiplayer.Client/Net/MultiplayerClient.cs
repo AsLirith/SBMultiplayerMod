@@ -309,10 +309,11 @@ internal sealed class MultiplayerClient : INetEventListener
 
     // ---------- Temps ----------
 
-    private (int RoundId, Func<uint> ReadMs, bool SendToServer)? pendingFinish;
+    private (int RoundId, SE.LevelTimer Timer, SE.TimeDiffOnCheckpoints? Display, bool SendToServer)? pendingFinish;
 
     /// <summary>Arrivée franchie : le temps sera lu (et envoyé si besoin) à la fin du tick, chrono alors définitif.</summary>
-    public void QueueFinish(int roundId, Func<uint> readMs, bool sendToServer) => pendingFinish = (roundId, readMs, sendToServer);
+    public void QueueFinish(int roundId, SE.LevelTimer timer, SE.TimeDiffOnCheckpoints? display, bool sendToServer) =>
+        pendingFinish = (roundId, timer, display, sendToServer);
 
     private void FlushPendingFinish()
     {
@@ -321,8 +322,8 @@ internal sealed class MultiplayerClient : INetEventListener
             return;
         }
         pendingFinish = null;
-        uint ms = finish.ReadMs();
-        int? delta = SplitTracker.Finished(mapKey, finish.RoundId, ms);
+        uint ms = finish.Timer.Counter.MS;
+        int? delta = SplitTracker.Finished(mapKey, finish.RoundId, finish.Timer, finish.Display);
         if (!finish.SendToServer)
         {
             return; // hors round : affiché par les intermédiaires uniquement

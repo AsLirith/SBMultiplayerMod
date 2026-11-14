@@ -1,25 +1,23 @@
-using SBMultiplayer.Protocol;
+using System.Reflection;
+using HarmonyLib;
+using SE;
 
 namespace SBMultiplayer.Client.Net;
 
 /// <summary>
-/// Temps intermédiaires : temps à chaque checkpoint de la run en cours, comparés à ceux de notre
-/// meilleure run sur la même map pendant le même round. Global (les scènes sont recréées à chaque retry).
-/// Thread du jeu uniquement.
+/// Checkpoint splits, shown with the game's own time difference display (<see cref="TimeDiffOnCheckpoints"/>,
+/// the one used against ghosts): our best run of the round on this map becomes its "opponent".
+/// Global state (scenes are recreated on every retry). Game thread only.
 /// </summary>
 internal static class SplitTracker
 {
-    /// <summary>Dernier intermédiaire franchi, pour l'affichage (null = rien à afficher).</summary>
-    public readonly record struct Split(int Index, uint Ms, int? DeltaMs, double ShownAt, bool IsFinish);
+    // TimeDiffOnCheckpoints compares every checkpoint with this (readonly, set by the game when the scene is built).
+    private static readonly FieldInfo OpponentField = AccessTools.Field(typeof(TimeDiffOnCheckpoints), "opponent");
 
     private static string context = "";
-    private static readonly List<uint> current = new();
-    private static List<uint>? best;
-    private static uint? bestTotal;
+    private static LevelTimeData? best;
 
-    public static Split? Last { get; private set; }
-
-    /// <summary>Change de référence quand la map ou le round change.</summary>
+    /// <summary>Forgets the reference when the map or the round changes.</summary>
     private static void EnsureContext(string mapKey, int roundId)
     {
         string key = $"{roundId}|{mapKey}";
@@ -27,51 +25,42 @@ internal static class SplitTracker
         {
             context = key;
             best = null;
-            bestTotal = null;
-            current.Clear();
-            Last = null;
         }
     }
 
-    public static void RunStarted(string mapKey, int roundId)
+    /// <summary>New run (new scene): our best run becomes the opponent of the game's split display.</summary>
+    public static void AttachTo(TimeDiffOnCheckpoints? display, string mapKey, int roundId)
     {
         EnsureContext(mapKey, roundId);
-        current.Clear();
-        // Le retry automatique relance le niveau juste après l'arrivée : on laisse le temps final affiché.
-        if (Last is not { IsFinish: true } last || NetClock.Now - last.ShownAt > 2)
+        if (display != null && best != null && ModConfig.Current.ShowSplits)
         {
-            Last = null;
+            OpponentField.SetValue(display, best);
         }
     }
 
-    public static void CheckpointTaken(string mapKey, int roundId, uint ms)
+    /// <summary>
+    /// Finish (called at the end of the tick, once the timer is final): shows the final difference with the
+    /// game's display, and keeps the run as the new reference if it's our best. Returns the difference in ms.
+    /// </summary>
+    public static int? Finished(string mapKey, int roundId, LevelTimer timer, TimeDiffOnCheckpoints? display)
     {
         EnsureContext(mapKey, roundId);
-        int index = current.Count;
-        current.Add(ms);
-        int? delta = best != null && index < best.Count ? (int)ms - (int)best[index] : null;
-        Last = new Split(index, ms, delta, NetClock.Now, IsFinish: false);
-    }
+        LevelTimeData run = timer.Counter;
+        int? delta = best != null ? (int)run.MS - (int)best.MS : null;
 
-    /// <summary>Arrivée : la run devient la référence si c'est notre meilleur temps. Renvoie l'écart avec l'ancien meilleur.</summary>
-    public static int? Finished(string mapKey, int roundId, uint totalMs)
-    {
-        EnsureContext(mapKey, roundId);
-        int? delta = bestTotal.HasValue ? (int)totalMs - (int)bestTotal.Value : null;
-        Last = new Split(current.Count, totalMs, delta, NetClock.Now, IsFinish: true);
-        if (!bestTotal.HasValue || totalMs < bestTotal.Value)
+        if (display != null && best != null && ModConfig.Current.ShowSplits)
         {
-            bestTotal = totalMs;
-            best = new List<uint>(current);
+            display.ShowTimeDiff(best.MS, null); // null checkpoint = final time
+        }
+
+        if (best == null || run.MS < best.MS)
+        {
+            // Copy: the game keeps updating its own LevelTimeData.
+            var checkpoints = run.Checkpoints
+                .Select(c => new CheckpointTimeAndRestarts(c.CheckpointID, c.MS, new List<uint>(), c.Rewindable))
+                .ToList();
+            best = new LevelTimeData(run.MS, run.TotalMS, run.RestartCount, checkpoints, ghostHasCheckpointPenalties: true);
         }
         return delta;
-    }
-
-    /// <summary>"-0.234", "+1.050", "+1:02.300".</summary>
-    public static string FormatDelta(int deltaMs)
-    {
-        int abs = Math.Abs(deltaMs);
-        string body = abs >= 60_000 ? Msg.FormatTime((uint)abs) : $"{abs / 1000}.{abs % 1000:000}";
-        return (deltaMs < 0 ? "-" : "+") + body;
     }
 }

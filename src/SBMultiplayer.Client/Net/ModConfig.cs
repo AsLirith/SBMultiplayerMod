@@ -47,11 +47,8 @@ internal sealed class ModConfig
     /// <summary>Affiche les pseudos au-dessus des ghosts proches.</summary>
     public bool ShowNameTags { get; set; } = true;
 
-    /// <summary>Temps intermédiaires aux checkpoints, comparés à notre meilleure run du round.</summary>
+    /// <summary>Temps intermédiaires aux checkpoints (affichage du jeu), comparés à notre meilleure run du round.</summary>
     public bool ShowSplits { get; set; } = true;
-
-    /// <summary>Taille de l'affichage des temps intermédiaires (1 = taille d'origine).</summary>
-    public float SplitsScale { get; set; } = 1f;
 
     /// <summary>Langue de l'interface du mod : "auto" (celle du jeu), "en" ou "fr".</summary>
     public string Language { get; set; } = "auto";

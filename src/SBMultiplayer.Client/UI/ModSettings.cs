@@ -23,8 +23,6 @@ internal static class ModSettings
 
     public static ValueEvent<bool> ShowSplits { get; } = Bind(ModConfig.Current.ShowSplits, v => ModConfig.Current.ShowSplits = v);
 
-    public static ValueEvent<float> SplitsScale { get; } = Bind(ModConfig.Current.SplitsScale, v => ModConfig.Current.SplitsScale = v);
-
     private static ValueEvent<T> Bind<T>(T initial, Action<T> apply)
     {
         var value = new ValueEvent<T>(initial);

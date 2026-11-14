@@ -57,6 +57,8 @@ internal sealed class MultiplayerSceneHook : IUpdate, ICheckpointStorage, IGoalR
         mapKey = ComputeMapKey(board);
         localPosition = GameAccess.GetGhostState(board).Position;
         client.SetMap(this, mapKey);
+        // Splits: the game's own time difference display compares with our best run of the round.
+        SplitTracker.AttachTo(scene.AllThings.OfType<TimeDiffOnCheckpoints>().FirstOrDefault(), mapKey, client.Round.Current.Info.RoundId);
         return true;
     }
 
@@ -126,16 +128,7 @@ internal sealed class MultiplayerSceneHook : IUpdate, ICheckpointStorage, IGoalR
 
     public void StoreCheckpoint(ICheckpointInfo checkpointInfo)
     {
-        EnsureBoard();
-        int roundId = client.Round.Current.Info.RoundId;
-        if (checkpointInfo is FirstCheckpoint)
-        {
-            SplitTracker.RunStarted(mapKey, roundId);
-        }
-        else if (scene.AllThings.OfType<LevelTimer>().FirstOrDefault() is { } timer)
-        {
-            SplitTracker.CheckpointTaken(mapKey, roundId, timer.Counter.MS);
-        }
+        EnsureBoard(); // the run starts (FirstCheckpoint) before the scene's first update
     }
 
     public void GoalReached()
@@ -153,7 +146,7 @@ internal sealed class MultiplayerSceneHook : IUpdate, ICheckpointStorage, IGoalR
         }
         // Le temps est toujours lu (intermédiaires), mais n'est envoyé au serveur que pendant un round, sur sa map.
         bool counts = client.IsOnRoundMap && round.Info.Phase == RoundPhase.Playing;
-        client.QueueFinish(round.Info.RoundId, () => timer.Counter.MS, sendToServer: counts);
+        client.QueueFinish(round.Info.RoundId, timer, scene.AllThings.OfType<TimeDiffOnCheckpoints>().FirstOrDefault(), sendToServer: counts);
     }
 
     public void DrawBatch(Microsoft.Xna.Framework.Graphics.SpriteBatch spriteBatch, float extrapolation)
@@ -183,10 +176,6 @@ internal sealed class MultiplayerSceneHook : IUpdate, ICheckpointStorage, IGoalR
     {
         // Restart ou respawn : nouveau segment, les autres ne verront pas la planche glisser jusqu'au respawn.
         segment++;
-        if (checkpointInfo is FirstCheckpoint)
-        {
-            SplitTracker.RunStarted(mapKey, client.Round.Current.Info.RoundId);
-        }
     }
 
     public void Dispose()

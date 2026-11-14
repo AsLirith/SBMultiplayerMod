@@ -34,10 +34,6 @@ internal sealed class GlobalOverlay : SE.IDrawBatch2
             try
             {
                 DrawNotifications(sb, vp, scale);
-                if (ModConfig.Current.ShowSplits)
-                {
-                    DrawSplit(sb, vp, scale);
-                }
                 if (ModConfig.Current.ShowRoundPanel && MultiplayerClient.Instance.IsReady)
                 {
                     DrawRoundPanel(sb, vp, scale);
@@ -62,33 +58,6 @@ internal sealed class GlobalOverlay : SE.IDrawBatch2
         foreach (var (item, alpha) in Notifications.Visible())
         {
             text.DrawCentered(sb, item.Text, vp.Width / 2f, ref y, item.Color, s, alpha);
-        }
-    }
-
-    private const double SplitDisplaySeconds = 2.5;
-
-    /// <summary>Dernier intermédiaire au centre de l'écran : temps et écart (vert = en avance, rouge = en retard).</summary>
-    private void DrawSplit(SpriteBatch sb, Viewport vp, float scale)
-    {
-        if (SplitTracker.Last is not { } split || !GameAccess.IsIngameScene(GameAccess.CurrentScene))
-        {
-            return;
-        }
-        double age = NetClock.Now - split.ShownAt;
-        if (age > SplitDisplaySeconds)
-        {
-            return;
-        }
-        float alpha = (float)Math.Clamp((SplitDisplaySeconds - age) / 0.4, 0, 1);
-        float s = scale * 0.9f * ModConfig.Current.SplitsScale;
-        bool finish = split.IsFinish;
-        string label = finish ? Tr.SplitFinish : Tr.SplitCheckpoint(split.Index + 1);
-        float y = vp.Height * 0.28f;
-        text.DrawCentered(sb, $"{label}   {Msg.FormatTime(split.Ms)}", vp.Width / 2f, ref y, Color.White, s, alpha);
-        if (split.DeltaMs is int delta)
-        {
-            Color color = delta < 0 ? new Color(110, 160, 255) : delta > 0 ? new Color(255, 110, 110) : Color.White;
-            text.DrawCentered(sb, SplitTracker.FormatDelta(delta), vp.Width / 2f, ref y, color, s * 1.2f, alpha);
         }
     }
 
