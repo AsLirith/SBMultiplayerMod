@@ -152,16 +152,7 @@ internal sealed class MultiplayerClient : INetEventListener
             GameAccess.GlobalStuff.Add(overlay);
         }
 
-        if (!gameReady)
-        {
-            gameReady = currentScene?.GetType().Name == "LevelSelectionScene" || GameAccess.IsIngameScene(currentScene);
-            if (!gameReady)
-            {
-                return;
-            }
-            ModLog.Info($"Jeu prêt ({currentScene?.GetType().Name})");
-        }
-
+        // Menus, chat and connection work as soon as the game runs (main menu included).
         HandleHotkeys();
         PopupMenu.Tick();
         StartGate.Tick(this);
@@ -172,6 +163,18 @@ internal sealed class MultiplayerClient : INetEventListener
 
         var r = Round.Current;
         AnnounceRound(r);
+
+        // Loading the round's map automatically waits until the game has really started (level selection or a
+        // level): never during the first-launch save creation. F7 / "Join round" also count as ready.
+        if (!gameReady)
+        {
+            gameReady = currentScene?.GetType().Name == "LevelSelectionScene" || GameAccess.IsIngameScene(currentScene);
+            if (!gameReady)
+            {
+                return;
+            }
+            ModLog.Info($"Jeu prêt ({currentScene?.GetType().Name})");
+        }
 
         // Nouveau round : on charge la map imposée (une seule fois par round). En mode Rounds, chaque
         // manche recharge la map (même map) : tout le monde repart de la ligne de départ.
@@ -226,7 +229,15 @@ internal sealed class MultiplayerClient : INetEventListener
         {
             return;
         }
-        int skin = SkinCache.LocalSkinId(GameAccess.Game);
+        int skin;
+        try
+        {
+            skin = SkinCache.LocalSkinId(GameAccess.Game);
+        }
+        catch (Exception)
+        {
+            return; // no save yet (first launch): try again later
+        }
         if (skin != localSkin)
         {
             localSkin = skin;
@@ -331,6 +342,8 @@ internal sealed class MultiplayerClient : INetEventListener
         }
         else
         {
+            gameReady = true; // explicit request: the player is ready to play
+            loadedRoundId = r.Info.RoundId;
             LoadRoundMap(r.Info.MapKey);
         }
     }
@@ -466,9 +479,16 @@ internal sealed class MultiplayerClient : INetEventListener
             }
 
             playerName = ResolvePlayerName();
-            if (GameAccess.Game != null)
+            try
             {
-                localSkin = SkinCache.LocalSkinId(GameAccess.Game);
+                if (GameAccess.Game != null)
+                {
+                    localSkin = SkinCache.LocalSkinId(GameAccess.Game);
+                }
+            }
+            catch (Exception)
+            {
+                // no save yet (first launch): the skin is sent later by TrackLocalSkin
             }
             var (host, port) = ModConfig.Current.ParseServer();
             serverAddress = $"{host}:{port}";

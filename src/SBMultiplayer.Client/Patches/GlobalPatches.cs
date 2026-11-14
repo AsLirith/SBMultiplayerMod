@@ -74,7 +74,9 @@ internal static class ModdedNoticePatch
         int index = __result.IndexOf("mod: 0Harmony");
         if (index >= 0)
         {
-            __result[index] = $"mod: SBMultiplayer v{SBMultiplayer.Client.UI.MultiplayerMenu.Version}";
+            __result[index] = Compatibility.IsCompatible
+                ? $"mod: SBMultiplayer v{SBMultiplayer.Client.UI.MultiplayerMenu.Version}"
+                : SBMultiplayer.Client.UI.Tr.IncompatibleNotice(SBMultiplayer.Client.UI.MultiplayerMenu.Version);
         }
     }
 }

@@ -248,6 +248,10 @@ internal static class Tr
     public static string NextGameIn(int seconds) => T($"Next game in {seconds} s", $"Partie suivante dans {seconds} s");
     public static string SettingsMatchEnd => T("End-of-game screen", "Écran de fin de partie");
 
+    public static string IncompatibleNotice(string version) =>
+        T($"SBMultiplayer v{version}: incompatible with this game version, update the mod",
+          $"SBMultiplayer v{version} : incompatible avec cette version du jeu, mets le mod à jour");
+
     // ---------- Panneau : pause et match ----------
     public static string PausedHeader => T("PAUSED", "PAUSE");
     public static string MatchStandings => T("Match", "Match");
