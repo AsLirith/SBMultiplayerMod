@@ -13,8 +13,8 @@ namespace SBMultiplayer.Client.Net;
 /// </summary>
 internal sealed class MultiplayerSceneHook : IUpdate, ICheckpointStorage, IGoalReached, IDrawBatch, IDisposable
 {
-    /// <summary>One send every 2 ticks = 30 states per second.</summary>
-    private const int SendEveryTicks = 2;
+    /// <summary>One send every tick = 60 states per second (smooth ghosts with a short display delay).</summary>
+    private const int SendEveryTicks = 1;
 
     private static readonly AccessTools.FieldRef<Board, PlayerContainer> BoardPlayerContainer =
         AccessTools.FieldRefAccess<Board, PlayerContainer>("playerContainer");
