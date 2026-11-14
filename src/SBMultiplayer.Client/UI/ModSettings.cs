@@ -15,6 +15,8 @@ internal static class ModSettings
 
     public static ValueEvent<bool> ShowNameTags { get; } = Bind(ModConfig.Current.ShowNameTags, v => ModConfig.Current.ShowNameTags = v);
 
+    public static ValueEvent<bool> ShowNameTagDistance { get; } = Bind(ModConfig.Current.ShowNameTagDistance, v => ModConfig.Current.ShowNameTagDistance = v);
+
     public static ValueEvent<float> NameTagMaxDistance { get; } = Bind(ModConfig.Current.NameTagMaxDistance, v => ModConfig.Current.NameTagMaxDistance = v);
 
     public static ValueEvent<bool> ShowRoundPanel { get; } = Bind(ModConfig.Current.ShowRoundPanel, v => ModConfig.Current.ShowRoundPanel = v);

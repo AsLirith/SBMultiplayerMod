@@ -24,6 +24,10 @@ internal sealed class MultiplayerOverlay
         }
     }
 
+    /// <summary>Game units are centimeters (the game shows speeds in cm/s): "42 cm", then "1.5 m".</summary>
+    private static string FormatDistance(float units) =>
+        units < 100f ? $"{units:0} cm" : $"{units / 100f:0.0} m";
+
     public void Draw(SpriteBatch sb, Scene scene, Vector3? localPosition, IEnumerable<RemotePlayer> shownPlayers, float extrapolation)
     {
         ModConfig cfg = ModConfig.Current;
@@ -72,8 +76,9 @@ internal sealed class MultiplayerOverlay
 
                 // Fade over the last quarter of the distance, to avoid popping in.
                 float alpha = MathHelper.Clamp((cfg.NameTagMaxDistance - distance) / (cfg.NameTagMaxDistance * 0.25f), 0f, 1f);
-                Vector2 size = text.Measure(p.Name, textScale);
-                text.DrawOutlined(sb, p.Name, screen - new Vector2(size.X / 2f, size.Y), Color.White * alpha, textScale, alpha);
+                string label = cfg.ShowNameTagDistance ? $"{p.Name} - {FormatDistance(distance)}" : p.Name;
+                Vector2 size = text.Measure(label, textScale);
+                text.DrawOutlined(sb, label, screen - new Vector2(size.X / 2f, size.Y), Color.White * alpha, textScale, alpha);
             }
         }
         finally

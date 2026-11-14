@@ -46,6 +46,7 @@ internal static class Tr
     public static string OtherPlayersOpacity => T("Other players' opacity", "Opacité des autres joueurs");
     public static string ShowNameTags => T("Show names", "Afficher les pseudos");
     public static string NameTagDistance => T("Name display distance", "Distance des pseudos");
+    public static string ShowNameTagDistance => T("Show the distance next to names", "Afficher la distance à côté des pseudos");
     public static string ShowSplits => T("Checkpoint splits", "Temps intermédiaires");
     public static string RoundPanel => T("Round panel", "Panneau du round");
     public static string RoundPanelSize => T("Round panel size", "Taille du panneau du round");

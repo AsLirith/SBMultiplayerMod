@@ -37,11 +37,11 @@ internal static class HideSeek
     private static readonly AccessTools.FieldRef<Board, PlayerContainer> BoardPlayerContainer =
         AccessTools.FieldRefAccess<Board, PlayerContainer>("playerContainer");
 
-    /// <summary>Height of a board's center above its position (the position is at the wheels), in cm.</summary>
-    private const float BoardCenterHeight = 25;
+    /// <summary>Height aimed at above a board's position (the player is about 1 unit = 1 cm tall), in cm.</summary>
+    private const float BoardCenterHeight = 0.5f;
 
     /// <summary>A frozen mouse whose board moves this far (restart from the pause menu...) left its hiding place, in cm.</summary>
-    private const float LeftHidingPlaceDistance = 300;
+    private const float LeftHidingPlaceDistance = 5;
 
     private static Scene? scene;
     private static Board? board;
@@ -320,7 +320,7 @@ internal static class HideSeek
             {
                 continue;
             }
-            if (entities != null && entities.GetNearestTriangleRaycastSolid(origin, to / distance, distance - 60f, out _) != null)
+            if (entities != null && entities.GetNearestTriangleRaycastSolid(origin, to / distance, distance - 0.6f, out _) != null)
             {
                 continue; // a wall in between
             }

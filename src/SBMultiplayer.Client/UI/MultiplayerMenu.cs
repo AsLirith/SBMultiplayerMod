@@ -148,6 +148,7 @@ internal static class MultiplayerMenu
             o.GetSliderRow(Tr.OtherPlayersOpacity, ModSettings.GhostOpacity, Percent, 0.1f, 1f, 0.1f),
             o.GetCheckboxRow(Tr.ShowNameTags, ModSettings.ShowNameTags),
             o.GetSliderRow(Tr.NameTagDistance, ModSettings.NameTagMaxDistance, f => MathF.Round(float.Parse(f)) + " cm", 10f, 300f, 10f),
+            o.GetCheckboxRow(Tr.ShowNameTagDistance, ModSettings.ShowNameTagDistance),
             Button(Tr.Back, close)
         ).SetChildrenWidthToMaxChildWidth();
     });

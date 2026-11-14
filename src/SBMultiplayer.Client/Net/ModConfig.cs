@@ -53,6 +53,9 @@ internal sealed class ModConfig
     /// <summary>Shows names above nearby ghosts.</summary>
     public bool ShowNameTags { get; set; } = true;
 
+    /// <summary>Adds the distance to the names ("Bob - 42 cm").</summary>
+    public bool ShowNameTagDistance { get; set; } = true;
+
     /// <summary>Checkpoint splits (the game's display), compared with our best run of the round.</summary>
     public bool ShowSplits { get; set; } = true;
 
