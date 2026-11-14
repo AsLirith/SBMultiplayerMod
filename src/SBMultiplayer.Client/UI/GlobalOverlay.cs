@@ -252,6 +252,10 @@ internal sealed class GlobalOverlay : SE.IDrawBatch2
         MultiplayerClient client = MultiplayerClient.Instance;
         bool found = client.LocalId is int me && HideSeek.IsFound(me);
 
+        if (client.Round.Current.GoAt is not double start || now < start)
+        {
+            return; // the 3, 2, 1 of the start is shown alone
+        }
         if (now < seekStart)
         {
             int left = (int)Math.Ceiling(seekStart - now);
@@ -262,7 +266,7 @@ internal sealed class GlobalOverlay : SE.IDrawBatch2
                 text.DrawCentered(sb, Tr.HsMiceHiding, cx, ref y, Color.White, scale * 0.8f);
                 text.DrawCentered(sb, $"{left / 60}:{left % 60:00}", cx, ref y, Gold, scale * 2.2f);
             }
-            else if (role == HideSeek.Role.Mouse && client.Round.Current.GoAt is double goAt && now >= goAt)
+            else if (role == HideSeek.Role.Mouse && now - start >= 1.0) // after the "GO!"
             {
                 text.DrawCentered(sb, Tr.HsYouAreMouse, cx, ref y, new Color(140, 220, 255), scale * 0.9f);
                 text.DrawCentered(sb, $"{Tr.HsHide} {left / 60}:{left % 60:00}", cx, ref y, Gold, scale * 1.4f);

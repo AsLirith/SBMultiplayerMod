@@ -146,6 +146,16 @@ internal static class HideSeek
         return them == Role.Mouse && IsFound(p.Id);
     }
 
+    /// <summary>Hide and Seek round on our map: the finish line does nothing (no teleport back to the start).</summary>
+    public static bool BlocksFinish
+    {
+        get
+        {
+            RoundInfo info = Client.Round.Current.Info;
+            return info.Mode == GameMode.HideAndSeek && info.Phase != RoundPhase.Free && Client.IsOnRoundMap;
+        }
+    }
+
     /// <summary>Name tags: never for the hunter.</summary>
     public static bool HidesNameTags => LocalRole == Role.Hunter;
 
@@ -327,6 +337,31 @@ internal static class HideSeek
             Client.SendTag(roundId, best.Id);
         }
     }
+}
+
+/// <summary>
+/// Hide and Seek: a frozen mouse can't respawn at a checkpoint or restart (R / Q, pause menu): that would move its
+/// board out of its hiding place while the game is paused, and leave it stuck there.
+/// </summary>
+[HarmonyPatch]
+internal static class FrozenRestartPatch
+{
+    // The entry points (R, Q, pause menu) and the methods they end up in, every overload: blocked at several levels
+    // in case the JIT inlined a small one into its caller.
+    private static readonly string[] Names =
+        { "RestartLevel", "RewindToCheckpoint", "RewindToggle", "RewindToStart", "TimeTravelForward", "LoadCheckpointLater", "LoadFirstCheckpointLater" };
+
+    private static IEnumerable<MethodBase> TargetMethods() =>
+        AccessTools.GetDeclaredMethods(typeof(CheckpointManager)).Where(m => Names.Contains(m.Name)).Cast<MethodBase>();
+
+    private static bool Prefix() => !HideSeek.KeepFrozen;
+}
+
+/// <summary>Hide and Seek: crossing the finish line does nothing (otherwise the round's retry sends the player back to the start).</summary>
+[HarmonyPatch(typeof(Goal), "GoalReached")]
+internal static class HideSeekFinishPatch
+{
+    private static bool Prefix() => !HideSeek.BlocksFinish;
 }
 
 /// <summary>Hide and Seek: a frozen mouse can't close the game's free camera (which would resume the run).</summary>

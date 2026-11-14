@@ -85,6 +85,11 @@ internal static class Compatibility
         Member(typeof(Player), "State");
         Member(typeof(InputOutgameRaw), "GrindOrStartSkatingRaw");
         Member(typeof(Entities), "GetNearestTriangleRaycastSolid");
+        Member(typeof(Goal), "GoalReached");
+        foreach (string m in new[] { "RestartLevel", "RewindToCheckpoint", "RewindToggle", "RewindToStart", "TimeTravelForward" })
+        {
+            Member(typeof(CheckpointManager), m);
+        }
         MemberOf("SE.CustomMapCatalogue", "ReadMap");
         MemberOf("SE.CustomMapCatalogue", "Maps");
         MemberOf("SE.CustomMapCatalogue+Entry", "WorkshopItemId");
