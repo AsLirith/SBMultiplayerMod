@@ -10,6 +10,9 @@ internal interface IGhostPoseSource
 {
     /// <param name="extrapolation">Fraction [0, 1) écoulée depuis le dernier tick, donnée par le moteur.</param>
     bool TryGetPose(float extrapolation, out Vector3 position, out Vector3 orientation);
+
+    /// <summary>Skin de planche à afficher (id du jeu), ou null pour garder la texture courante.</summary>
+    int? SkinId => null;
 }
 
 /// <summary>
@@ -60,10 +63,29 @@ internal sealed class NetGhostBoard : BoardVisual, IDrawWorldSkinRender, IBefore
         Matrix transform = Matrix.CreateFromYawPitchRoll(rot.Y, rot.X, rot.Z) * Matrix.CreateTranslation(pos);
         void DrawNow()
         {
-            using (shader.UseRasterizer(rasterizerState))
-            using (shaderRender?.Color.Use(new Vector4(1f, 1f, 1f, opacity.Value)))
+            // Skin du joueur : on remplace la texture du modèle le temps du dessin, comme SE.GhostBoard.
+            // Le modèle est partagé avec notre propre planche : on remet toujours l'ancienne texture.
+            TextureGL? boardTex = Assets.Model.Value.Textures?.Get(0);
+            Ref<Texture2D>? skin = source.SkinId is int skinId ? SkinCache.Get(skinId) : null;
+            Ref<Texture2D>? previous = boardTex?.Image.Tex2D;
+            if (boardTex != null && skin != null)
             {
-                DrawInternalBase(shader, shaderSkin, shaderRender, transform, null, null, applyDepthBias: true);
+                boardTex.Image.Tex2D = skin;
+            }
+            try
+            {
+                using (shader.UseRasterizer(rasterizerState))
+                using (shaderRender?.Color.Use(new Vector4(1f, 1f, 1f, opacity.Value)))
+                {
+                    DrawInternalBase(shader, shaderSkin, shaderRender, transform, null, null, applyDepthBias: true);
+                }
+            }
+            finally
+            {
+                if (boardTex != null && skin != null)
+                {
+                    boardTex.Image.Tex2D = previous!;
+                }
             }
         }
 

@@ -5,7 +5,7 @@ namespace SBMultiplayer.Protocol;
 public static class ProtocolInfo
 {
     /// <summary>À incrémenter à chaque changement incompatible du format des messages.</summary>
-    public const int Version = 2;
+    public const int Version = 3;
 
     public const int DefaultPort = 24800;
 
@@ -43,6 +43,9 @@ public enum MessageType : byte
 
     /// <summary>S→C, fiable. Classement du round (meilleur temps de chacun).</summary>
     Leaderboard = 9,
+
+    /// <summary>C→S (sans id) et S→C (avec id), fiable. Skin de planche du joueur (id du jeu).</summary>
+    SkinChanged = 10,
 }
 
 public enum RoundPhase : byte
@@ -69,16 +72,29 @@ public readonly record struct Vec3(float X, float Y, float Z);
 /// <param name="Segment">Incrémenté à chaque téléportation (restart, respawn) : pas d'interpolation entre deux segments.</param>
 public readonly record struct PlayerState(double Time, Vec3 Position, Vec3 Orientation, ushort Segment);
 
-public readonly record struct PlayerInfo(int Id, string Name, string MapKey);
+public readonly record struct PlayerInfo(int Id, string Name, string MapKey, int Skin);
 
 /// <summary>Sérialisation des messages. Chaque message commence par son <see cref="MessageType"/>.</summary>
 public static class Msg
 {
-    public static NetDataWriter Hello(NetDataWriter w, string name)
+    public static NetDataWriter Hello(NetDataWriter w, string name, int skin)
     {
         w.Reset();
         w.Put((byte)MessageType.Hello);
         w.Put(name);
+        w.Put(skin);
+        return w;
+    }
+
+    public static NetDataWriter SkinChanged(NetDataWriter w, int? id, int skin)
+    {
+        w.Reset();
+        w.Put((byte)MessageType.SkinChanged);
+        if (id.HasValue)
+        {
+            w.Put(id.Value);
+        }
+        w.Put(skin);
         return w;
     }
 
@@ -209,10 +225,11 @@ public static class Msg
         w.Put(p.Id);
         w.Put(p.Name);
         w.Put(p.MapKey);
+        w.Put(p.Skin);
     }
 
     public static PlayerInfo GetPlayerInfo(NetDataReader r) =>
-        new(r.GetInt(), r.GetString(ProtocolInfo.MaxNameLength * 4), r.GetString(256));
+        new(r.GetInt(), r.GetString(ProtocolInfo.MaxNameLength * 4), r.GetString(256), r.GetInt());
 
     private static void Put(NetDataWriter w, in Vec3 v)
     {

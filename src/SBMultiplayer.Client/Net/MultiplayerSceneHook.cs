@@ -25,7 +25,6 @@ internal sealed class MultiplayerSceneHook : IUpdate, ICheckpointStorage, IGoalR
     private readonly Scene scene;
     private readonly MultiplayerClient client = MultiplayerClient.Instance;
     private readonly Dictionary<int, (RemotePlayer Player, NetGhostBoard Board)> ghosts = new();
-    private readonly ValueEvent<float> ghostOpacity = new(0.5f);
     private Board? board;
     private string mapKey = "";
     private int tick;
@@ -87,7 +86,7 @@ internal sealed class MultiplayerSceneHook : IUpdate, ICheckpointStorage, IGoalR
     {
         foreach (RemotePlayer p in client.Players.Values)
         {
-            bool shouldShow = p.MapKey == mapKey;
+            bool shouldShow = UI.ModSettings.ShowOtherPlayers.Value && p.MapKey == mapKey;
             bool shown = ghosts.TryGetValue(p.Id, out var entry) && ReferenceEquals(entry.Player, p);
             if (shouldShow && !shown)
             {
@@ -95,7 +94,7 @@ internal sealed class MultiplayerSceneHook : IUpdate, ICheckpointStorage, IGoalR
                 {
                     RemoveGhost(p.Id); // même id, nouvel objet (reconnexion)
                 }
-                var ghostBoard = new NetGhostBoard(p, board!.Assets, GameAccess.GetTransparencyBatch(scene), ghostOpacity,
+                var ghostBoard = new NetGhostBoard(p, board!.Assets, GameAccess.GetTransparencyBatch(scene), UI.ModSettings.GhostOpacity,
                     zFightingIndex: 200 + (p.Id % 1000));
                 scene.Add(ghostBoard);
                 ghosts[p.Id] = (p, ghostBoard);

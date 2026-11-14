@@ -43,7 +43,8 @@ public sealed class GameServer : INetEventListener
         public string Name { get; set; } = "";
         public string MapKey { get; set; } = "";
         public bool HasSaidHello { get; set; }
-        public PlayerInfo Info => new(Id, Name, MapKey);
+        public int Skin { get; set; }
+        public PlayerInfo Info => new(Id, Name, MapKey, Skin);
     }
 
     private readonly ServerOptions options;
@@ -238,10 +239,15 @@ public sealed class GameServer : INetEventListener
             request.Reject(NetDataWriter.FromString("Serveur plein"));
             return;
         }
-        if (request.AcceptIfKey(ProtocolInfo.ConnectionKey) == null)
+        // Vérification manuelle de la clé (au lieu de AcceptIfKey) pour expliquer le refus au joueur.
+        string key = request.Data.AvailableBytes > 0 ? request.Data.GetString(64) : "";
+        if (key == ProtocolInfo.ConnectionKey)
         {
-            Log($"Connexion refusée depuis {request.RemoteEndPoint} : version du mod différente");
+            request.Accept();
+            return;
         }
+        Log($"Connexion refusée depuis {request.RemoteEndPoint} : version du mod différente ({key})");
+        request.Reject(NetDataWriter.FromString($"Version du mod incompatible (serveur : protocole v{ProtocolInfo.Version}). Mets le mod à jour."));
     }
 
     public void OnPeerConnected(NetPeer peer)
@@ -289,6 +295,14 @@ public sealed class GameServer : INetEventListener
                 case MessageType.State:
                     OnState(p, Msg.GetState(reader));
                     break;
+                case MessageType.SkinChanged:
+                    p.Skin = reader.GetInt();
+                    Broadcast(Msg.SkinChanged(writer, p.Id, p.Skin), DeliveryMethod.ReliableOrdered, except: p);
+                    if (options.Echo)
+                    {
+                        p.Peer.Send(Msg.SkinChanged(writer, EchoIdOffset + p.Id, p.Skin), DeliveryMethod.ReliableOrdered);
+                    }
+                    break;
                 case MessageType.Finish:
                     OnFinish(p, reader.GetInt(), reader.GetUInt());
                     break;
@@ -323,6 +337,7 @@ public sealed class GameServer : INetEventListener
             return;
         }
         p.Name = Msg.SanitizeName(reader.GetString(ProtocolInfo.MaxNameLength * 4));
+        p.Skin = reader.GetInt();
         p.HasSaidHello = true;
 
         var others = players.Values.Where(o => o.HasSaidHello && o != p).Select(o => o.Info).ToList();
@@ -331,7 +346,7 @@ public sealed class GameServer : INetEventListener
 
         if (options.Echo)
         {
-            p.Peer.Send(Msg.PlayerJoined(writer, new PlayerInfo(EchoIdOffset + p.Id, $"Echo {p.Name}", p.MapKey)), DeliveryMethod.ReliableOrdered);
+            p.Peer.Send(Msg.PlayerJoined(writer, new PlayerInfo(EchoIdOffset + p.Id, $"Echo {p.Name}", p.MapKey, p.Skin)), DeliveryMethod.ReliableOrdered);
         }
         Log($"{p.Name} (#{p.Id}) a rejoint la partie ({players.Count} connecté(s))");
 

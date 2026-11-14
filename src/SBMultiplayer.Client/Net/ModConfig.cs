@@ -29,6 +29,24 @@ internal sealed class ModConfig
     /// <summary>Panneau du round (temps restant, classement) en haut à droite.</summary>
     public bool ShowRoundPanel { get; set; } = true;
 
+    /// <summary>Taille du panneau du round (1 = taille d'origine de la v0.4, jugée trop grosse).</summary>
+    public float RoundPanelScale { get; set; } = 0.6f;
+
+    /// <summary>Affiche les ghosts des autres joueurs.</summary>
+    public bool ShowOtherPlayers { get; set; } = true;
+
+    /// <summary>Opacité des ghosts des autres joueurs (0 à 1).</summary>
+    public float GhostOpacity { get; set; } = 0.5f;
+
+    /// <summary>Affiche les pseudos au-dessus des ghosts proches.</summary>
+    public bool ShowNameTags { get; set; } = true;
+
+    /// <summary>Touche du menu multijoueur (nom d'une touche MonoGame : F8, F10, Insert…).</summary>
+    public string MenuKey { get; set; } = "F8";
+
+    /// <summary>Touche pour rejoindre la map du round en cours.</summary>
+    public string RejoinKey { get; set; } = "F7";
+
     /// <summary>Debug : log de la position chaque seconde.</summary>
     public bool DebugProbe { get; set; }
 
@@ -39,9 +57,37 @@ internal sealed class ModConfig
 
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 
+    private static string path = "";
+
+    // Valeurs du fichier, quand une variable d'environnement les surcharge : on ne les écrase pas en sauvegardant.
+    private static (string Server, string Name)? fileValuesBeforeEnv;
+
+    /// <summary>Enregistre la configuration (appelé quand un réglage change dans le menu).</summary>
+    public static void Save()
+    {
+        try
+        {
+            ModConfig toWrite = Current;
+            if (fileValuesBeforeEnv is { } fileValues)
+            {
+                toWrite = (ModConfig)Current.MemberwiseClone();
+                toWrite.Server = fileValues.Server;
+                toWrite.PlayerName = fileValues.Name;
+            }
+            File.WriteAllText(path, JsonSerializer.Serialize(toWrite, JsonOptions));
+        }
+        catch (Exception e)
+        {
+            ModLog.Error($"Impossible d'enregistrer la configuration ({path})", e);
+        }
+    }
+
+    /// <summary>L'adresse ou le pseudo ont été changés dans le menu : ils remplacent la surcharge d'environnement.</summary>
+    public static void ForgetEnvironmentOverride() => fileValuesBeforeEnv = null;
+
     public static void Load(string modDir)
     {
-        string path = Path.Combine(modDir, "SBMultiplayer.json");
+        path = Path.Combine(modDir, "SBMultiplayer.json");
         try
         {
             if (File.Exists(path))
@@ -60,6 +106,12 @@ internal sealed class ModConfig
             Current = new ModConfig();
         }
 
+        string envServer = Environment.GetEnvironmentVariable("SBMULTI_SERVER") ?? "";
+        string envName = Environment.GetEnvironmentVariable("SBMULTI_NAME") ?? "";
+        if (envServer.Length > 0 || envName.Length > 0)
+        {
+            fileValuesBeforeEnv = (Current.Server, Current.PlayerName);
+        }
         if (Environment.GetEnvironmentVariable("SBMULTI_SERVER") is { Length: > 0 } server)
         {
             Current.Server = server;

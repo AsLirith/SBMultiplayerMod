@@ -86,6 +86,43 @@ internal static class GameAccess
         return true;
     }
 
+    // ---------- Interface du jeu (pour l'écran Multijoueur) ----------
+
+    private static readonly AccessTools.FieldRef<GlobalGame, StuffDisposable> StuffRef =
+        AccessTools.FieldRefAccess<GlobalGame, StuffDisposable>("stuff");
+
+    private static readonly AccessTools.FieldRef<GlobalGame, OptionsUI> OptionsUiRef =
+        AccessTools.FieldRefAccess<GlobalGame, OptionsUI>("optionsUI");
+
+    private static readonly FieldInfo UpdateSpeedField = AccessTools.Field(typeof(GamePrototype), "updateSpeed");
+    private static readonly MethodInfo ShowPopupMethod = AccessTools.Method(typeof(GlobalGame), "ShowPopup",
+        new[] { typeof(Func<Action, Scene>), typeof(Scene), typeof(bool), typeof(bool) });
+    private static readonly MethodInfo CreateCanvasMethod = AccessTools.Method(typeof(GlobalGame), "CreateCanvas");
+    private static readonly MethodInfo CreateButtonMethod = AccessTools.Method(typeof(GlobalGame), "CreateButton");
+    private static readonly MethodInfo CreateMainPanelMethod = AccessTools.Method(typeof(UIAssets), "CreateMainPanel");
+
+    /// <summary>Liste d'objets globale du jeu (dessinée et mise à jour quelle que soit la scène).</summary>
+    public static StuffDisposable GlobalStuff => StuffRef(Game!);
+
+    public static UIAssets UiAssets => UiAssetsRef(Game!);
+
+    public static OptionsUI OptionsUi => OptionsUiRef(Game!);
+
+    public static GameSpeed UpdateSpeed => (GameSpeed)UpdateSpeedField.GetValue(Game)!;
+
+    /// <summary>Ouvre une popup par-dessus la scène courante, comme les écrans d'options du jeu.</summary>
+    public static void ShowPopup(Func<Action, Scene> create) =>
+        ShowPopupMethod.Invoke(Game, new object?[] { create, CurrentScene, true, false });
+
+    public static BytingLib.UI.CanvasScale CreateCanvas() =>
+        (BytingLib.UI.CanvasScale)CreateCanvasMethod.Invoke(Game, new object[] { true })!;
+
+    public static BytingLib.UI.Button CreateButton(Action onClick) =>
+        (BytingLib.UI.Button)CreateButtonMethod.Invoke(Game, new object?[] { onClick, 0f, 0f, null, null })!;
+
+    public static BytingLib.UI.Element CreateMainPanel(BytingLib.UI.Element content) =>
+        (BytingLib.UI.Element)CreateMainPanelMethod.Invoke(UiAssets, new object[] { content })!;
+
     private static readonly Dictionary<string, string> MapLabels = new();
 
     /// <summary>Nom lisible d'une map de round : "o:5" → "A5 Jump" (code et nom affichés par le jeu).</summary>

@@ -34,7 +34,13 @@ internal sealed class RemotePlayer : IGhostPoseSource
         Id = info.Id;
         Name = info.Name;
         mapKey = info.MapKey;
+        Skin = info.Skin;
     }
+
+    /// <summary>Skin de planche du joueur (id du jeu). Modifié par le thread réseau.</summary>
+    public volatile int Skin;
+
+    public int? SkinId => Skin;
 
     public int Id { get; }
 
