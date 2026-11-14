@@ -5,7 +5,7 @@ namespace SBMultiplayer.Protocol;
 public static class ProtocolInfo
 {
     /// <summary>À incrémenter à chaque changement incompatible du format des messages.</summary>
-    public const int Version = 7;
+    public const int Version = 8;
 
     public const int DefaultPort = 24800;
 
@@ -567,9 +567,30 @@ public static class Msg
         return (roundId, list);
     }
 
-    /// <summary>Vrai si la map d'un joueur ("o:1:2001") correspond à l'entrée de rotation ("o:1" ou "o:1:2001").</summary>
+    /// <summary>
+    /// Vrai si la map d'un joueur correspond à l'entrée de rotation :
+    /// officielle "o:1:2001" pour "o:1" ou "o:1:2001", Workshop "c:M123.&lt;version&gt;" pour "c:M123" ou la clé complète.
+    /// </summary>
     public static bool MapMatches(string playerMapKey, string roundMapKey) =>
-        roundMapKey.Length > 0 && (playerMapKey == roundMapKey || playerMapKey.StartsWith(roundMapKey + ":", StringComparison.Ordinal));
+        roundMapKey.Length > 0 && (playerMapKey == roundMapKey
+            || playerMapKey.StartsWith(roundMapKey + ":", StringComparison.Ordinal)
+            || playerMapKey.StartsWith(roundMapKey + ".", StringComparison.Ordinal));
+
+    /// <summary>Clés de map acceptées dans une rotation : niveau officiel ou map du Workshop.</summary>
+    public static bool IsValidRotationKey(string key) =>
+        System.Text.RegularExpressions.Regex.IsMatch(key, @"^(o:\d+(:\d+)?|c:M[1-9]\d*(\.[0-9a-f]{64})?)$");
+
+    /// <summary>Identifiant Workshop d'une clé "c:M123" ou "c:M123.&lt;version&gt;", sinon null.</summary>
+    public static ulong? WorkshopId(string key)
+    {
+        if (!key.StartsWith("c:M", StringComparison.Ordinal))
+        {
+            return null;
+        }
+        int end = key.IndexOf('.');
+        string digits = end < 0 ? key[3..] : key[3..end];
+        return ulong.TryParse(digits, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out ulong id) ? id : null;
+    }
 
     public static string FormatTime(uint ms) => $"{ms / 60000}:{ms / 1000 % 60:00}.{ms % 1000:000}";
 

@@ -20,7 +20,7 @@ Every setting can also be given (or overridden) on the command line:
 | `--max-players <n>` | `MaxPlayers` | 32 | Maximum number of players |
 | `--password <text>` | `Password` | (none) | Password required to join |
 | `--admin-password <text>` | `AdminPassword` | (none) | Password to use the in-game admin panel (F8 > Admin) |
-| `--maps <list>` | `Maps` | (none) | Map rotation, e.g. `o:1,o:2,o:57` (official level IDs). Without it, the server runs in free mode: no rounds, everyone rides wherever they want |
+| `--maps <list>` | `Maps` | (none) | Map rotation, e.g. `o:1,o:2,c:M3456789` (see [Maps](#maps)). Without it, the server runs in free mode: no rounds, everyone rides wherever they want |
 | `--mode <mode>` | `Mode` | `TimeAttack` | `Free`, `TimeAttack`, `Rounds`, `Cup` or `Elimination` (see [Game modes](#game-modes)) |
 | `--round <s>` | `RoundSeconds` | 300 | Time Attack: round duration. Rounds: time limit after the start |
 | `--rounds-per-map <n>` | `RoundsPerMap` | 3 | Rounds mode: rounds played on each map |
@@ -34,7 +34,18 @@ Every setting can also be given (or overridden) on the command line:
 | | `ResultsDirectory` | `results` | Where results are exported (empty = no export) |
 | `--echo` | `Echo` | off | Sends each player their own board back with a delay, as a fake "Echo" player, to test alone |
 
-A player's current map key (e.g. `o:1:2001`) is shown in the server console when they enter a level. Use `o:<id>` in the rotation to accept any version of that level.
+## Maps
+
+The rotation can mix official levels and **Workshop maps**:
+
+- official level: `o:<id>` (any version) or `o:<id>:<version>`;
+- Workshop map: `c:M<workshop id>` (latest version, recommended: an update by the author doesn't break the rotation) or the full key with its version.
+
+The easiest way is to set the rotation in game (F8 > Admin > Mode and maps) with level codes: `A1, A5` for official levels, and the game's Workshop codes (`M3456789`) for Workshop maps, or "Add the map I'm on". Players who don't have a Workshop map download it automatically (without subscribing to it) when the round starts.
+
+Local maps (not published on the Workshop) can't be used in a rotation, since the other players don't have them.
+
+A player's current map key (e.g. `o:1:2001`) is shown in the server console when they enter a level.
 
 ## Game modes
 

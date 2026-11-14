@@ -89,7 +89,7 @@ public sealed class ServerOptions
     public string? Apply(MatchSettings s)
     {
         var maps = s.Maps.Select(m => m.Trim()).Where(m => m.Length > 0).ToList();
-        string? invalid = maps.FirstOrDefault(m => !System.Text.RegularExpressions.Regex.IsMatch(m, @"^o:\d+(:\d+)?$"));
+        string? invalid = maps.FirstOrDefault(m => !Msg.IsValidRotationKey(m));
         if (invalid != null)
         {
             return $"invalid map key \"{invalid}\"";
@@ -159,7 +159,8 @@ public sealed class ServerOptions
           // Password to log in as admin from the game's F8 menu. Empty = no in-game admin.
           "AdminPassword": "",
 
-          // Map rotation, as official level IDs: "o:<id>" (any version) or "o:<id>:<version>".
+          // Map rotation: official levels as "o:<id>" (any version) or "o:<id>:<version>", and Workshop maps
+          // as "c:M<workshop id>" (latest version). Easiest: set it in game (F8 > Admin > Mode and maps).
           // A player's map key is shown in the server console when they enter a level.
           // Empty list = free mode: no rounds, everyone rides wherever they want.
           "Maps": [ "o:1", "o:2", "o:3" ],

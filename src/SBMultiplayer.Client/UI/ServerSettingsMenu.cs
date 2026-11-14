@@ -60,7 +60,12 @@ internal static class ServerSettingsMenu
         void AddCurrentMap()
         {
             string current = MultiplayerClient.Instance.CurrentMapKey;
-            if (!current.StartsWith("o:", StringComparison.Ordinal))
+            if (current.StartsWith("l:", StringComparison.Ordinal))
+            {
+                Notifications.Warn(Tr.SettingsLocalMap);
+                return;
+            }
+            if (!current.StartsWith("o:", StringComparison.Ordinal) && Msg.WorkshopId(current) == null)
             {
                 Notifications.Warn(Tr.SettingsNoCurrentMap);
                 return;

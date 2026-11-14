@@ -169,9 +169,13 @@ internal static class Tr
     public static string SettingsModeAndMapsTitle => T("Mode and maps", "Mode et maps");
     public static string SettingsTimingsTitle => T("Timings and points", "Délais et points");
     public static string SettingsModeLabel(string mode) => T($"Game mode: {mode}", $"Mode de jeu : {mode}");
-    public static string SettingsMapsField => T("Map rotation (level codes separated by commas, e.g. A1, A5, B2):", "Rotation de maps (codes de niveau séparés par des virgules, ex. A1, A5, B2) :");
+    public static string SettingsMapsField => T("Level codes separated by commas: official levels (A1, A5…) and Workshop maps (M123456…):", "Codes séparés par des virgules : niveaux officiels (A1, A5…) et maps du Workshop (M123456…) :");
     public static string SettingsAddCurrentMap => T("Add the map I'm on", "Ajouter la map où je suis");
-    public static string SettingsNoCurrentMap => T("You're not on an official level", "Tu n'es pas sur un niveau officiel");
+    public static string SettingsNoCurrentMap => T("You're not on a level", "Tu n'es pas sur un niveau");
+    public static string SettingsLocalMap => T("Local maps can't be used on a server (the others don't have them): publish it on the Workshop first",
+        "Les maps locales ne peuvent pas être utilisées sur un serveur (les autres ne les ont pas) : publie-la d'abord sur le Workshop");
+    public static string WorkshopVersionMismatch => T("Your version of this Workshop map differs from the server's: your times won't count",
+        "Ta version de cette map du Workshop diffère de celle du serveur : tes temps ne compteront pas");
     public static string SettingsUnknownMap(string code) => T($"Unknown level \"{code}\"", $"Niveau inconnu \"{code}\"");
     public static string SettingsRestartWarning => T("Changing the mode or the maps restarts the match.", "Changer le mode ou les maps relance le match.");
     public static string SettingsSaveToFile => T("Also save to the server's config file", "Enregistrer aussi dans le fichier de config du serveur");

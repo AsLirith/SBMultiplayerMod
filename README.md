@@ -10,7 +10,7 @@ Unofficial multiplayer mod for [STUNTBOOST](https://store.steampowered.com/app/2
 - **Server settings editable in game** by admins (mode, map rotation, timings, points), optionally saved to the config file.
 - **Dedicated server** (console app, no game needed): map rotation, live leaderboard, results screen, match points, results export (JSON/CSV), optional password.
 - **Other players' ghosts** in real time, smoothly interpolated, with **their own skin** and **their name** when they're close.
-- **Round map loaded automatically**, instant retry when you cross the finish line instead of the end screen.
+- **Official levels and Workshop maps**: the round's map is loaded automatically (Workshop maps are downloaded if needed), instant retry when you cross the finish line instead of the end screen.
 - **In-game menu (F8)**: server address, name, connect/disconnect, other players' visibility and opacity, name tags, round panel size.
 - **Checkpoint splits** compared to your best run of the round.
 - **Chat (Tab)** with admin commands (`/next`, `/map`, `/kick`… see `/help`).

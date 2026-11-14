@@ -304,7 +304,21 @@ internal sealed class MultiplayerClient : INetEventListener
 
     private static void LoadRoundMap(string key)
     {
-        // Format : "o:<id>" ou "o:<id>:<version>" (maps officielles uniquement pour l'instant).
+        // Map du Workshop : "c:M<id>" (dernière version) ou "c:M<id>.<version>" (version exacte).
+        if (Msg.WorkshopId(key) is ulong workshopId)
+        {
+            try
+            {
+                GameAccess.StartWorkshopMap(workshopId, key.Contains('.') ? key[2..] : null);
+            }
+            catch (Exception e)
+            {
+                ModLog.Error($"Impossible de charger la map {key}", e);
+                Notifications.Warn(Tr.MapLoadFailed(key));
+            }
+            return;
+        }
+        // Niveau officiel : "o:<id>" ou "o:<id>:<version>".
         string[] parts = key.Split(':');
         if (parts.Length >= 2 && parts[0] == "o" && uint.TryParse(parts[1], out uint id))
         {

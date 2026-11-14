@@ -141,6 +141,10 @@ internal static class GameAccess
     /// <summary>Level code shown in the game's menus ("A5") for a map key ("o:2"), or the key itself if unknown.</summary>
     public static string MapKeyToCode(string mapKey)
     {
+        if (SBMultiplayer.Protocol.Msg.WorkshopId(mapKey) is ulong workshopId)
+        {
+            return $"M{workshopId}"; // the game's own Workshop code
+        }
         string[] parts = mapKey.Split(':');
         if (Game != null && parts.Length >= 2 && parts[0] == "o" && uint.TryParse(parts[1], out uint id)
             && Game.levelOrder.GetLevelByID(id) is { } level)
@@ -154,9 +158,13 @@ internal static class GameAccess
     public static string? CodeToMapKey(string codeOrKey)
     {
         string s = codeOrKey.Trim();
-        if (System.Text.RegularExpressions.Regex.IsMatch(s, @"^o:\d+(:\d+)?$"))
+        if (SBMultiplayer.Protocol.Msg.IsValidRotationKey(s))
         {
             return s;
+        }
+        if (System.Text.RegularExpressions.Regex.IsMatch(s, @"^[Mm][1-9]\d*$"))
+        {
+            return "c:M" + s[1..]; // Workshop code, latest version
         }
         if (Game == null)
         {
@@ -174,12 +182,22 @@ internal static class GameAccess
 
     private static readonly Dictionary<string, string> MapLabels = new();
 
-    /// <summary>Nom lisible d'une map de round : "o:5" → "A5 Jump" (code et nom affichés par le jeu).</summary>
+    /// <summary>Nom lisible d'une map de round : "o:5" → "A5 Jump", "c:M123" → nom de la map Workshop.</summary>
     public static string DescribeMap(string mapKey)
     {
         if (MapLabels.TryGetValue(mapKey, out string? label))
         {
             return label;
+        }
+        if (SBMultiplayer.Protocol.Msg.WorkshopId(mapKey) is ulong workshopId)
+        {
+            // Not cached while unknown: the name appears once the map is downloaded.
+            string? name = WorkshopMapName(workshopId);
+            if (name == null)
+            {
+                return $"Workshop M{workshopId}";
+            }
+            return MapLabels[mapKey] = name;
         }
         label = mapKey;
         string[] parts = mapKey.Split(':');
@@ -197,6 +215,80 @@ internal static class GameAccess
         }
         MapLabels[mapKey] = label;
         return label;
+    }
+
+    // ---------- Workshop maps ----------
+
+    private static readonly Type CatalogueEntryType = AccessTools.TypeByName("SE.CustomMapCatalogue+Entry");
+    private static readonly FieldInfo CustomMapsField = AccessTools.Field(typeof(GlobalGame), "customMaps");
+    private static readonly MethodInfo DownloadWorkshopCodeMethod = AccessTools.Method(typeof(GlobalGame), "DownloadWorkshopCode");
+    private static readonly MethodInfo StartCustomMapEntryMethod = AccessTools.Method(typeof(GlobalGame), "StartCustomMapEntry");
+    private static readonly MethodInfo ReadMapFromEntry = AccessTools.Method(AccessTools.TypeByName("SE.CustomMapCatalogue"), "ReadMap", new[] { CatalogueEntryType });
+
+    /// <summary>Name of an installed Workshop map (from the game's custom map catalogue), or null.</summary>
+    public static string? WorkshopMapName(ulong workshopId)
+    {
+        if (Game == null)
+        {
+            return null;
+        }
+        object catalogue = CustomMapsField.GetValue(Game)!;
+        var maps = (System.Collections.IEnumerable)AccessTools.Property(catalogue.GetType(), "Maps").GetValue(catalogue)!;
+        foreach (object entry in maps)
+        {
+            var id = (ulong?)AccessTools.Property(CatalogueEntryType, "WorkshopItemId").GetValue(entry);
+            if (id == workshopId)
+            {
+                return (string)AccessTools.Property(CatalogueEntryType, "Name").GetValue(entry)!;
+            }
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Plays a Workshop map, through the game's own flow: downloads it first if needed (without subscribing,
+    /// with the game's download popup). <paramref name="requiredKey"/>: exact version required, or null for any.
+    /// </summary>
+    public static void StartWorkshopMap(ulong workshopId, string? requiredKey)
+    {
+        if (Game == null)
+        {
+            return;
+        }
+        WorkshopCallback.Handler = entry =>
+        {
+            try
+            {
+                if (requiredKey != null)
+                {
+                    object map = ReadMapFromEntry.Invoke(null, new[] { entry })!;
+                    string? onlineKey = (string?)AccessTools.Property(map.GetType(), "OnlineKey").GetValue(map);
+                    if (onlineKey != requiredKey)
+                    {
+                        UI.Notifications.Warn(UI.Tr.WorkshopVersionMismatch);
+                    }
+                }
+                StartCustomMapEntryMethod.Invoke(Game, new[] { entry });
+                ModLog.Info($"Loading Workshop map M{workshopId}");
+            }
+            catch (Exception e)
+            {
+                ModLog.Error($"Could not start Workshop map M{workshopId}", e);
+                UI.Notifications.Warn(UI.Tr.MapLoadFailed($"M{workshopId}"));
+            }
+        };
+        // DownloadWorkshopCode(ulong, Action<CustomMapCatalogue.Entry>): the entry type is internal, so the
+        // callback is a generic method instantiated for it at runtime.
+        MethodInfo invoke = typeof(WorkshopCallback).GetMethod(nameof(WorkshopCallback.Invoke))!.MakeGenericMethod(CatalogueEntryType);
+        Delegate callback = Delegate.CreateDelegate(typeof(Action<>).MakeGenericType(CatalogueEntryType), invoke);
+        DownloadWorkshopCodeMethod.Invoke(Game, new object[] { workshopId, callback });
+    }
+
+    private static class WorkshopCallback
+    {
+        public static Action<object>? Handler;
+
+        public static void Invoke<T>(T entry) => Handler?.Invoke(entry!);
     }
 
     /// <summary>Relance le niveau courant sans intro (utilisé à la place de l'écran de fin en round).</summary>
