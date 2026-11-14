@@ -152,11 +152,22 @@ internal sealed class MultiplayerClient : INetEventListener
             GameAccess.GlobalStuff.Add(overlay);
         }
 
+        // A newer release on GitHub: said once in the chat, as soon as the overlay can show it.
+        if (!updateAnnounced && UpdateCheck.NewerVersion is string newer && overlay != null)
+        {
+            updateAnnounced = true;
+            Notifications.Warn(Tr.UpdateAvailable(newer));
+        }
+
         // Menus, chat and connection work as soon as the game runs (main menu included).
         HandleHotkeys();
         PopupMenu.Tick();
         StartGate.Tick(this);
         HideSeek.Tick();
+        if (SteamP2P.Available)
+        {
+            SteamLobby.Tick();
+        }
         TrackLocalSkin();
         EnsureConnected();
         FlushPendingFinish();
@@ -185,6 +196,8 @@ internal sealed class MultiplayerClient : INetEventListener
             LoadRoundMap(r.Info.MapKey);
         }
     }
+
+    private bool updateAnnounced;
 
     private void HandleHotkeys()
     {
@@ -624,6 +637,7 @@ internal sealed class MultiplayerClient : INetEventListener
                 AppDomain.CurrentDomain.ProcessExit += (_, _) =>
                 {
                     net.Stop(sendDisconnectMessages: true);
+                    SteamLobby.Shutdown();
                     SteamP2P.StopJoin();
                     SteamP2P.StopHost();
                     HostedServer.Stop();

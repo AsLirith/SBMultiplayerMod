@@ -18,6 +18,9 @@ internal static class HostedServer
 
     public static bool IsRunning => running;
 
+    /// <summary>Name, mode, map and players of the hosted game (for the public game list), or null.</summary>
+    public static GameServer.ServerSummary? Summary => server?.Summary;
+
     public static int Port { get; private set; }
 
     /// <summary>Admin password of the hosted game (random if none is set): the host logs in with it automatically.</summary>

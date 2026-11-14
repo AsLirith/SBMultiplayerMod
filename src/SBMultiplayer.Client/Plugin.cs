@@ -42,6 +42,7 @@ internal static class Plugin
         {
             ModLog.Info($"Patched: {method.DeclaringType?.FullName}.{method.Name}");
         }
+        Net.UpdateCheck.Start();
     }
 
     /// <summary>Only the "modded" notice patch, to tell the player that the mod needs an update.</summary>

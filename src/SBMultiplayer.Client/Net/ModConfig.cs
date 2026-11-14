@@ -71,6 +71,12 @@ internal sealed class ModConfig
     /// <summary>Key to write in the chat. With Enter (the game's confirm key), the chat only opens in a level.</summary>
     public string ChatKey { get; set; } = "Enter";
 
+    /// <summary>Checks GitHub at startup for a newer version of the mod (reads the public release page only).</summary>
+    public bool CheckForUpdates { get; set; } = true;
+
+    /// <summary>Hosting: list the game publicly in F8 > Public games (anyone on Steam can join it).</summary>
+    public bool PublicGame { get; set; }
+
     /// <summary>Key to hold to show the player list (name, map, role, points).</summary>
     public string ScoreboardKey { get; set; } = "Tab";
 

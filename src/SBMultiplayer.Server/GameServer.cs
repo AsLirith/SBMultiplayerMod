@@ -148,9 +148,23 @@ public sealed class GameServer : INetEventListener
             : "Free mode: no rounds, everyone rides wherever they want");
     }
 
+    /// <summary>What a game browser shows about this server. Refreshed every second by <see cref="Poll"/>, readable from any thread.</summary>
+    public sealed record ServerSummary(string Name, GameMode Mode, string MapKey, int Players, int MaxPlayers, bool HasPassword);
+
+    private volatile ServerSummary? summary;
+    private double nextSummaryAt;
+
+    public ServerSummary? Summary => summary;
+
     public void Poll()
     {
         net.PollEvents();
+        if (Now >= nextSummaryAt)
+        {
+            nextSummaryAt = Now + 1;
+            summary = new ServerSummary(options.ServerName, HasRotation ? options.Mode : GameMode.Free, phase == RoundPhase.Free ? "" : CurrentMap,
+                players.Values.Count(p => p.HasSaidHello), options.MaxPlayers, options.Password != "");
+        }
         if (options.Echo)
         {
             FlushEcho();

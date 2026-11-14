@@ -21,7 +21,8 @@ SBMultiplayer - unofficial multiplayer mod for STUNTBOOST
    hold Tab to see the player list.
    F8 > Spectate to watch: Left / Right to switch player, F for the free camera.
    F8 > Host a game to host your own game (you're its admin); Steam friends join it
-   from F8 > Join a Steam friend, without opening any port.
+   from F8 > Join a Steam friend, without opening any port. Tick "List my game publicly"
+   and anyone can join it from F8 > Public games.
 
 Other players riding the same level show up as translucent boards.
 The mod's interface follows the game's language (English or French).

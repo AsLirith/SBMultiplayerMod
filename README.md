@@ -8,7 +8,8 @@ Unofficial multiplayer mod for [STUNTBOOST](https://store.steampowered.com/app/2
 
 - **Game modes**: **Free** ride, **Time Attack** (unlimited retries, best time), **Rounds** (synchronized start with a countdown, one attempt per round, points by race time), **Cup** (finalists and match point), **Elimination** (the slowest players are knocked out each round) and **Hide and Seek** (the mice hide, get frozen in place, and the hunter has to find them).
 - **Server settings editable in game** by admins (mode, map rotation, timings, points), optionally saved to the config file.
-- **Host from the game** (F8 > Host a game): you're the admin of your game, no extra program needed. **Steam friends join in one click** (F8 > Join a Steam friend), without opening any port (Steam P2P).
+- **Host from the game** (F8 > Host a game): you're the admin of your game, no extra program needed. **Steam friends join in one click** (F8 > Join a Steam friend), without opening any port (Steam P2P). Tick "List my game publicly" and **anyone can find and join it** in F8 > Public games.
+- **New version notice**: at startup the mod checks the project's GitHub releases and tells you in the chat when a newer version is out (it only reads the public release page; turn it off with `"CheckForUpdates": false` in `SBMultiplayer.json`).
 - **Dedicated server** (console app, no game needed): map rotation, live leaderboard, results screen, match points, results export (JSON/CSV), optional password.
 - **Other players' ghosts** in real time, smoothly interpolated, with **their own skin** and **their name** when they're close.
 - **Official levels and Workshop maps**: the round's map is loaded automatically (Workshop maps are downloaded if needed), instant retry when you cross the finish line instead of the end screen.

@@ -6,6 +6,8 @@ In the game, open **F8 > Host a game**, choose the UDP port (24800 by default) a
 
 **Steam friends can join without opening any port**: with "Steam friends can join without opening a port (Steam P2P)" checked (default), your game appears in their **F8 > Join a Steam friend** list while they play STUNTBOOST, and one click connects them through Steam (NAT traversal and Steam's relays). Other players can still join with your IP address and an open port.
 
+**Public games**: tick "List my game publicly" (it needs Steam P2P) and your game appears in everyone's **F8 > Public games** list, with its name, mode, map and number of players: anyone on Steam can join it in one click, the same way. It's listed through a Steam lobby, so nothing else has to be hosted. Set a password in `hosted-server.json` if you only want some players to come in. Dedicated servers aren't listed (they don't run Steam): share their address.
+
 Its settings are kept in `SBMultiplayer/hosted-server.json` (same format as below). The game stops when you click "Stop hosting" or quit the game. For a server that runs all the time, or for tournaments, prefer the dedicated server below. The network setup (firewall, port forwarding) is the same.
 
 ## The dedicated server

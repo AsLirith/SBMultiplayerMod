@@ -258,6 +258,24 @@ internal static class Tr
     public static string NextGameIn(int seconds) => T($"Next game in {seconds} s", $"Partie suivante dans {seconds} s");
     public static string SettingsMatchEnd => T("End-of-game screen", "Écran de fin de partie");
 
+    // ---------- Updates ----------
+    public static string UpdateAvailable(string version) =>
+        T($"SBMultiplayer {version} is available: download it from the mod's GitHub page (releases)",
+          $"SBMultiplayer {version} est disponible : télécharge-la sur la page GitHub du mod (releases)");
+
+    // ---------- Public games ----------
+    public static string PublicGamesButton => T("Public games", "Parties publiques");
+    public static string PublicGamesHint => T("Games hosted from the game and listed publicly. Click one to join it through Steam (no port to open). Password: enter it in the F8 Password field first.",
+        "Parties hébergées depuis le jeu et rendues publiques. Clique sur l'une d'elles pour la rejoindre via Steam (aucun port à ouvrir). Mot de passe : renseigne-le d'abord dans le champ Mot de passe de F8.");
+    public static string PublicGamesSearching => T("Searching...", "Recherche...");
+    public static string NoPublicGames => T("No public game right now. Host one: F8 > Host a game, with \"List my game publicly\" ticked.",
+        "Aucune partie publique pour le moment. Héberges-en une : F8 > Héberger une partie, avec \"Rendre ma partie publique\" coché.");
+    public static string PublicGameCheckbox => T("List my game publicly (anyone on Steam can join)", "Rendre ma partie publique (tout joueur Steam peut la rejoindre)");
+    public static string PublicListingOn => T("Your game is now listed in F8 > Public games", "Ta partie apparaît maintenant dans F8 > Parties publiques");
+    public static string PublicListingFailed => T("Could not list your game publicly (Steam lobbies unavailable)", "Impossible de rendre ta partie publique (lobbies Steam indisponibles)");
+    public static string PasswordTag => T("password", "mot de passe");
+    public static string OtherVersionWith(string version) => T($"other mod version ({version})", $"autre version du mod ({version})");
+
     // ---------- Local commands and player list ----------
     public static string Usage(string usage) => T($"Usage: {usage}", $"Utilisation : {usage}");
     public static string NoPlayerMatching(string query) => T($"No player matching \"{query}\"", $"Aucun joueur ne correspond à \"{query}\"");

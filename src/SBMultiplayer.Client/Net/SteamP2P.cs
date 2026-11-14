@@ -45,6 +45,8 @@ internal static class SteamP2P
 
     public static bool IsJoining => joining;
 
+    public static bool IsHosting => hosting;
+
     /// <summary>Steam is running and its networking API usable.</summary>
     public static bool Available
     {

@@ -45,6 +45,7 @@ internal static class MultiplayerMenu
 
         return Stack(
             Title(Tr.MenuTitle(Version)),
+            UpdateCheck.NewerVersion is string newer ? Text(Tr.UpdateAvailable(newer)) : null,
             status,
             Section(Tr.ConnectionSection),
             Row(Tr.ServerField, Field(server)),
@@ -66,7 +67,8 @@ internal static class MultiplayerMenu
             Section(Tr.PlayWithFriendsSection),
             Line(
                 Button(HostedServer.IsRunning ? Tr.HostManageButton : Tr.HostSection, OpenHost),
-                SteamP2P.Available ? Button(Tr.JoinFriendSection, OpenFriends) : Text("")),
+                SteamP2P.Available ? Button(Tr.JoinFriendSection, OpenFriends) : null,
+                SteamP2P.Available ? Button(Tr.PublicGamesButton, OpenPublicGames) : null),
             Section(Tr.SettingsSection),
             Line(
                 Button(Tr.DisplayTitle, OpenDisplay),
@@ -89,6 +91,7 @@ internal static class MultiplayerMenu
                 Text(Tr.HostRunning(HostedServer.Port)),
                 Text(Tr.HostAddresses(addresses.Count > 0 ? string.Join(", ", addresses) : "?", HostedServer.Port)),
                 ModConfig.Current.SteamP2PHost && SteamP2P.Available ? Text(Tr.SteamHostVisible) : null,
+                SteamP2P.IsHosting ? GameAccess.OptionsUi.GetCheckboxRow(Tr.PublicGameCheckbox, ModSettings.PublicGame) : null,
                 Button(Tr.HostStop, () =>
                 {
                     close();
@@ -111,7 +114,8 @@ internal static class MultiplayerMenu
         port.OnEnter += () => { Host(); return true; };
         return Stack(
             Line(Text(Tr.HostPortLabel), Field(port), Button(Tr.HostButton, Host)),
-            SteamP2P.Available ? GameAccess.OptionsUi.GetCheckboxRow(Tr.SteamHostCheckbox, ModSettings.SteamP2PHost) : null);
+            SteamP2P.Available ? GameAccess.OptionsUi.GetCheckboxRow(Tr.SteamHostCheckbox, ModSettings.SteamP2PHost) : null,
+            SteamP2P.Available ? GameAccess.OptionsUi.GetCheckboxRow(Tr.PublicGameCheckbox, ModSettings.PublicGame) : null);
     }
 
     // ---------- Join a Steam friend (P2P) ----------
@@ -136,6 +140,49 @@ internal static class MultiplayerMenu
                 OpenFriends();
             }), Button(Tr.Back, close)));
     });
+
+    // ---------- Public games (Steam lobbies) ----------
+
+    private static void OpenPublicGames()
+    {
+        SteamLobby.Refresh();
+        Show("public", (close, _) =>
+        {
+            var games = SteamLobby.Games;
+            Element list = SteamLobby.Searching ? Text(Tr.PublicGamesSearching)
+                : games.Count == 0 ? Text(Tr.NoPublicGames)
+                : Grid(games.Take(30).Select(g => Button(DescribeGame(g), () =>
+                {
+                    close();
+                    MultiplayerClient.Instance.JoinFriend(g.HostId, g.Name);
+                })).ToList(), 1);
+            return Stack(
+                Title(Tr.PublicGamesButton),
+                Text(Tr.PublicGamesHint),
+                list,
+                Line(Button(Tr.Refresh, SteamLobby.Refresh), Button(Tr.Back, close)));
+        }, () => SteamLobby.ListVersion);
+    }
+
+    /// <summary>"Bob's game - Hide and Seek - C9 Castle - 3/32 - password".</summary>
+    private static string DescribeGame(SteamLobby.PublicGame g)
+    {
+        var parts = new List<string> { g.Name, Tr.ModeName(g.Mode) };
+        if (g.MapKey != "")
+        {
+            parts.Add(GameAccess.DescribeMap(g.MapKey));
+        }
+        parts.Add($"{g.Players}/{g.MaxPlayers}");
+        if (g.HasPassword)
+        {
+            parts.Add(Tr.PasswordTag);
+        }
+        if (!g.SameVersion)
+        {
+            parts.Add(Tr.OtherVersionWith(g.ModVersion));
+        }
+        return string.Join(" - ", parts);
+    }
 
     // ---------- Display: how other players are shown ----------
 
