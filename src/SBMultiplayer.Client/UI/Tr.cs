@@ -49,8 +49,30 @@ internal static class Tr
     public static string ShowSplits => T("Checkpoint splits", "Temps intermédiaires");
     public static string RoundPanel => T("Round panel", "Panneau du round");
     public static string RoundPanelSize => T("Round panel size", "Taille du panneau du round");
-    public static string KeysHint(string menuKey, string rejoinKey) =>
-        T($"{menuKey}: this menu      {rejoinKey}: join the round's map", $"{menuKey} : ce menu      {rejoinKey} : rejoindre la map du round");
+    public static string KeysHint(string menuKey, string rejoinKey, string chatKey) =>
+        T($"{menuKey}: this menu    {rejoinKey}: join the round's map    {chatKey}: chat",
+          $"{menuKey} : ce menu    {rejoinKey} : rejoindre la map du round    {chatKey} : chat");
+    public static string ShowChat => T("Show chat", "Afficher le chat");
+    public static string ChatTitle => T("Chat", "Chat");
+    public static string ChatHint => T("Enter: send    Escape: cancel    /help: commands", "Entrée : envoyer    Échap : annuler    /help : commandes");
+
+    public static string CommandReply(string code, string arg) => code switch
+    {
+        SBMultiplayer.Protocol.CommandResults.Help when arg == "admin" => T(
+            "Commands: /help, /login <password>, /next, /restart, /pause, /extend [seconds], /map <number>, /kick <name>, /resetmatch",
+            "Commandes : /help, /login <mot de passe>, /next, /restart, /pause, /extend [secondes], /map <numéro>, /kick <pseudo>, /resetmatch"),
+        SBMultiplayer.Protocol.CommandResults.Help => T(
+            "Commands: /help, /login <admin password> (admin commands: /next, /restart, /pause, /extend, /map, /kick, /resetmatch)",
+            "Commandes : /help, /login <mot de passe admin> (commandes admin : /next, /restart, /pause, /extend, /map, /kick, /resetmatch)"),
+        SBMultiplayer.Protocol.CommandResults.NotAdmin => T("Admin only: log in with /login <password> or F8 > Admin", "Réservé aux admins : connecte-toi avec /login <mot de passe> ou F8 > Admin"),
+        SBMultiplayer.Protocol.CommandResults.NoRound => T("No round in progress", "Aucun round en cours"),
+        SBMultiplayer.Protocol.CommandResults.Usage => T($"Usage: {arg}", $"Utilisation : {arg}"),
+        SBMultiplayer.Protocol.CommandResults.NoPlayer => T($"No player matching \"{arg}\"", $"Aucun joueur ne correspond à \"{arg}\""),
+        SBMultiplayer.Protocol.CommandResults.BadMap => T($"Unknown map number (the rotation has {arg} maps)", $"Numéro de map inconnu (la rotation compte {arg} maps)"),
+        SBMultiplayer.Protocol.CommandResults.Unknown => T($"Unknown command {arg} (see /help)", $"Commande inconnue {arg} (voir /help)"),
+        SBMultiplayer.Protocol.CommandResults.TooFast => T("You're sending messages too fast", "Tu envoies des messages trop vite"),
+        _ => $"{code} {arg}",
+    };
     public static string Back => T("Back", "Retour");
     public static string MenuOpenFailed => T("Could not open the multiplayer menu (see SBMultiplayer.log)", "Impossible d'ouvrir le menu multijoueur (voir SBMultiplayer.log)");
 

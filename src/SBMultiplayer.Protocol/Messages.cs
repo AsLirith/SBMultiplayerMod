@@ -5,11 +5,13 @@ namespace SBMultiplayer.Protocol;
 public static class ProtocolInfo
 {
     /// <summary>À incrémenter à chaque changement incompatible du format des messages.</summary>
-    public const int Version = 4;
+    public const int Version = 5;
 
     public const int DefaultPort = 24800;
 
     public const int MaxNameLength = 24;
+
+    public const int MaxChatLength = 200;
 
     /// <summary>Clé de connexion LiteNetLib : un client d'une autre version est refusé dès la poignée de main.</summary>
     public static string ConnectionKey => $"SBMultiplayer/{Version}";
@@ -52,6 +54,25 @@ public static class ServerEvents
     public const string PlayerKicked = "PLAYER_KICKED";
     public const string MatchReset = "MATCH_RESET";
     public const string AdminLoggedIn = "ADMIN_LOGGED_IN";
+}
+
+/// <summary>Replies to chat commands, sent to the issuer only and translated by the client. Argument depends on the code.</summary>
+public static class CommandResults
+{
+    /// <summary>Argument: "admin" or "player" (which commands to list).</summary>
+    public const string Help = "HELP";
+    public const string Done = "DONE";
+    public const string NotAdmin = "NOT_ADMIN";
+    public const string NoRound = "NO_ROUND";
+    /// <summary>Argument: expected usage, e.g. "/map <number>".</summary>
+    public const string Usage = "USAGE";
+    /// <summary>Argument: the searched name or id.</summary>
+    public const string NoPlayer = "NO_PLAYER";
+    /// <summary>Argument: number of maps in the rotation.</summary>
+    public const string BadMap = "BAD_MAP";
+    /// <summary>Argument: the unknown command.</summary>
+    public const string Unknown = "UNKNOWN";
+    public const string TooFast = "TOO_FAST";
 }
 
 public enum AdminCommand : byte
@@ -114,6 +135,12 @@ public enum MessageType : byte
 
     /// <summary>S→C, fiable. Classement du match (points cumulés sur les rounds).</summary>
     MatchStandings = 15,
+
+    /// <summary>C→S (texte) et S→C (id, pseudo, texte), fiable. Message de chat ; "/..." = commande.</summary>
+    Chat = 16,
+
+    /// <summary>S→C, fiable. Réponse à une commande (<see cref="CommandResults"/> + argument).</summary>
+    CommandReply = 17,
 }
 
 public enum RoundPhase : byte
@@ -288,6 +315,60 @@ public static class Msg
         w.Put(code);
         w.Put(argument);
         return w;
+    }
+
+    public static NetDataWriter ChatToServer(NetDataWriter w, string text)
+    {
+        w.Reset();
+        w.Put((byte)MessageType.Chat);
+        w.Put(text);
+        return w;
+    }
+
+    public static NetDataWriter ChatToClient(NetDataWriter w, int senderId, string name, string text)
+    {
+        w.Reset();
+        w.Put((byte)MessageType.Chat);
+        w.Put(senderId);
+        w.Put(name);
+        w.Put(text);
+        return w;
+    }
+
+    public static NetDataWriter Reply(NetDataWriter w, string code, string argument)
+    {
+        w.Reset();
+        w.Put((byte)MessageType.CommandReply);
+        w.Put(code);
+        w.Put(argument);
+        return w;
+    }
+
+    /// <summary>Nettoie un message de chat : longueur bornée, sans caractères de contrôle ni de format invisibles.</summary>
+    public static string SanitizeChat(string? text)
+    {
+        var sb = new System.Text.StringBuilder();
+        int count = 0;
+        foreach (System.Text.Rune rune in (text ?? "").EnumerateRunes())
+        {
+            var category = System.Text.Rune.GetUnicodeCategory(rune);
+            if (category is System.Globalization.UnicodeCategory.Control
+                or System.Globalization.UnicodeCategory.Format
+                or System.Globalization.UnicodeCategory.PrivateUse
+                or System.Globalization.UnicodeCategory.Surrogate
+                or System.Globalization.UnicodeCategory.OtherNotAssigned
+                or System.Globalization.UnicodeCategory.LineSeparator
+                or System.Globalization.UnicodeCategory.ParagraphSeparator)
+            {
+                continue;
+            }
+            if (count++ == ProtocolInfo.MaxChatLength)
+            {
+                break;
+            }
+            sb.Append(rune.ToString());
+        }
+        return sb.ToString().Trim();
     }
 
     public static NetDataWriter Standings(NetDataWriter w, IReadOnlyCollection<StandingEntry> entries)

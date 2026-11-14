@@ -59,6 +59,12 @@ internal sealed class ModConfig
     /// <summary>Touche pour rejoindre la map du round en cours.</summary>
     public string RejoinKey { get; set; } = "F7";
 
+    /// <summary>Touche pour écrire dans le chat.</summary>
+    public string ChatKey { get; set; } = "Tab";
+
+    /// <summary>Affiche le chat (messages et événements) en bas à gauche.</summary>
+    public bool ShowChat { get; set; } = true;
+
     /// <summary>Debug : log de la position chaque seconde.</summary>
     public bool DebugProbe { get; set; }
 

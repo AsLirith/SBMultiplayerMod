@@ -33,17 +33,19 @@ A player's current map key (e.g. `o:1:2001`) is shown in the server console when
 
 At the end of each round, players get **match points** according to their rank (`PointsTable`). The match standings are shown to players on the results screen, and kept until you reset them.
 
-Admins control the match from the game (**F8 > Admin**, then log in with `AdminPassword`) or from the server console:
+Admins control the match from the game, either with the admin panel (**F8 > Admin**) or with chat commands (**Tab** opens the chat), after logging in with `AdminPassword` (in the panel, or `/login <password>` in the chat). The server console has the same commands:
 
-| Console | In-game admin panel | Effect |
-|---|---|---|
-| `next` | Next (skip) | Ends the round now (results), or skips the results screen |
-| `restart` | Restart round | Restarts the current round on the same map (times cleared, no points given) |
-| `pause` | Pause / Resume | Freezes or resumes the round timer (players can still ride) |
-| `extend <s>` | +1 min | Adds time to the running round |
-| `map <index>` | Go to map | Starts a round on that map of the rotation (index starts at 0) |
-| `kick <id>` | Kick | Disconnects a player (`list` shows the ids) |
-| `resetmatch` | Reset match scores | Clears the match standings |
+| Console | Chat | In-game admin panel | Effect |
+|---|---|---|---|
+| `next` | `/next` | Next (skip) | Ends the round now (results), or skips the results screen |
+| `restart` | `/restart` | Restart round | Restarts the current round on the same map (times cleared, no points given) |
+| `pause` | `/pause` | Pause / Resume | Freezes or resumes the round timer (players can still ride) |
+| `extend <s>` | `/extend [s]` | +1 min | Adds time to the running round (chat: 60 s by default) |
+| `map <index>` | `/map <number>` | Go to map | Starts a round on that map of the rotation (console: index from 0, chat: number from 1) |
+| `kick <id>` | `/kick <name>` | Kick | Disconnects a player (console: id from `list`; chat: name or start of the name) |
+| `resetmatch` | `/resetmatch` | Reset match scores | Clears the match standings |
+
+Everyone can use `/help` in the chat. Chat messages are shown in the server console (`[chat]`), with a limit of 5 messages per 5 seconds per player.
 
 Other console commands: `list` (connected players), `round` (current round), `standings` (match standings), `quit`.
 

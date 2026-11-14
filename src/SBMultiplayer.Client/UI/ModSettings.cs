@@ -23,6 +23,8 @@ internal static class ModSettings
 
     public static ValueEvent<bool> ShowSplits { get; } = Bind(ModConfig.Current.ShowSplits, v => ModConfig.Current.ShowSplits = v);
 
+    public static ValueEvent<bool> ShowChat { get; } = Bind(ModConfig.Current.ShowChat, v => ModConfig.Current.ShowChat = v);
+
     private static ValueEvent<T> Bind<T>(T initial, Action<T> apply)
     {
         var value = new ValueEvent<T>(initial);

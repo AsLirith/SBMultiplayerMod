@@ -92,10 +92,11 @@ internal static class MultiplayerMenu
             options.GetSliderRow(Tr.NameTagDistance, ModSettings.NameTagMaxDistance,
                 f => MathF.Round(float.Parse(f)) + " cm", 10f, 300f, 10f),
             options.GetCheckboxRow(Tr.ShowSplits, ModSettings.ShowSplits),
+            options.GetCheckboxRow(Tr.ShowChat, ModSettings.ShowChat),
             options.GetCheckboxRow(Tr.RoundPanel, ModSettings.ShowRoundPanel),
             options.GetSliderRow(Tr.RoundPanelSize, ModSettings.RoundPanelScale,
                 f => MathF.Round(float.Parse(f) * 100f) + "%", 0.3f, 1.2f, 0.1f),
-            new Label(Tr.KeysHint(cfg.MenuKey, cfg.RejoinKey)),
+            new Label(Tr.KeysHint(cfg.MenuKey, cfg.RejoinKey, cfg.ChatKey)),
             Button(Tr.Back, close)
         ).SetChildrenWidthToMaxChildWidth().SetNavigationStartToFirstNavigatable();
 

@@ -150,6 +150,15 @@ internal sealed class MultiplayerClient : INetEventListener
     private void HandleHotkeys()
     {
         KeyboardState keys = Keyboard.GetState();
+        if (GameAccess.IsTyping() || ChatInput.IsOpen)
+        {
+            previousKeys = keys; // pas de raccourcis pendant la saisie de texte
+            return;
+        }
+        if (Pressed(keys, ModConfig.Current.ChatKey))
+        {
+            ChatInput.Open();
+        }
         if (Pressed(keys, ModConfig.Current.MenuKey))
         {
             MultiplayerMenu.Open();
@@ -338,6 +347,14 @@ internal sealed class MultiplayerClient : INetEventListener
             Notifications.Info(Tr.TimeVsBest(Msg.FormatTime(ms), Msg.FormatTime((uint)(ms - d)), d / 1000f));
         }
         SendFinish(finish.RoundId, ms);
+    }
+
+    public void SendChat(string text)
+    {
+        if (IsReady)
+        {
+            Send(w => Msg.ChatToServer(w, text), DeliveryMethod.ReliableOrdered);
+        }
     }
 
     public void SendFinish(int roundId, uint timeMs)
@@ -604,6 +621,21 @@ internal sealed class MultiplayerClient : INetEventListener
                     string code = reader.GetString(64);
                     string arg = reader.GetString(128);
                     Notifications.Show(Tr.ServerEvent(code, arg), new Microsoft.Xna.Framework.Color(255, 210, 90));
+                    break;
+                }
+                case MessageType.Chat:
+                {
+                    reader.GetInt(); // id de l'émetteur (réservé : mute, couleurs…)
+                    string name = reader.GetString(ProtocolInfo.MaxNameLength * 4);
+                    string text = reader.GetString(ProtocolInfo.MaxChatLength * 4);
+                    ChatLog.AddPlayer(name, text);
+                    break;
+                }
+                case MessageType.CommandReply:
+                {
+                    string code = reader.GetString(64);
+                    string arg = reader.GetString(256);
+                    Notifications.Show(Tr.CommandReply(code, arg), new Microsoft.Xna.Framework.Color(255, 170, 80));
                     break;
                 }
                 case MessageType.MatchStandings:

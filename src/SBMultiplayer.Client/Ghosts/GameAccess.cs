@@ -59,6 +59,21 @@ internal static class GameAccess
 
     public static Scene? CurrentScene => Game == null ? null : CurrentSceneRef(Game);
 
+    private static readonly MethodInfo IsNavigatingInTextInputMethod = AccessTools.Method(typeof(GlobalGame), "IsNavigatingInTextInput");
+
+    /// <summary>A text field of the game (or of the mod) has the focus: hotkeys must not react.</summary>
+    public static bool IsTyping()
+    {
+        try
+        {
+            return Game != null && (bool)IsNavigatingInTextInputMethod.Invoke(Game, null)!;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     public static bool IsIngameScene(Scene? scene) => scene != null && Scene3DIngameType.IsInstanceOfType(scene);
 
     public static SpriteFont? UiFont => Game == null ? null : UiAssetsRef(Game)?.FontSmall?.Value;

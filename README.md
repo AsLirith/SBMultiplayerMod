@@ -11,6 +11,7 @@ Unofficial multiplayer mod for [STUNTBOOST](https://store.steampowered.com/app/2
 - **Round map loaded automatically**, instant retry when you cross the finish line instead of the end screen.
 - **In-game menu (F8)**: server address, name, connect/disconnect, other players' visibility and opacity, name tags, round panel size.
 - **Checkpoint splits** compared to your best run of the round.
+- **Chat (Tab)** with admin commands (`/next`, `/map`, `/kick`… see `/help`).
 - **Admin panel (F8 > Admin)**: skip, restart, pause, extend the round, choose the map, kick players, reset the match.
 - **F7** to rejoin the round's map. On-screen notifications for connection, players, rounds and your times.
 - Interface in **English or French**, following the game's language.

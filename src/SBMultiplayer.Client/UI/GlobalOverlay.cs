@@ -34,6 +34,10 @@ internal sealed class GlobalOverlay : SE.IDrawBatch2
             try
             {
                 DrawNotifications(sb, vp, scale);
+                if (ModConfig.Current.ShowChat && MultiplayerClient.Instance.IsReady)
+                {
+                    DrawChat(sb, vp, scale);
+                }
                 if (ModConfig.Current.ShowRoundPanel && MultiplayerClient.Instance.IsReady)
                 {
                     DrawRoundPanel(sb, vp, scale);
@@ -59,6 +63,76 @@ internal sealed class GlobalOverlay : SE.IDrawBatch2
         {
             text.DrawCentered(sb, item.Text, vp.Width / 2f, ref y, item.Color, s, alpha);
         }
+    }
+
+    private const double ChatVisibleSeconds = 15;
+    private const int ChatLinesIdle = 8;
+    private const int ChatLinesOpen = 14;
+
+    /// <summary>Chat in the bottom-left corner: recent lines only, the whole history while typing.</summary>
+    private void DrawChat(SpriteBatch sb, Viewport vp, float scale)
+    {
+        bool open = ChatInput.IsOpen;
+        double now = NetClock.Now;
+        float s = scale * 0.6f;
+        float left = 24f * scale;
+        float maxWidth = vp.Width * 0.42f;
+        float lineHeight = text.LineHeight(s);
+
+        // Lines are laid out bottom-up, starting above the bottom edge.
+        var lines = new List<(string? Name, string Text, Color Color, float Alpha)>();
+        foreach (ChatLog.Entry e in ChatLog.Last(open ? ChatLinesOpen : ChatLinesIdle))
+        {
+            double age = now - e.Time;
+            if (!open && age > ChatVisibleSeconds)
+            {
+                continue;
+            }
+            float alpha = open ? 1f : (float)Math.Clamp(ChatVisibleSeconds - age, 0, 1);
+            string prefix = e.Name != null ? e.Name + ": " : "";
+            List<string> wrapped = Wrap(prefix + e.Text, maxWidth, s);
+            for (int i = 0; i < wrapped.Count; i++)
+            {
+                // Only the first line carries the sender name (drawn in gold).
+                lines.Add((i == 0 ? e.Name : null, i == 0 && e.Name != null ? wrapped[i][Math.Min(prefix.Length, wrapped[i].Length)..] : wrapped[i], e.Color, alpha));
+            }
+        }
+
+        float y = vp.Height * 0.78f - lines.Count * lineHeight;
+        foreach (var (name, line, color, alpha) in lines)
+        {
+            float x = left;
+            if (name != null)
+            {
+                string label = name + ": ";
+                text.DrawOutlined(sb, label, new Vector2(x, y), Gold * alpha, s, alpha);
+                x += text.Measure(label, s).X;
+            }
+            text.DrawOutlined(sb, line, new Vector2(x, y), color * alpha, s, alpha);
+            y += lineHeight;
+        }
+    }
+
+    /// <summary>Greedy word wrap to the given pixel width.</summary>
+    private List<string> Wrap(string value, float maxWidth, float s)
+    {
+        var result = new List<string>();
+        string current = "";
+        foreach (string word in value.Split(' '))
+        {
+            string candidate = current.Length == 0 ? word : current + " " + word;
+            if (current.Length > 0 && text.Measure(candidate, s).X > maxWidth)
+            {
+                result.Add(current);
+                current = word;
+            }
+            else
+            {
+                current = candidate;
+            }
+        }
+        result.Add(current);
+        return result;
     }
 
     private void DrawRoundPanel(SpriteBatch sb, Viewport vp, float scale)

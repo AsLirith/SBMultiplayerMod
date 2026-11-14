@@ -17,6 +17,7 @@ internal static class Notifications
     public static void Show(string text, Color? color = null)
     {
         ModLog.Info($"[notif] {text}");
+        ChatLog.AddSystem(text, color);
         lock (Gate)
         {
             Items.Add(new Item(text, color ?? Color.White, NetClock.Now));

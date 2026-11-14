@@ -30,6 +30,7 @@ public sealed class GameServer : INetEventListener
         public int Skin { get; set; }
         public bool IsAdmin { get; set; }
         public PlayerInfo Info => new(Id, Name, MapKey, Skin);
+        public Queue<double> RecentChat { get; } = new();
     }
 
     private readonly ServerOptions options;
@@ -114,8 +115,22 @@ public sealed class GameServer : INetEventListener
     public IEnumerable<string> DescribeStandings() =>
         SortedStandings().Select((e, i) => $"{i + 1}. {e.Name} - {e.Points} pts ({e.RoundsPlayed} rounds)");
 
-    /// <summary>Runs an admin command from the server console (no admin name).</summary>
-    public string? RunConsoleCommand(AdminCommand command, int argument) => ExecuteAdmin(null, command, argument);
+    /// <summary>Runs an admin command from the server console (no admin name). Returns an error message, or null.</summary>
+    public string? RunConsoleCommand(AdminCommand command, int argument)
+    {
+        var (code, arg) = ExecuteAdmin(null, command, argument);
+        return code == CommandResults.Done ? null : DescribeResult(code, arg);
+    }
+
+    /// <summary>English text of a command result, for the server console.</summary>
+    private static string DescribeResult(string code, string arg) => code switch
+    {
+        CommandResults.NoRound => "No round in progress",
+        CommandResults.Usage => $"Usage: {arg}",
+        CommandResults.NoPlayer => $"No player {arg}",
+        CommandResults.BadMap => $"Map index out of range (the rotation has {arg} maps)",
+        _ => $"{code} {arg}",
+    };
 
     // ---------- Rounds ----------
 
@@ -337,13 +352,18 @@ public sealed class GameServer : INetEventListener
         if (!p.IsAdmin)
         {
             Log($"Admin command {command} refused for {p.Name} (#{p.Id}): not logged in");
+            Reply(p, CommandResults.NotAdmin, "");
             return;
         }
-        ExecuteAdmin(p, command, argument);
+        var (code, arg) = ExecuteAdmin(p, command, argument);
+        if (code != CommandResults.Done)
+        {
+            Reply(p, code, arg);
+        }
     }
 
-    /// <summary>Runs an admin command. Returns an error message, or null on success.</summary>
-    private string? ExecuteAdmin(Player? admin, AdminCommand command, int argument)
+    /// <summary>Runs an admin command. Returns a <see cref="CommandResults"/> code and its argument.</summary>
+    private (string Code, string Arg) ExecuteAdmin(Player? admin, AdminCommand command, int argument)
     {
         string by = admin?.Name ?? "server";
         bool inRound = phase != RoundPhase.Free;
@@ -352,7 +372,7 @@ public sealed class GameServer : INetEventListener
             case AdminCommand.NextPhase:
                 if (!inRound)
                 {
-                    return "No round in progress";
+                    return (CommandResults.NoRound, "");
                 }
                 if (phase == RoundPhase.Playing)
                 {
@@ -368,7 +388,7 @@ public sealed class GameServer : INetEventListener
             case AdminCommand.RestartRound:
                 if (!inRound)
                 {
-                    return "No round in progress";
+                    return (CommandResults.NoRound, "");
                 }
                 StartRound(mapIndex);
                 BroadcastEvent(ServerEvents.Restarted, by);
@@ -377,7 +397,7 @@ public sealed class GameServer : INetEventListener
             case AdminCommand.TogglePause:
                 if (!inRound)
                 {
-                    return "No round in progress";
+                    return (CommandResults.NoRound, "");
                 }
                 if (paused)
                 {
@@ -394,9 +414,13 @@ public sealed class GameServer : INetEventListener
                 break;
 
             case AdminCommand.Extend:
-                if (phase != RoundPhase.Playing || argument <= 0)
+                if (phase != RoundPhase.Playing)
                 {
-                    return "Can only extend a running round by a positive number of seconds";
+                    return (CommandResults.NoRound, "");
+                }
+                if (argument <= 0)
+                {
+                    return (CommandResults.Usage, "/extend <seconds>");
                 }
                 if (paused)
                 {
@@ -413,7 +437,7 @@ public sealed class GameServer : INetEventListener
             case AdminCommand.GotoMap:
                 if (argument < 0 || argument >= options.Maps.Count)
                 {
-                    return $"Map index out of range (0-{options.Maps.Count - 1})";
+                    return (CommandResults.BadMap, options.Maps.Count.ToString(CultureInfo.InvariantCulture));
                 }
                 StartRound(argument);
                 BroadcastEvent(ServerEvents.MapChosen, by);
@@ -422,7 +446,7 @@ public sealed class GameServer : INetEventListener
             case AdminCommand.Kick:
                 if (!players.TryGetValue(argument, out Player? target))
                 {
-                    return $"No player #{argument}";
+                    return (CommandResults.NoPlayer, $"#{argument}");
                 }
                 Log($"{target.Name} (#{target.Id}) kicked by {by}");
                 BroadcastEvent(ServerEvents.PlayerKicked, target.Name);
@@ -436,10 +460,139 @@ public sealed class GameServer : INetEventListener
                 break;
 
             default:
-                return $"Unknown command {command}";
+                return (CommandResults.Unknown, command.ToString());
         }
         Log($"Admin: {command}{(argument != 0 ? $" {argument}" : "")} by {by}");
-        return null;
+        return (CommandResults.Done, "");
+    }
+
+    // ---------- Chat ----------
+
+    private const int ChatBurst = 5;
+    private const double ChatWindowSeconds = 5;
+
+    private void OnChat(Player p, string raw)
+    {
+        string text = Msg.SanitizeChat(raw);
+        if (text.Length == 0)
+        {
+            return;
+        }
+
+        // Anti-spam: at most ChatBurst messages per ChatWindowSeconds.
+        while (p.RecentChat.Count > 0 && Now - p.RecentChat.Peek() > ChatWindowSeconds)
+        {
+            p.RecentChat.Dequeue();
+        }
+        if (p.RecentChat.Count >= ChatBurst)
+        {
+            Reply(p, CommandResults.TooFast, "");
+            return;
+        }
+        p.RecentChat.Enqueue(Now);
+
+        if (text.StartsWith('/'))
+        {
+            OnChatCommand(p, text);
+            return;
+        }
+        Log($"[chat] {p.Name}: {text}");
+        Broadcast(Msg.ChatToClient(writer, p.Id, p.Name, text), DeliveryMethod.ReliableOrdered, except: null);
+    }
+
+    private void Reply(Player p, string code, string argument) =>
+        p.Peer.Send(Msg.Reply(writer, code, argument), DeliveryMethod.ReliableOrdered);
+
+    /// <summary>Chat commands. Map numbers are 1-based for players (the console uses 0-based indexes).</summary>
+    private void OnChatCommand(Player p, string text)
+    {
+        string[] parts = text[1..].Split(' ', 2, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        string command = parts.Length > 0 ? parts[0].ToLowerInvariant() : "";
+        string arg = parts.Length > 1 ? parts[1] : "";
+
+        switch (command)
+        {
+            case "help":
+                Reply(p, CommandResults.Help, p.IsAdmin ? "admin" : "player");
+                return;
+            case "login":
+                OnAdminLogin(p, arg);
+                return;
+        }
+
+        AdminCommand? admin = command switch
+        {
+            "next" or "skip" => AdminCommand.NextPhase,
+            "restart" => AdminCommand.RestartRound,
+            "pause" or "resume" => AdminCommand.TogglePause,
+            "extend" => AdminCommand.Extend,
+            "map" => AdminCommand.GotoMap,
+            "kick" => AdminCommand.Kick,
+            "resetmatch" => AdminCommand.ResetMatch,
+            _ => null,
+        };
+        if (admin is not AdminCommand cmd)
+        {
+            Reply(p, CommandResults.Unknown, "/" + command);
+            return;
+        }
+        if (!p.IsAdmin)
+        {
+            Reply(p, CommandResults.NotAdmin, "");
+            return;
+        }
+
+        int argument = 0;
+        switch (cmd)
+        {
+            case AdminCommand.Extend:
+                argument = arg == "" ? 60 : int.TryParse(arg, out int seconds) ? seconds : -1;
+                break;
+            case AdminCommand.GotoMap:
+                if (!int.TryParse(arg, out int number))
+                {
+                    Reply(p, CommandResults.Usage, "/map <number>");
+                    return;
+                }
+                argument = number - 1;
+                break;
+            case AdminCommand.Kick:
+                Player? target = FindPlayer(arg);
+                if (target == null)
+                {
+                    Reply(p, arg == "" ? CommandResults.Usage : CommandResults.NoPlayer, arg == "" ? "/kick <name>" : arg);
+                    return;
+                }
+                argument = target.Id;
+                break;
+        }
+
+        var (code, resultArg) = ExecuteAdmin(p, cmd, argument);
+        if (code != CommandResults.Done)
+        {
+            Reply(p, code, resultArg);
+        }
+    }
+
+    /// <summary>Finds a player by "#id", exact name, or unique name prefix (case-insensitive).</summary>
+    private Player? FindPlayer(string query)
+    {
+        if (query == "")
+        {
+            return null;
+        }
+        var named = players.Values.Where(o => o.HasSaidHello).ToList();
+        if (query.StartsWith('#') && int.TryParse(query[1..], out int id))
+        {
+            return named.FirstOrDefault(o => o.Id == id);
+        }
+        var exact = named.FirstOrDefault(o => string.Equals(o.Name, query, StringComparison.OrdinalIgnoreCase));
+        if (exact != null)
+        {
+            return exact;
+        }
+        var prefix = named.Where(o => o.Name.StartsWith(query, StringComparison.OrdinalIgnoreCase)).ToList();
+        return prefix.Count == 1 ? prefix[0] : null;
     }
 
     // ---------- LiteNetLib events ----------
@@ -530,6 +683,9 @@ public sealed class GameServer : INetEventListener
                     break;
                 case MessageType.AdminCommand:
                     OnAdminCommand(p, (AdminCommand)reader.GetByte(), reader.GetInt());
+                    break;
+                case MessageType.Chat:
+                    OnChat(p, reader.GetString(ProtocolInfo.MaxChatLength * 4));
                     break;
                 default:
                     Log($"Unexpected message {type} from #{p.Id}");
