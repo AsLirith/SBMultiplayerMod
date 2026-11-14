@@ -63,8 +63,10 @@ internal static class MultiplayerMenu
                     close();
                     MultiplayerClient.Instance.SetSpectating(!MultiplayerClient.Instance.IsSpectating);
                 })),
-            Section(Tr.HostSection),
-            BuildHostRow(close),
+            Section(Tr.PlayWithFriendsSection),
+            Line(
+                Button(HostedServer.IsRunning ? Tr.HostManageButton : Tr.HostSection, OpenHost),
+                SteamP2P.Available ? Button(Tr.JoinFriendSection, OpenFriends) : Text("")),
             Section(Tr.SettingsSection),
             Line(
                 Button(Tr.DisplayTitle, OpenDisplay),
@@ -76,6 +78,8 @@ internal static class MultiplayerMenu
 
     // ---------- Host a game ----------
 
+    private static void OpenHost() => Show("host", (close, _) => Stack(Title(Tr.HostSection), BuildHostRow(close), Button(Tr.Back, close)));
+
     private static Element BuildHostRow(Action close)
     {
         if (HostedServer.IsRunning)
@@ -84,6 +88,7 @@ internal static class MultiplayerMenu
             return Stack(
                 Text(Tr.HostRunning(HostedServer.Port)),
                 Text(Tr.HostAddresses(addresses.Count > 0 ? string.Join(", ", addresses) : "?", HostedServer.Port)),
+                ModConfig.Current.SteamP2PHost && SteamP2P.Available ? Text(Tr.SteamHostVisible) : null,
                 Button(Tr.HostStop, () =>
                 {
                     close();
@@ -104,8 +109,33 @@ internal static class MultiplayerMenu
             MultiplayerClient.Instance.HostGame(p);
         }
         port.OnEnter += () => { Host(); return true; };
-        return Line(Text(Tr.HostPortLabel), Field(port), Button(Tr.HostButton, Host));
+        return Stack(
+            Line(Text(Tr.HostPortLabel), Field(port), Button(Tr.HostButton, Host)),
+            SteamP2P.Available ? GameAccess.OptionsUi.GetCheckboxRow(Tr.SteamHostCheckbox, ModSettings.SteamP2PHost) : null);
     }
+
+    // ---------- Join a Steam friend (P2P) ----------
+
+    private static void OpenFriends() => Show("friends", (close, _) =>
+    {
+        var friends = SteamP2P.FriendsHosting();
+        Element list = friends.Count == 0
+            ? Text(Tr.NoFriendHosting)
+            : Grid(friends.Select(f => Button(f.SameVersion ? f.Name : $"{f.Name} ({Tr.OtherVersion})", () =>
+            {
+                close();
+                MultiplayerClient.Instance.JoinFriend(f.SteamId, f.Name);
+            })).ToList(), 3);
+        return Stack(
+            Title(Tr.JoinFriendSection),
+            Text(Tr.JoinFriendHint),
+            list,
+            Line(Button(Tr.Refresh, () =>
+            {
+                close();
+                OpenFriends();
+            }), Button(Tr.Back, close)));
+    });
 
     // ---------- Display: how other players are shown ----------
 

@@ -254,6 +254,8 @@ internal static class Tr
 
     // ---------- Héberger une partie ----------
     public static string HostSection => T("Host a game", "Héberger une partie");
+    public static string HostManageButton => T("My hosted game", "Ma partie hébergée");
+    public static string PlayWithFriendsSection => T("Play with friends", "Jouer entre amis");
     public static string HostPortLabel => T("UDP port", "Port UDP");
     public static string HostButton => T("Host", "Héberger");
     public static string HostStop => T("Stop hosting", "Arrêter la partie");
@@ -265,6 +267,18 @@ internal static class Tr
     public static string HostAddresses(string local, int port) => T(
         $"Friends connect to: {local} (local network), or your public IP:{port} (internet, open the port on your router)",
         $"Tes amis se connectent à : {local} (réseau local), ou ton IP publique:{port} (internet, ouvre le port sur ta box)");
+
+    // ---------- Steam P2P ----------
+    public static string SteamHostCheckbox => T("Steam friends can join without opening a port (Steam P2P)", "Les amis Steam peuvent rejoindre sans ouvrir de port (P2P Steam)");
+    public static string SteamHostVisible => T("Your Steam friends can join you: F8 > Join a Steam friend", "Tes amis Steam peuvent te rejoindre : F8 > Rejoindre un ami Steam");
+    public static string SteamUnavailable => T("Steam P2P unavailable (see SBMultiplayer.log)", "P2P Steam indisponible (voir SBMultiplayer.log)");
+    public static string JoinFriendSection => T("Join a Steam friend", "Rejoindre un ami Steam");
+    public static string JoinFriendButton => T("Friends hosting a game", "Amis qui hébergent une partie");
+    public static string JoinFriendHint => T("Friends playing STUNTBOOST and hosting a game with the mod:", "Amis qui jouent à STUNTBOOST et hébergent une partie avec le mod :");
+    public static string NoFriendHosting => T("No friend is hosting a game right now", "Aucun ami n'héberge de partie pour le moment");
+    public static string OtherVersion => T("other mod version", "autre version du mod");
+    public static string Refresh => T("Refresh", "Actualiser");
+    public static string JoiningFriend(string name) => T($"Joining {name}'s game through Steam...", $"Connexion à la partie de {name} via Steam...");
 
     // ---------- Panneau : pause et match ----------
     public static string PausedHeader => T("PAUSED", "PAUSE");

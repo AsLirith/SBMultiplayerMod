@@ -283,8 +283,12 @@ internal sealed class MultiplayerClient : INetEventListener
 
     // ---------- Actions (menu, touches) ----------
 
-    /// <summary>Address used instead of the configured one while hosting a game (127.0.0.1:port), and its admin password.</summary>
+    /// <summary>
+    /// Address used instead of the configured one: our hosted game (127.0.0.1:port) or the local Steam P2P proxy
+    /// towards a friend's game; with its display name and the admin password of our hosted game.
+    /// </summary>
     private string? hostAddress;
+    private string? hostAddressLabel;
     private string? hostAdminPassword;
 
     /// <summary>Hosting from F8: starts the in-game server, then connects to it as admin.</summary>
@@ -296,10 +300,48 @@ internal sealed class MultiplayerClient : INetEventListener
             Notifications.Warn(Tr.HostFailed(error));
             return;
         }
+        SteamP2P.StopJoin();
         hostAddress = $"127.0.0.1:{port}";
+        hostAddressLabel = null;
         hostAdminPassword = HostedServer.AdminPassword;
         ConnectNow();
         Notifications.Good(Tr.HostStarted(port));
+        if (ModConfig.Current.SteamP2PHost && SteamP2P.Available)
+        {
+            try
+            {
+                SteamP2P.StartHost(port);
+                Notifications.Good(Tr.SteamHostVisible);
+            }
+            catch (Exception e)
+            {
+                ModLog.Error("Steam P2P hosting failed", e);
+                Notifications.Warn(Tr.SteamUnavailable);
+            }
+        }
+    }
+
+    /// <summary>Joins a Steam friend's hosted game through Steam P2P (no port to open).</summary>
+    public void JoinFriend(ulong steamId, string name)
+    {
+        if (HostedServer.IsRunning)
+        {
+            StopHosting();
+        }
+        try
+        {
+            int localPort = SteamP2P.StartJoin(steamId);
+            hostAddress = $"127.0.0.1:{localPort}";
+            hostAddressLabel = $"Steam: {name}";
+            hostAdminPassword = null;
+            ConnectNow();
+            Notifications.Info(Tr.JoiningFriend(name));
+        }
+        catch (Exception e)
+        {
+            ModLog.Error("Steam P2P join failed", e);
+            Notifications.Warn(Tr.SteamUnavailable);
+        }
     }
 
     public void StopHosting()
@@ -311,6 +353,7 @@ internal sealed class MultiplayerClient : INetEventListener
         hostAddress = null;
         hostAdminPassword = null;
         Disconnect();
+        SteamP2P.StopHost();
         HostedServer.Stop();
         Notifications.Info(Tr.HostStopped);
     }
@@ -321,6 +364,12 @@ internal sealed class MultiplayerClient : INetEventListener
         if (HostedServer.IsRunning)
         {
             StopHosting(); // connecting elsewhere ends the hosted game
+        }
+        if (SteamP2P.IsJoining)
+        {
+            SteamP2P.StopJoin(); // back to the configured server address
+            hostAddress = null;
+            hostAddressLabel = null;
         }
         ConnectNow();
     }
@@ -519,6 +568,8 @@ internal sealed class MultiplayerClient : INetEventListener
                 AppDomain.CurrentDomain.ProcessExit += (_, _) =>
                 {
                     net.Stop(sendDisconnectMessages: true);
+                    SteamP2P.StopJoin();
+                    SteamP2P.StopHost();
                     HostedServer.Stop();
                 };
             }
@@ -538,7 +589,7 @@ internal sealed class MultiplayerClient : INetEventListener
             var (host, port) = hostAddress != null
                 ? (hostAddress[..hostAddress.LastIndexOf(':')], int.Parse(hostAddress[(hostAddress.LastIndexOf(':') + 1)..]))
                 : ModConfig.Current.ParseServer();
-            serverAddress = $"{host}:{port}";
+            serverAddress = hostAddressLabel ?? $"{host}:{port}";
             ModLog.Info($"Connexion à {serverAddress} en tant que « {playerName} »…");
             server = net.Connect(host, port, ProtocolInfo.ConnectionData(ModConfig.Current.ServerPassword));
         }

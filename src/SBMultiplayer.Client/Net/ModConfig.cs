@@ -15,6 +15,9 @@ internal sealed class ModConfig
     /// <summary>Pseudo affiché. Vide = pseudo Steam.</summary>
     public string PlayerName { get; set; } = "";
 
+    /// <summary>When hosting, let Steam friends join through Steam P2P (no port to open).</summary>
+    public bool SteamP2PHost { get; set; } = true;
+
     /// <summary>UDP port used when hosting a game from the F8 menu.</summary>
     public int HostPort { get; set; } = ProtocolInfo.DefaultPort;
 
