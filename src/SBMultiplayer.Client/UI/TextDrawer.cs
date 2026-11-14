@@ -36,6 +36,24 @@ internal sealed class TextDrawer
 
     public float LineHeight(float scale) => font!.LineSpacing * scale;
 
+    /// <summary>Shortens the text with "..." so that it fits in <paramref name="maxWidth"/> pixels.</summary>
+    public string Fit(string value, float maxWidth, float scale)
+    {
+        if (Measure(value, scale).X <= maxWidth)
+        {
+            return value;
+        }
+        for (int length = value.Length - 1; length > 1; length--)
+        {
+            string candidate = value[..length].TrimEnd() + "...";
+            if (Measure(candidate, scale).X <= maxWidth)
+            {
+                return candidate;
+            }
+        }
+        return value[..1] + "...";
+    }
+
     /// <summary>Texte avec un contour sombre, lisible sur n'importe quel décor.</summary>
     public void DrawOutlined(SpriteBatch sb, string text, Vector2 pos, Color color, float scale, float alpha = 1f)
     {

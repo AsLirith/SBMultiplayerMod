@@ -244,6 +244,7 @@ internal static class Tr
     };
     public static string WinnerAnnounce(string name) => T($"Winner: {name}", $"Vainqueur : {name}");
     public static string NoWinner => T("No winner", "Pas de vainqueur");
+    public static string AndMore(int n) => T($"... and {n} more", $"... et {n} autre{(n > 1 ? "s" : "")}");
     public static string NextGameIn(int seconds) => T($"Next game in {seconds} s", $"Partie suivante dans {seconds} s");
     public static string SettingsMatchEnd => T("End-of-game screen", "Écran de fin de partie");
 

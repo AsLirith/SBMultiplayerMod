@@ -92,8 +92,6 @@ internal sealed class GlobalOverlay : SE.IDrawBatch2
 
     private Texture2D? pixel;
 
-    private const int MaxEndScreenRows = 12;
-
     private void FillRect(SpriteBatch sb, Rectangle rect, Color color)
     {
         if (pixel == null)
@@ -151,44 +149,65 @@ internal sealed class GlobalOverlay : SE.IDrawBatch2
             }
         }
 
-        // Dimmed background and central panel.
+        // Layout: the standings shrink to fit the screen, then split into two columns, then get truncated.
+        const float BaseRow = 0.6f;     // row text scale, relative to the 1080p font
+        const float MinRow = 0.42f;
+        const int MaxRowsPerColumn = 20;
+        float maxListHeight = vp.Height * 0.5f;
+        float rowGap = 1.08f;
+        int count = rows.Count;
+        int columns = count > MaxRowsPerColumn / 2 && text.LineHeight(scale * MinRow) * rowGap * count > maxListHeight ? 2 : 1;
+        int perColumn = Math.Min(MaxRowsPerColumn, (int)Math.Ceiling(count / (float)columns));
+        int shown = Math.Min(count, perColumn * columns);
+        float rowScale = Math.Clamp(maxListHeight / (Math.Max(1, perColumn) * text.LineHeight(scale) * rowGap), MinRow, BaseRow) * scale;
+        float lineHeight = text.LineHeight(rowScale) * rowGap;
+
+        float titleScale = scale * 0.9f;
+        float winnerScale = scale * 1.15f;
+        float footerScale = scale * 0.55f;
+        float columnWidth = 720 * scale * (rowScale / (BaseRow * scale));
+        int panelWidth = (int)Math.Max(820 * scale, columns * columnWidth + 120 * scale);
+        float listHeight = Math.Max(1, perColumn) * lineHeight + (shown < count ? lineHeight : 0);
+        int panelHeight = (int)(text.LineHeight(titleScale) + text.LineHeight(winnerScale) + listHeight
+                                + text.LineHeight(footerScale) + 130 * scale);
+
         FillRect(sb, new Rectangle(0, 0, vp.Width, vp.Height), Color.Black * 0.55f);
-        int panelWidth = (int)(1100 * scale);
-        int panelHeight = (int)((420 + Math.Min(rows.Count, MaxEndScreenRows) * 46) * scale);
-        var panel = new Rectangle((vp.Width - panelWidth) / 2, (int)(vp.Height * 0.12f), panelWidth, panelHeight);
+        var panel = new Rectangle((vp.Width - panelWidth) / 2, Math.Max(0, (vp.Height - panelHeight) / 2 - (int)(vp.Height * 0.05f)), panelWidth, panelHeight);
         FillRect(sb, panel, new Color(20, 20, 24) * 0.85f);
 
         float cx = vp.Width / 2f;
-        float y = panel.Y + 30 * scale;
-        text.DrawCentered(sb, Tr.EndTitle(mode), cx, ref y, Color.White, scale * 1.2f);
-        y += 10 * scale;
+        float y = panel.Y + 26 * scale;
+        text.DrawCentered(sb, Tr.EndTitle(mode), cx, ref y, Color.White, titleScale);
+        y += 6 * scale;
         text.DrawCentered(sb, winner != null ? Tr.WinnerAnnounce(winner) : Tr.NoWinner, cx, ref y,
-            winner != null ? new Color(255, 215, 90) : Color.LightGray, scale * 1.6f);
-        y += 24 * scale;
+            winner != null ? new Color(255, 215, 90) : Color.LightGray, winnerScale);
+        y += 20 * scale;
 
-        // Table: rank | name | score | detail.
-        float s = scale * 0.8f;
-        float left = panel.X + 70 * scale;
-        float nameX = left + 90 * scale;
-        float scoreX = panel.X + panelWidth * 0.55f;
-        float detailX = panel.X + panelWidth * 0.75f;
-        float lineHeight = text.LineHeight(s) * 1.1f;
-        if (rows.Count == 0)
+        if (count == 0)
         {
-            text.DrawCentered(sb, Tr.NoTimesYet, cx, ref y, Color.LightGray, s);
+            text.DrawCentered(sb, Tr.NoTimesYet, cx, ref y, Color.LightGray, rowScale);
         }
-        for (int i = 0; i < Math.Min(rows.Count, MaxEndScreenRows); i++)
+        float listTop = y;
+        float listLeft = cx - columns * columnWidth / 2f;
+        for (int i = 0; i < shown; i++)
         {
             EndRow row = rows[i];
-            text.DrawOutlined(sb, $"{i + 1}.", new Vector2(left, y), row.Color, s);
-            text.DrawOutlined(sb, row.Name, new Vector2(nameX, y), row.Color, s);
-            text.DrawOutlined(sb, row.Score, new Vector2(scoreX, y), row.Color, s);
-            text.DrawOutlined(sb, row.Detail, new Vector2(detailX, y), row.Color * 0.9f, s * 0.9f);
-            y += lineHeight;
+            float x = listLeft + (i / perColumn) * columnWidth;
+            float rowY = listTop + (i % perColumn) * lineHeight;
+            // Columns inside a standings column: rank | name | score | detail.
+            text.DrawOutlined(sb, $"{i + 1}.", new Vector2(x, rowY), row.Color, rowScale);
+            text.DrawOutlined(sb, text.Fit(row.Name, columnWidth * 0.4f, rowScale), new Vector2(x + columnWidth * 0.1f, rowY), row.Color, rowScale);
+            text.DrawOutlined(sb, row.Score, new Vector2(x + columnWidth * 0.52f, rowY), row.Color, rowScale);
+            text.DrawOutlined(sb, row.Detail, new Vector2(x + columnWidth * 0.74f, rowY), row.Color * 0.9f, rowScale * 0.85f);
+        }
+        if (shown < count)
+        {
+            float moreY = listTop + perColumn * lineHeight;
+            text.DrawCentered(sb, Tr.AndMore(count - shown), cx, ref moreY, Color.LightGray, rowScale * 0.9f);
         }
 
-        float footerY = panel.Bottom - 50 * scale;
-        text.DrawCentered(sb, Tr.NextGameIn((int)Math.Ceiling(round.RemainingSeconds)), cx, ref footerY, Color.LightGray, scale * 0.7f);
+        float footerY = panel.Bottom - text.LineHeight(footerScale) - 22 * scale;
+        text.DrawCentered(sb, Tr.NextGameIn((int)Math.Ceiling(round.RemainingSeconds)), cx, ref footerY, Color.LightGray, footerScale);
     }
 
     private static Color RowColor(int rank, bool isMe, StandingStatus status) => status switch
