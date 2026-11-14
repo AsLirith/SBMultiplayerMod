@@ -15,6 +15,9 @@ internal sealed class RoundState
 
     public sealed record Snapshot(RoundInfo Info, double ReceivedAt, IReadOnlyList<LeaderboardEntry> Leaderboard)
     {
+        /// <summary>Rounds mode: local time (<see cref="NetClock"/>) of the start signal, corrected for latency.</summary>
+        public double? GoAt { get; init; }
+
         public double RemainingSeconds => Info.Paused ? Info.RemainingSeconds : Math.Max(0, Info.RemainingSeconds - (NetClock.Now - ReceivedAt));
 
         public bool IsRound => Info.Phase != RoundPhase.Free;
@@ -22,12 +25,17 @@ internal sealed class RoundState
 
     public Snapshot Current => current;
 
-    public void SetInfo(RoundInfo info)
+    /// <param name="oneWayLatencySeconds">Server → client delay, to compute the start signal time.</param>
+    public void SetInfo(RoundInfo info, double oneWayLatencySeconds)
     {
         Snapshot old = current;
         // Nouveau round : l'ancien classement n'a plus de sens.
         var board = info.RoundId == old.Info.RoundId ? old.Leaderboard : new List<LeaderboardEntry>();
-        current = new Snapshot(info, NetClock.Now, board);
+        double now = NetClock.Now;
+        double? goAt = info.Mode == GameMode.Rounds && info.Phase == RoundPhase.Playing
+            ? now + info.StartIn - oneWayLatencySeconds
+            : null;
+        current = new Snapshot(info, now, board) { GoAt = goAt };
     }
 
     public void SetLeaderboard(int roundId, List<LeaderboardEntry> entries)

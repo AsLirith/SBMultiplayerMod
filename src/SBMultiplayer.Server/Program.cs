@@ -14,6 +14,8 @@ const string Help = """
       --password <text>     password required to join
       --admin-password <t>  password for the in-game admin panel (F8)
       --maps <list>         rotation, e.g. o:1,o:2,o:57 (official level IDs; empty = free mode)
+      --mode <mode>         TimeAttack (default) or Rounds (synchronized start, one attempt per round)
+      --rounds-per-map <n>  Rounds mode: rounds played on each map (default 3)
       --round <s>           round duration in seconds (default 300)
       --results <s>         results screen duration (default 15)
       --echo                sends each player their own delayed board back (solo testing)
@@ -59,6 +61,16 @@ for (int i = 0; i < args.Length; i++)
                 break;
             }
             case "--round": { double v = Seconds(); overrides.Add(o => o.RoundSeconds = v); break; }
+            case "--mode":
+            {
+                if (!Enum.TryParse(Next(), ignoreCase: true, out GameMode v))
+                {
+                    throw new ArgumentException("expected TimeAttack or Rounds");
+                }
+                overrides.Add(o => o.Mode = v);
+                break;
+            }
+            case "--rounds-per-map": { int v = int.Parse(Next()); overrides.Add(o => o.RoundsPerMap = v); break; }
             case "--results": { double v = Seconds(); overrides.Add(o => o.ResultsSeconds = v); break; }
             case "--echo": overrides.Add(o => o.Echo = true); break;
             case "--echo-delay": { double v = Seconds(); overrides.Add(o => o.EchoDelaySeconds = v); break; }

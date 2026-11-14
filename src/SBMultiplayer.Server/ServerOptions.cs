@@ -25,7 +25,23 @@ public sealed class ServerOptions
     /// <summary>Map rotation ("o:1", "o:57:2001"…). Empty = free mode, no rounds.</summary>
     public List<string> Maps { get; set; } = new();
 
+    /// <summary>Game mode: TimeAttack (unlimited retries, best time) or Rounds (synchronized start, one attempt per round).</summary>
+    public GameMode Mode { get; set; } = GameMode.TimeAttack;
+
+    /// <summary>Time Attack: round duration. Rounds: time limit of a round after the start.</summary>
     public double RoundSeconds { get; set; } = 300;
+
+    /// <summary>Rounds mode: number of rounds played on each map before moving to the next one.</summary>
+    public int RoundsPerMap { get; set; } = 3;
+
+    /// <summary>Rounds mode: the round ends this many seconds after the first player finishes.</summary>
+    public double FinishTimeoutSeconds { get; set; } = 15;
+
+    /// <summary>Rounds mode: maximum wait for everyone to load the map and be ready on the start line.</summary>
+    public double PrepareTimeoutSeconds { get; set; } = 20;
+
+    /// <summary>Rounds mode: countdown before the start, once everyone is ready.</summary>
+    public double CountdownSeconds { get; set; } = 3;
 
     public double ResultsSeconds { get; set; } = 15;
 
@@ -42,6 +58,7 @@ public sealed class ServerOptions
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
+        Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() },
         ReadCommentHandling = JsonCommentHandling.Skip,
         AllowTrailingCommas = true,
         PropertyNameCaseInsensitive = true,
@@ -73,9 +90,22 @@ public sealed class ServerOptions
           // Empty list = free mode: no rounds, everyone rides wherever they want.
           "Maps": [ "o:1", "o:2", "o:3" ],
 
-          // Round and results screen durations, in seconds.
+          // Game mode:
+          //  - "TimeAttack": unlimited retries during the round, best time wins.
+          //  - "Rounds": synchronized start, one attempt per round (respawning at checkpoints is allowed,
+          //    going back to the start means giving up), points by race time.
+          "Mode": "TimeAttack",
+
+          // Time Attack: round duration. Rounds: time limit after the start. In seconds.
           "RoundSeconds": 300,
           "ResultsSeconds": 15,
+
+          // Rounds mode only: rounds per map, end of the round after the first finisher,
+          // maximum wait for players to load the map, countdown before the start. In seconds.
+          "RoundsPerMap": 3,
+          "FinishTimeoutSeconds": 15,
+          "PrepareTimeoutSeconds": 20,
+          "CountdownSeconds": 3,
 
           // Match points by rank at the end of each round (1st, 2nd, 3rd...).
           "PointsTable": [ 10, 8, 6, 5, 4, 3, 2, 1 ],

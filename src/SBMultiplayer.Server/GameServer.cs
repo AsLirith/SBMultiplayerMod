@@ -49,6 +49,15 @@ public sealed class GameServer : INetEventListener
     private bool paused;
     private double pausedRemaining;
 
+    // ---------- Rounds mode (synchronized start) ----------
+    private bool IsRoundsMode => options.Mode == GameMode.Rounds;
+    private int roundInMap = 1;
+    private double? startAt;
+    private double? firstFinishAt;
+    private readonly HashSet<int> ready = new();
+    private readonly HashSet<int> participants = new();
+    private readonly HashSet<int> gaveUp = new();
+
     /// <summary>Best time of each player in the current round (the name is kept if the player leaves).</summary>
     private readonly Dictionary<int, LeaderboardEntry> best = new();
 
@@ -85,7 +94,9 @@ public sealed class GameServer : INetEventListener
             + (options.AdminPassword != "" ? ", in-game admin enabled" : "")
             + (options.Echo ? ", echo mode" : "") + ")");
         Log(HasRotation
-            ? $"Rotation: {string.Join(", ", options.Maps)} - {options.RoundSeconds:0} s rounds, {options.ResultsSeconds:0} s results"
+            ? (IsRoundsMode
+                ? $"Rounds mode - rotation: {string.Join(", ", options.Maps)} - {options.RoundsPerMap} rounds per map, {options.RoundSeconds:0} s limit, {options.ResultsSeconds:0} s results"
+                : $"Time Attack - rotation: {string.Join(", ", options.Maps)} - {options.RoundSeconds:0} s rounds, {options.ResultsSeconds:0} s results")
             : "No maps configured: free mode (set Maps in the config or use --maps to enable rounds)");
     }
 
@@ -156,11 +167,24 @@ public sealed class GameServer : INetEventListener
 
         if (phase == RoundPhase.Free)
         {
-            StartRound((mapIndex + 1) % options.Maps.Count);
+            StartRound((mapIndex + 1) % options.Maps.Count, newMap: true);
         }
         else if (paused)
         {
             phaseEnd = Now + pausedRemaining;
+        }
+        else if (phase == RoundPhase.Preparing)
+        {
+            // Everyone on the start line (or waited long enough): countdown, then start.
+            int connected = players.Values.Count(p => p.HasSaidHello);
+            if ((ready.Count >= connected && ready.Count > 0) || Now >= phaseEnd)
+            {
+                BeginCountdown();
+            }
+        }
+        else if (phase == RoundPhase.Playing && IsRoundsMode && RoundsRaceIsOver())
+        {
+            EndRound();
         }
         else if (Now >= phaseEnd)
         {
@@ -170,23 +194,103 @@ public sealed class GameServer : INetEventListener
             }
             else
             {
-                StartRound((mapIndex + 1) % options.Maps.Count);
+                AdvanceAfterResults();
             }
         }
     }
 
-    private void StartRound(int index)
+    /// <summary>After the results: next round on the same map (Rounds mode), or next map.</summary>
+    private void AdvanceAfterResults()
     {
+        if (IsRoundsMode && roundInMap < Math.Max(1, options.RoundsPerMap))
+        {
+            roundInMap++;
+            StartRound(mapIndex, newMap: false);
+        }
+        else
+        {
+            StartRound((mapIndex + 1) % options.Maps.Count, newMap: true);
+        }
+    }
+
+    private void StartRound(int index, bool newMap)
+    {
+        if (newMap)
+        {
+            roundInMap = 1;
+        }
         mapIndex = index;
         roundId++;
-        phase = RoundPhase.Playing;
         paused = false;
         phaseStart = Now;
-        phaseEnd = Now + options.RoundSeconds;
         best.Clear();
-        Log($"Round {roundId}: {CurrentMap} ({options.RoundSeconds:0} s)");
+        ready.Clear();
+        participants.Clear();
+        gaveUp.Clear();
+        startAt = null;
+        firstFinishAt = null;
+        if (IsRoundsMode)
+        {
+            phase = RoundPhase.Preparing;
+            phaseEnd = Now + options.PrepareTimeoutSeconds;
+            Log($"Round {roundId}: {CurrentMap} (round {roundInMap}/{options.RoundsPerMap} on this map) - waiting for players");
+        }
+        else
+        {
+            phase = RoundPhase.Playing;
+            phaseEnd = Now + options.RoundSeconds;
+            Log($"Round {roundId}: {CurrentMap} ({options.RoundSeconds:0} s)");
+        }
         BroadcastRound();
         BroadcastLeaderboard();
+    }
+
+    /// <summary>Rounds mode: everyone ready (or timeout). The players ready now are the participants of the race.</summary>
+    private void BeginCountdown()
+    {
+        phase = RoundPhase.Playing;
+        participants.UnionWith(ready);
+        startAt = Now + options.CountdownSeconds;
+        phaseStart = startAt.Value;
+        phaseEnd = startAt.Value + options.RoundSeconds;
+        Log($"Round {roundId}: start in {options.CountdownSeconds:0} s ({participants.Count} participant(s))");
+        BroadcastRound();
+    }
+
+    /// <summary>Rounds mode: all participants finished or gave up, or the finish timeout expired.</summary>
+    private bool RoundsRaceIsOver()
+    {
+        if (startAt == null || Now < startAt)
+        {
+            return false;
+        }
+        if (firstFinishAt is double first && Now >= first + options.FinishTimeoutSeconds)
+        {
+            return true;
+        }
+        var stillRacing = participants.Where(id => players.ContainsKey(id) && !best.ContainsKey(id) && !gaveUp.Contains(id));
+        return participants.Count > 0 && !stillRacing.Any();
+    }
+
+    private void OnReady(Player p, int readyRoundId)
+    {
+        if (!IsRoundsMode || readyRoundId != roundId || phase != RoundPhase.Preparing || !Msg.MapMatches(p.MapKey, CurrentMap))
+        {
+            return;
+        }
+        if (ready.Add(p.Id))
+        {
+            BroadcastRound(); // updates the "ready x/y" counter
+        }
+    }
+
+    private void OnGiveUp(Player p, int giveUpRoundId)
+    {
+        if (IsRoundsMode && giveUpRoundId == roundId && phase == RoundPhase.Playing && participants.Contains(p.Id)
+            && !best.ContainsKey(p.Id) && gaveUp.Add(p.Id))
+        {
+            Log($"{p.Name} gave up");
+        }
     }
 
     private void EndRound()
@@ -215,7 +319,13 @@ public sealed class GameServer : INetEventListener
     }
 
     private RoundInfo CurrentRoundInfo() =>
-        new(roundId, CurrentMap, phase, (float)Remaining, Math.Max(0, mapIndex), options.Maps.Count, paused);
+        new(roundId, CurrentMap, phase, (float)Remaining, Math.Max(0, mapIndex), options.Maps.Count, paused,
+            options.Mode,
+            StartIn: startAt is double s ? (float)(s - Now) : 0f,
+            RoundInMap: roundInMap,
+            RoundsPerMap: IsRoundsMode ? Math.Max(1, options.RoundsPerMap) : 1,
+            ReadyCount: ready.Count,
+            PlayerCount: players.Values.Count(p => p.HasSaidHello));
 
     private void BroadcastRound() => Broadcast(Msg.Round(writer, CurrentRoundInfo()), DeliveryMethod.ReliableOrdered, except: null);
 
@@ -241,6 +351,10 @@ public sealed class GameServer : INetEventListener
         {
             reject = "outside of a round";
         }
+        else if (IsRoundsMode && (!participants.Contains(p.Id) || gaveUp.Contains(p.Id) || best.ContainsKey(p.Id)))
+        {
+            reject = "not racing in this round (one attempt per round)";
+        }
         else if (!Msg.MapMatches(p.MapKey, CurrentMap))
         {
             reject = $"wrong map ({p.MapKey})";
@@ -257,6 +371,7 @@ public sealed class GameServer : INetEventListener
             return;
         }
 
+        firstFinishAt ??= Now;
         bool improved = !best.TryGetValue(p.Id, out LeaderboardEntry previous) || timeMs < previous.BestMs;
         Log($"{p.Name}: {Msg.FormatTime(timeMs)}{(improved ? " (personal best)" : "")}");
         if (improved)
@@ -374,13 +489,17 @@ public sealed class GameServer : INetEventListener
                 {
                     return (CommandResults.NoRound, "");
                 }
-                if (phase == RoundPhase.Playing)
+                if (phase == RoundPhase.Preparing)
+                {
+                    BeginCountdown(); // don't wait for the missing players
+                }
+                else if (phase == RoundPhase.Playing)
                 {
                     EndRound();
                 }
                 else
                 {
-                    StartRound((mapIndex + 1) % options.Maps.Count);
+                    AdvanceAfterResults();
                 }
                 BroadcastEvent(ServerEvents.Skipped, by);
                 break;
@@ -390,7 +509,7 @@ public sealed class GameServer : INetEventListener
                 {
                     return (CommandResults.NoRound, "");
                 }
-                StartRound(mapIndex);
+                StartRound(mapIndex, newMap: false);
                 BroadcastEvent(ServerEvents.Restarted, by);
                 break;
 
@@ -439,7 +558,7 @@ public sealed class GameServer : INetEventListener
                 {
                     return (CommandResults.BadMap, options.Maps.Count.ToString(CultureInfo.InvariantCulture));
                 }
-                StartRound(argument);
+                StartRound(argument, newMap: true);
                 BroadcastEvent(ServerEvents.MapChosen, by);
                 break;
 
@@ -686,6 +805,12 @@ public sealed class GameServer : INetEventListener
                     break;
                 case MessageType.Chat:
                     OnChat(p, reader.GetString(ProtocolInfo.MaxChatLength * 4));
+                    break;
+                case MessageType.Ready:
+                    OnReady(p, reader.GetInt());
+                    break;
+                case MessageType.GiveUp:
+                    OnGiveUp(p, reader.GetInt());
                     break;
                 default:
                     Log($"Unexpected message {type} from #{p.Id}");

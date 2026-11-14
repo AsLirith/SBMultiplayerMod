@@ -57,6 +57,8 @@ internal sealed class MultiplayerSceneHook : IUpdate, ICheckpointStorage, IGoalR
         mapKey = ComputeMapKey(board);
         localPosition = GameAccess.GetGhostState(board).Position;
         client.SetMap(this, mapKey);
+        // Synchronized start (Rounds mode) needs to know whether a start-line popup is a start or a respawn.
+        StartGate.CheckpointManager = scene.AllThings.OfType<CheckpointManager>().FirstOrDefault();
         // Splits: the game's own time difference display compares with our best run of the round.
         SplitTracker.AttachTo(scene.AllThings.OfType<TimeDiffOnCheckpoints>().FirstOrDefault(), mapKey, client.Round.Current.Info.RoundId);
         return true;

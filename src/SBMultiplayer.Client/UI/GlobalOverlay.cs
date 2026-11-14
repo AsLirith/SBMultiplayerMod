@@ -42,6 +42,10 @@ internal sealed class GlobalOverlay : SE.IDrawBatch2
                 {
                     DrawChat(sb, vp, scale); // also when disconnected: connection errors stay visible
                 }
+                if (MultiplayerClient.Instance.IsReady && StartGate.Applies)
+                {
+                    DrawStartStatus(sb, vp, scale);
+                }
                 if (ModConfig.Current.ShowRoundPanel && MultiplayerClient.Instance.IsReady)
                 {
                     DrawRoundPanel(sb, vp, scale);
@@ -66,6 +70,53 @@ internal sealed class GlobalOverlay : SE.IDrawBatch2
         foreach (var (item, alpha) in Notifications.Visible())
         {
             text.DrawCentered(sb, item.Text, vp.Width / 2f, ref y, item.Color, s, alpha);
+        }
+    }
+
+    /// <summary>Rounds mode: waiting for players, countdown, "GO!", or why we're waiting on the start line.</summary>
+    private void DrawStartStatus(SpriteBatch sb, Viewport vp, float scale)
+    {
+        RoundState.Snapshot round = MultiplayerClient.Instance.Round.Current;
+        double now = NetClock.Now;
+        float y = vp.Height * 0.3f;
+        float cx = vp.Width / 2f;
+
+        if (now - StartGate.ReleasedAt < 1.0)
+        {
+            text.DrawCentered(sb, Tr.Go, cx, ref y, new Color(120, 230, 120), scale * 2.2f);
+            return;
+        }
+        if (!StartGate.IsHeldOnStartLine)
+        {
+            return;
+        }
+
+        string? message = null;
+        float size = scale * 0.9f;
+        Color color = Color.White;
+        switch (StartGate.State)
+        {
+            case StartGate.RunState.Waiting when round.Info.Phase == RoundPhase.Preparing:
+                message = Tr.WaitingForPlayers(round.Info.ReadyCount, round.Info.PlayerCount);
+                break;
+            case StartGate.RunState.Waiting when round.GoAt is double goAt && goAt > now:
+                message = ((int)Math.Ceiling(goAt - now)).ToString();
+                size = scale * 2.6f;
+                color = new Color(255, 210, 90);
+                break;
+            case StartGate.RunState.Finished:
+                message = Tr.FinishedWaiting;
+                break;
+            case StartGate.RunState.GaveUp:
+                message = Tr.WaitNextRound;
+                break;
+            case StartGate.RunState.Late:
+                message = Tr.LateWaiting;
+                break;
+        }
+        if (message != null)
+        {
+            text.DrawCentered(sb, message, cx, ref y, color, size);
         }
     }
 
@@ -155,10 +206,13 @@ internal sealed class GlobalOverlay : SE.IDrawBatch2
         bool results = round.Info.Phase == RoundPhase.Results;
         int remaining = (int)Math.Ceiling(round.RemainingSeconds);
         string clock = $"{remaining / 60}:{remaining % 60:00}";
+        string roundPart = round.Info.RoundsPerMap > 1 ? $" - {Tr.RoundOf(round.Info.RoundInMap, round.Info.RoundsPerMap)}" : "";
         string header = results
             ? Tr.ResultsHeader(remaining)
-            : $"{GameAccess.DescribeMap(round.Info.MapKey)} ({round.Info.MapIndex + 1}/{round.Info.MapCount}) - "
-              + (round.Info.Paused ? $"{Tr.PausedHeader} {clock}" : clock);
+            : round.Info.Phase == RoundPhase.Preparing
+                ? $"{GameAccess.DescribeMap(round.Info.MapKey)} ({round.Info.MapIndex + 1}/{round.Info.MapCount}){roundPart}"
+                : $"{GameAccess.DescribeMap(round.Info.MapKey)} ({round.Info.MapIndex + 1}/{round.Info.MapCount}){roundPart} - "
+                  + (round.Info.Paused ? $"{Tr.PausedHeader} {clock}" : clock);
         text.DrawRightAligned(sb, header, right, ref y, results || round.Info.Paused ? Gold : Color.White, s * 1.15f);
         if (!client.IsOnRoundMap && !results)
         {

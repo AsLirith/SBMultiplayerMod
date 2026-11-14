@@ -131,6 +131,7 @@ internal sealed class MultiplayerClient : INetEventListener
 
         HandleHotkeys();
         AdminMenu.Tick();
+        StartGate.Tick(this);
         TrackLocalSkin();
         EnsureConnected();
         FlushPendingFinish();
@@ -139,8 +140,9 @@ internal sealed class MultiplayerClient : INetEventListener
         var r = Round.Current;
         AnnounceRound(r);
 
-        // Nouveau round : on charge la map imposée (une seule fois par round).
-        if (IsReady && r.Info.Phase == RoundPhase.Playing && r.Info.RoundId != loadedRoundId)
+        // Nouveau round : on charge la map imposée (une seule fois par round). En mode Rounds, chaque
+        // manche recharge la map (même map) : tout le monde repart de la ligne de départ.
+        if (IsReady && r.Info.Phase is RoundPhase.Playing or RoundPhase.Preparing && r.Info.RoundId != loadedRoundId)
         {
             loadedRoundId = r.Info.RoundId;
             LoadRoundMap(r.Info.MapKey);
@@ -338,6 +340,10 @@ internal sealed class MultiplayerClient : INetEventListener
             return; // hors round : affiché par les intermédiaires uniquement
         }
         ModLog.Info($"Arrivée en {Msg.FormatTime(ms)} (round {finish.RoundId}) → envoi au serveur");
+        if (Round.Current.Info.Mode == GameMode.Rounds)
+        {
+            StartGate.MarkFinished();
+        }
         if (delta is not int d || d < 0)
         {
             Notifications.Good(Tr.NewBest(Msg.FormatTime(ms)));
@@ -348,6 +354,10 @@ internal sealed class MultiplayerClient : INetEventListener
         }
         SendFinish(finish.RoundId, ms);
     }
+
+    public void SendReady(int roundId) => Send(w => Msg.Ready(w, roundId), DeliveryMethod.ReliableOrdered);
+
+    public void SendGiveUp(int roundId) => Send(w => Msg.GiveUp(w, roundId), DeliveryMethod.ReliableOrdered);
 
     public void SendChat(string text)
     {
@@ -594,7 +604,7 @@ internal sealed class MultiplayerClient : INetEventListener
                 case MessageType.RoundInfo:
                 {
                     RoundInfo info = Msg.GetRound(reader);
-                    Round.SetInfo(info);
+                    Round.SetInfo(info, peer.Ping / 1000.0);
                     ModLog.Info($"Round {info.RoundId} : {info.Phase} sur {(info.MapKey == "" ? "-" : info.MapKey)}, {info.RemainingSeconds:0} s");
                     break;
                 }

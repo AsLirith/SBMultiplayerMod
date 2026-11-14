@@ -5,7 +5,7 @@ namespace SBMultiplayer.Protocol;
 public static class ProtocolInfo
 {
     /// <summary>À incrémenter à chaque changement incompatible du format des messages.</summary>
-    public const int Version = 5;
+    public const int Version = 6;
 
     public const int DefaultPort = 24800;
 
@@ -141,6 +141,12 @@ public enum MessageType : byte
 
     /// <summary>S→C, fiable. Réponse à une commande (<see cref="CommandResults"/> + argument).</summary>
     CommandReply = 17,
+
+    /// <summary>C→S, fiable. Prêt sur la ligne de départ (modes synchronisés).</summary>
+    Ready = 18,
+
+    /// <summary>C→S, fiable. Abandon de la manche (modes synchronisés).</summary>
+    GiveUp = 19,
 }
 
 public enum RoundPhase : byte
@@ -153,11 +159,26 @@ public enum RoundPhase : byte
 
     /// <summary>Round terminé : affichage des résultats avant la map suivante.</summary>
     Results = 2,
+
+    /// <summary>Modes à départ synchronisé : chargement de la map, en attente que tous les joueurs soient prêts.</summary>
+    Preparing = 3,
+}
+
+public enum GameMode : byte
+{
+    /// <summary>Retries illimités pendant le temps du round, meilleur temps.</summary>
+    TimeAttack = 0,
+
+    /// <summary>Départ synchronisé, une seule tentative par manche, points selon le temps de course.</summary>
+    Rounds = 1,
 }
 
 /// <param name="MapKey">Map imposée ("o:&lt;id&gt;" ou "o:&lt;id&gt;:&lt;version&gt;"), "" en phase Free.</param>
 /// <param name="RemainingSeconds">Temps restant dans la phase, au moment de l'envoi.</param>
-public readonly record struct RoundInfo(int RoundId, string MapKey, RoundPhase Phase, float RemainingSeconds, int MapIndex, int MapCount, bool Paused);
+/// <param name="StartIn">Modes synchronisés, phase Playing : secondes avant le départ au moment de l'envoi (≤ 0 = déjà parti).</param>
+/// <param name="RoundInMap">Numéro de la manche sur cette map (à partir de 1), et nombre de manches par map.</param>
+public readonly record struct RoundInfo(int RoundId, string MapKey, RoundPhase Phase, float RemainingSeconds, int MapIndex, int MapCount, bool Paused,
+    GameMode Mode = GameMode.TimeAttack, float StartIn = 0, int RoundInMap = 1, int RoundsPerMap = 1, int ReadyCount = 0, int PlayerCount = 0);
 
 public readonly record struct LeaderboardEntry(int PlayerId, string Name, uint BestMs);
 
@@ -260,11 +281,36 @@ public static class Msg
         w.Put(r.MapIndex);
         w.Put(r.MapCount);
         w.Put(r.Paused);
+        w.Put((byte)r.Mode);
+        w.Put(r.StartIn);
+        w.Put(r.RoundInMap);
+        w.Put(r.RoundsPerMap);
+        w.Put(r.ReadyCount);
+        w.Put(r.PlayerCount);
         return w;
     }
 
     public static RoundInfo GetRound(NetDataReader r) =>
-        new(r.GetInt(), r.GetString(256), (RoundPhase)r.GetByte(), r.GetFloat(), r.GetInt(), r.GetInt(), r.GetBool());
+        new(r.GetInt(), r.GetString(256), (RoundPhase)r.GetByte(), r.GetFloat(), r.GetInt(), r.GetInt(), r.GetBool(),
+            (GameMode)r.GetByte(), r.GetFloat(), r.GetInt(), r.GetInt(), r.GetInt(), r.GetInt());
+
+    /// <summary>C→S : le joueur est sur la ligne de départ de la manche (modes synchronisés).</summary>
+    public static NetDataWriter Ready(NetDataWriter w, int roundId)
+    {
+        w.Reset();
+        w.Put((byte)MessageType.Ready);
+        w.Put(roundId);
+        return w;
+    }
+
+    /// <summary>C→S : le joueur abandonne la manche (retour au départ après le top).</summary>
+    public static NetDataWriter GiveUp(NetDataWriter w, int roundId)
+    {
+        w.Reset();
+        w.Put((byte)MessageType.GiveUp);
+        w.Put(roundId);
+        return w;
+    }
 
     public static NetDataWriter AdminLogin(NetDataWriter w, string password)
     {

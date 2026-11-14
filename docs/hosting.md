@@ -21,13 +21,31 @@ Every setting can also be given (or overridden) on the command line:
 | `--password <text>` | `Password` | (none) | Password required to join |
 | `--admin-password <text>` | `AdminPassword` | (none) | Password to use the in-game admin panel (F8 > Admin) |
 | `--maps <list>` | `Maps` | (none) | Map rotation, e.g. `o:1,o:2,o:57` (official level IDs). Without it, the server runs in free mode: no rounds, everyone rides wherever they want |
-| `--round <s>` | `RoundSeconds` | 300 | Round duration in seconds |
+| `--mode <mode>` | `Mode` | `TimeAttack` | `TimeAttack` or `Rounds` (see [Game modes](#game-modes)) |
+| `--round <s>` | `RoundSeconds` | 300 | Time Attack: round duration. Rounds: time limit after the start |
+| `--rounds-per-map <n>` | `RoundsPerMap` | 3 | Rounds mode: rounds played on each map |
+| | `FinishTimeoutSeconds` | 15 | Rounds mode: the round ends this long after the first finisher |
+| | `PrepareTimeoutSeconds` | 20 | Rounds mode: maximum wait for everyone to be on the start line |
+| | `CountdownSeconds` | 3 | Rounds mode: countdown before the start |
 | `--results <s>` | `ResultsSeconds` | 15 | Results screen duration in seconds |
 | | `PointsTable` | 10, 8, 6, 5, 4, 3, 2, 1 | Match points by rank at the end of each round |
 | | `ResultsDirectory` | `results` | Where results are exported (empty = no export) |
 | `--echo` | `Echo` | off | Sends each player their own board back with a delay, as a fake "Echo" player, to test alone |
 
 A player's current map key (e.g. `o:1:2001`) is shown in the server console when they enter a level. Use `o:<id>` in the rotation to accept any version of that level.
+
+## Game modes
+
+- **Time Attack** (default): during the round, everyone retries as much as they want; the best time of each player counts.
+- **Rounds**: synchronized start, one attempt per round.
+  1. Everyone loads the map and waits on the start line ("Waiting for players x/y"). The countdown starts when everyone is ready, or after `PrepareTimeoutSeconds`.
+  2. 3, 2, 1, GO: all players are released at the same time.
+  3. Respawning at a checkpoint is allowed. Going back to the start means giving up the round.
+  4. The round ends when everyone has finished or given up, `FinishTimeoutSeconds` after the first finisher, or at the time limit.
+  5. Players are ranked by race time (not by arrival order, which depends on latency) and get points from `PointsTable`. Giving up gives no points.
+  6. After `RoundsPerMap` rounds, the next map starts.
+
+  Players who arrive after the start wait on the start line until the next round.
 
 ## Running a match
 
@@ -37,7 +55,7 @@ Admins control the match from the game, either with the admin panel (**F8 > Admi
 
 | Console | Chat | In-game admin panel | Effect |
 |---|---|---|---|
-| `next` | `/next` | Next (skip) | Ends the round now (results), or skips the results screen |
+| `next` | `/next` | Next (skip) | Ends the round now (results), skips the results screen, or (Rounds mode) starts the countdown without waiting for missing players |
 | `restart` | `/restart` | Restart round | Restarts the current round on the same map (times cleared, no points given) |
 | `pause` | `/pause` | Pause / Resume | Freezes or resumes the round timer (players can still ride) |
 | `extend <s>` | `/extend [s]` | +1 min | Adds time to the running round (chat: 60 s by default) |

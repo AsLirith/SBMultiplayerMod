@@ -134,6 +134,15 @@ internal static class Tr
         _ => $"{code} {arg}",
     };
 
+    // ---------- Mode Rounds (départ synchronisé) ----------
+    public static string WaitingForPlayers(int ready, int total) => T($"Waiting for players ({ready}/{total})", $"En attente des joueurs ({ready}/{total})");
+    public static string Go => T("GO!", "GO !");
+    public static string GaveUp => T("You went back to the start: you gave up this round", "Retour au départ : tu as abandonné cette manche");
+    public static string WaitNextRound => T("Waiting for the next round", "En attente de la prochaine manche");
+    public static string FinishedWaiting => T("Finished - waiting for the other players", "Arrivé - en attente des autres joueurs");
+    public static string LateWaiting => T("Round already started - you'll race in the next one", "Manche déjà commencée - tu joueras la suivante");
+    public static string RoundOf(int n, int total) => T($"Round {n}/{total}", $"Manche {n}/{total}");
+
     // ---------- Panneau : pause et match ----------
     public static string PausedHeader => T("PAUSED", "PAUSE");
     public static string MatchStandings => T("Match", "Match");

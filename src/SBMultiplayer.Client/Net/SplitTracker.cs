@@ -20,7 +20,9 @@ internal static class SplitTracker
     /// <summary>Forgets the reference when the map or the round changes.</summary>
     private static void EnsureContext(string mapKey, int roundId)
     {
-        string key = $"{roundId}|{mapKey}";
+        // Rounds mode: one attempt per round, so the reference is our best run on this map over the match.
+        bool rounds = MultiplayerClient.Instance.Round.Current.Info.Mode == SBMultiplayer.Protocol.GameMode.Rounds;
+        string key = rounds ? $"rounds|{mapKey}" : $"{roundId}|{mapKey}";
         if (key != context)
         {
             context = key;
