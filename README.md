@@ -1,52 +1,54 @@
 # SBMultiplayer
 
-Mod multijoueur non officiel pour [STUNTBOOST](https://store.steampowered.com/app/2999500/STUNTBOOST/), façon « time attack » : tous les joueurs roulent en même temps sur la même map, se voient sous forme de ghosts (sans collisions) et se disputent le meilleur temps du round.
+Unofficial multiplayer mod for [STUNTBOOST](https://store.steampowered.com/app/2999500/STUNTBOOST/), in a "time attack" style: everyone rides the same map at the same time, sees the other players as ghosts (no collisions), and fights for the best time of the round.
 
-> Version de test, déjà jouable entre amis. Testée sous Linux (version native du jeu). Windows : à confirmer.
+> Early version, already playable with friends. Tested on Linux (native version of the game). Windows: not confirmed yet, feedback welcome.
 
-## Fonctionnalités
+## Features
 
-- **Serveur dédié** (application console, sans le jeu) : rotation de maps, rounds chronométrés, classement en direct, écran de résultats.
-- **Ghosts des autres joueurs** en temps réel, fluides (interpolation), avec **leur skin** et **leur pseudo** quand ils sont proches.
-- **Map du round chargée automatiquement**, retry immédiat à l'arrivée au lieu de l'écran de fin.
-- **Menu en jeu (F8)** : serveur, pseudo, connexion, opacité et affichage des autres joueurs, pseudos, taille du panneau.
-- **F7** : rejoindre la map du round. Notifications de connexion, de joueurs, de rounds et de temps.
+- **Dedicated server** (console app, no game needed): map rotation, timed rounds, live leaderboard, results screen.
+- **Other players' ghosts** in real time, smoothly interpolated, with **their own skin** and **their name** when they're close.
+- **Round map loaded automatically**, instant retry when you cross the finish line instead of the end screen.
+- **In-game menu (F8)**: server address, name, connect/disconnect, other players' visibility and opacity, name tags, round panel size.
+- **F7** to rejoin the round's map. On-screen notifications for connection, players, rounds and your times.
 
-⚠️ **Avec le mod, le jeu n'enregistre aucun temps**, ni dans les classements officiels (le jeu le bloque lui-même dès qu'un mod est chargé), ni en local.
+⚠️ **While the mod is loaded, the game does not save any time**: not on the official leaderboards (the game blocks submissions by itself when a mod is detected), and not locally either.
 
-## Installation (joueurs)
+## Installation (players)
 
-1. Télécharger le zip de la dernière [release](../../releases/latest).
-2. Copier le dossier `SBMultiplayer` dans le dossier du jeu (Steam > STUNTBOOST > Gérer > Parcourir les fichiers locaux).
-3. Options de lancement Steam :
-   - **Linux** : `DOTNET_STARTUP_HOOKS="/chemin/vers/STUNTBOOST/SBMultiplayer/SBMultiplayer.Client.dll" %command%`
-   - **Windows** : `cmd /c "set DOTNET_STARTUP_HOOKS=C:\chemin\vers\STUNTBOOST\SBMultiplayer\SBMultiplayer.Client.dll&& %command%"`
-4. Lancer le jeu, appuyer sur **F8** et entrer l'adresse du serveur.
+1. Download the zip from the latest [release](../../releases/latest).
+2. Copy the `SBMultiplayer` folder into the game folder (Steam > STUNTBOOST > Manage > Browse local files).
+3. Set the Steam launch options:
+   - **Linux**: `DOTNET_STARTUP_HOOKS="/path/to/STUNTBOOST/SBMultiplayer/SBMultiplayer.Client.dll" %command%`
+   - **Windows**: `cmd /c "set DOTNET_STARTUP_HOOKS=C:\path\to\STUNTBOOST\SBMultiplayer\SBMultiplayer.Client.dll&& %command%"` (no space before `&&`)
+4. Start the game, press **F8** and enter the server address.
 
-Pour désinstaller, retirer l'option de lancement. Le log se trouve dans `SBMultiplayer/SBMultiplayer.log`.
+To uninstall, remove the launch option. The log file is `SBMultiplayer/SBMultiplayer.log`.
 
-## Héberger un serveur
+## Hosting a server
 
-Voir [docs/hosting.md](docs/hosting.md) (pare-feu, redirection de port, Tailscale…).
+See [docs/hosting.md](docs/hosting.md) (firewall, port forwarding, Tailscale…), or grab the server zip from the [releases](../../releases/latest).
 
 ```sh
 dotnet run --project src/SBMultiplayer.Server -c Release -- --maps o:1,o:2,o:3 --round 300
 ```
 
-## Compiler
+Main options: `--port` (default 24800, UDP), `--maps` (rotation of official level IDs), `--round` and `--results` (durations in seconds), `--max-players`. Console commands: `list`, `round`, `next`, `quit`.
 
-Prérequis : SDK .NET 8 ou plus récent, et le jeu installé.
+## Building
+
+Requirements: .NET 8 SDK or newer, and the game installed.
 
 ```sh
-dotnet build -p:GameDir=/chemin/vers/steamapps/common/STUNTBOOST   # compile et copie le mod dans le jeu
-./packaging/package.sh                                               # zip de distribution dans dist/
+dotnet build -p:GameDir=/path/to/steamapps/common/STUNTBOOST   # builds and copies the mod into the game folder
+./packaging/package.sh                                           # distribution zips in dist/
 ```
 
-## Comment ça marche
+## How it works
 
-Le mod est chargé par un [startup hook .NET](https://github.com/dotnet/runtime/blob/main/docs/design/features/host-startup-hook.md) et patche le jeu en mémoire avec [Harmony](https://github.com/pardeike/Harmony), sans modifier aucun fichier du jeu. Le réseau utilise [LiteNetLib](https://github.com/RevenantX/LiteNetLib) (UDP). Notes techniques dans [docs/00-reverse-engineering.md](docs/00-reverse-engineering.md).
+The mod is loaded through a [.NET startup hook](https://github.com/dotnet/runtime/blob/main/docs/design/features/host-startup-hook.md) and patches the game in memory with [Harmony](https://github.com/pardeike/Harmony), without modifying any game file. Networking uses [LiteNetLib](https://github.com/RevenantX/LiteNetLib) (UDP). Technical notes (in French) are in [docs/00-reverse-engineering.md](docs/00-reverse-engineering.md).
 
-## Légal
+## Legal
 
-Code sous licence [MIT](LICENSE). Ce dépôt ne contient aucun code ni asset du jeu, et ne doit jamais en contenir (pas de code décompilé).
-STUNTBOOST est la propriété de Byting Games. Ce projet n'est ni affilié au studio ni soutenu par lui.
+Code released under the [MIT license](LICENSE). This repository contains no code or assets from the game, and must never contain any (no decompiled code).
+STUNTBOOST is the property of Byting Games. This project is not affiliated with or endorsed by the studio.
