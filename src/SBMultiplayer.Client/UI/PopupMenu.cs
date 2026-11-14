@@ -102,9 +102,14 @@ internal static class PopupMenu
 
     public static Element Title(string text) => new Label(text).SetStyle(Ui.StrongStyle);
 
-    /// <summary>Section header: small bold text with some space above it.</summary>
+    private static readonly Color SectionColor = new(255, 210, 90);
+
+    /// <summary>
+    /// Section header: regular font in gold, with some space above it. (The game's small bold font is
+    /// hard to read, so the color does the job.)
+    /// </summary>
     public static Element Section(string text) =>
-        new Label(text) { Padding = Padding.GetTop(18f) }.SetStyle(new Style { Font = Ui.FontSmallBold });
+        new Label(text) { Padding = Padding.GetTop(18f) }.SetStyle(new Style { Font = Ui.FontSmall, FontColor = SectionColor });
 
     public static Element Text(string text) => new Label(text);
 
