@@ -47,6 +47,7 @@ internal static class Tr
     public static string ShowNameTags => T("Show names", "Afficher les pseudos");
     public static string NameTagDistance => T("Name display distance", "Distance des pseudos");
     public static string ShowSplits => T("Checkpoint splits", "Temps intermédiaires");
+    public static string SplitsSize => T("Splits size", "Taille des temps intermédiaires");
     public static string SplitCheckpoint(int n) => $"CP {n}";
     public static string SplitFinish => T("Finish", "Arrivée");
     public static string RoundPanel => T("Round panel", "Panneau du round");

@@ -80,7 +80,7 @@ internal sealed class GlobalOverlay : SE.IDrawBatch2
             return;
         }
         float alpha = (float)Math.Clamp((SplitDisplaySeconds - age) / 0.4, 0, 1);
-        float s = scale * 0.9f;
+        float s = scale * 0.9f * ModConfig.Current.SplitsScale;
         bool finish = split.IsFinish;
         string label = finish ? Tr.SplitFinish : Tr.SplitCheckpoint(split.Index + 1);
         float y = vp.Height * 0.28f;
