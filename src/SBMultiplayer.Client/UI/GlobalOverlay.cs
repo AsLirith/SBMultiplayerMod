@@ -77,19 +77,19 @@ internal sealed class GlobalOverlay : SE.IDrawBatch2
         bool results = round.Info.Phase == RoundPhase.Results;
         int remaining = (int)Math.Ceiling(round.RemainingSeconds);
         string header = results
-            ? $"Résultats - map suivante dans {remaining} s"
+            ? Tr.ResultsHeader(remaining)
             : $"{GameAccess.DescribeMap(round.Info.MapKey)} ({round.Info.MapIndex + 1}/{round.Info.MapCount}) - {remaining / 60}:{remaining % 60:00}";
         text.DrawRightAligned(sb, header, right, ref y, results ? Gold : Color.White, s * 1.15f);
         if (!client.IsOnRoundMap && !results)
         {
-            text.DrawRightAligned(sb, $"Tu n'es pas sur la map du round ({ModConfig.Current.RejoinKey} pour la rejoindre)", right, ref y, Color.Orange, s * 0.85f);
+            text.DrawRightAligned(sb, Tr.NotOnRoundMap(ModConfig.Current.RejoinKey), right, ref y, Color.Orange, s * 0.85f);
         }
         y += text.LineHeight(s) * 0.3f;
 
         IReadOnlyList<LeaderboardEntry> board = round.Leaderboard;
         if (board.Count == 0)
         {
-            text.DrawRightAligned(sb, "Aucun temps pour l'instant", right, ref y, Color.LightGray, s);
+            text.DrawRightAligned(sb, Tr.NoTimesYet, right, ref y, Color.LightGray, s);
             return;
         }
 

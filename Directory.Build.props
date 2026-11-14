@@ -6,7 +6,7 @@
     <!-- Dossier où le mod est déployé après chaque build (pas d'espace : plus simple pour DOTNET_STARTUP_HOOKS) -->
     <ModDeployDir>$(GameDir)/SBMultiplayer</ModDeployDir>
 
-    <Version>0.5.1</Version>
+    <Version>0.5.2</Version>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>

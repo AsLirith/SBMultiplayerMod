@@ -41,6 +41,9 @@ internal sealed class ModConfig
     /// <summary>Affiche les pseudos au-dessus des ghosts proches.</summary>
     public bool ShowNameTags { get; set; } = true;
 
+    /// <summary>Langue de l'interface du mod : "auto" (celle du jeu), "en" ou "fr".</summary>
+    public string Language { get; set; } = "auto";
+
     /// <summary>Touche du menu multijoueur (nom d'une touche MonoGame : F8, F10, Insert…).</summary>
     public string MenuKey { get; set; } = "F8";
 

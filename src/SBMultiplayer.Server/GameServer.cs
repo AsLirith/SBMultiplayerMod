@@ -236,7 +236,7 @@ public sealed class GameServer : INetEventListener
     {
         if (players.Count >= options.MaxPlayers)
         {
-            request.Reject(NetDataWriter.FromString("Serveur plein"));
+            request.Reject(NetDataWriter.FromString(ServerReasons.Full));
             return;
         }
         // Vérification manuelle de la clé (au lieu de AcceptIfKey) pour expliquer le refus au joueur.
@@ -247,7 +247,7 @@ public sealed class GameServer : INetEventListener
             return;
         }
         Log($"Connexion refusée depuis {request.RemoteEndPoint} : version du mod différente ({key})");
-        request.Reject(NetDataWriter.FromString($"Version du mod incompatible (serveur : protocole v{ProtocolInfo.Version}). Mets le mod à jour."));
+        request.Reject(NetDataWriter.FromString($"{ServerReasons.VersionMismatch}:{ProtocolInfo.Version}"));
     }
 
     public void OnPeerConnected(NetPeer peer)

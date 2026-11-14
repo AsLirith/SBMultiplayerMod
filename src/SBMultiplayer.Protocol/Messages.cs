@@ -15,6 +15,15 @@ public static class ProtocolInfo
     public static string ConnectionKey => $"SBMultiplayer/{Version}";
 }
 
+/// <summary>Codes de refus de connexion envoyés par le serveur, traduits par le client.</summary>
+public static class ServerReasons
+{
+    public const string Full = "SERVER_FULL";
+
+    /// <summary>Suivi de ":&lt;version du protocole du serveur&gt;".</summary>
+    public const string VersionMismatch = "VERSION_MISMATCH";
+}
+
 public enum MessageType : byte
 {
     /// <summary>C→S, fiable. Premier message après connexion.</summary>
@@ -267,6 +276,6 @@ public static class Msg
             sb.Append(rune.ToString());
         }
         string clean = sb.ToString().Trim();
-        return clean.Length == 0 ? "Joueur" : clean;
+        return clean.Length == 0 ? "Player" : clean;
     }
 }

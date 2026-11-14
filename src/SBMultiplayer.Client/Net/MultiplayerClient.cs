@@ -162,7 +162,7 @@ internal sealed class MultiplayerClient : INetEventListener
         if (ready && !wasReady)
         {
             int others = Players.Count;
-            Notifications.Good($"Connecté à {serverAddress} ({others} autre{(others > 1 ? "s" : "")} joueur{(others > 1 ? "s" : "")}) - {ModConfig.Current.MenuKey} : menu multijoueur");
+            Notifications.Good(Tr.Connected(serverAddress, others, ModConfig.Current.MenuKey));
             lastDisconnectReason = "";
         }
         wasReady = ready;
@@ -178,14 +178,14 @@ internal sealed class MultiplayerClient : INetEventListener
         notifiedRound = key;
         if (r.Info.Phase == RoundPhase.Playing)
         {
-            Notifications.Info($"Round {r.Info.RoundId} : {GameAccess.DescribeMap(r.Info.MapKey)}");
+            Notifications.Info(Tr.RoundStarted(r.Info.RoundId, GameAccess.DescribeMap(r.Info.MapKey)));
         }
         else if (r.Info.Phase == RoundPhase.Results)
         {
             var winner = r.Leaderboard.FirstOrDefault();
             Notifications.Show(winner.Name == null
-                ? "Fin du round : aucun temps"
-                : $"Fin du round : {winner.Name} gagne en {Msg.FormatTime(winner.BestMs)}", new Microsoft.Xna.Framework.Color(255, 210, 90));
+                ? Tr.RoundEndNoTimes
+                : Tr.RoundEndWinner(winner.Name, Msg.FormatTime(winner.BestMs)), new Microsoft.Xna.Framework.Color(255, 210, 90));
         }
     }
 
@@ -210,7 +210,7 @@ internal sealed class MultiplayerClient : INetEventListener
         if (server != null)
         {
             DropConnection("déconnexion manuelle");
-            Notifications.Info("Déconnecté du serveur");
+            Notifications.Info(Tr.DisconnectedByUser);
         }
     }
 
@@ -237,11 +237,11 @@ internal sealed class MultiplayerClient : INetEventListener
         var r = Round.Current;
         if (!IsReady || r.Info.Phase == RoundPhase.Free)
         {
-            Notifications.Warn("Aucun round en cours");
+            Notifications.Warn(Tr.NoRound);
         }
         else if (IsOnRoundMap)
         {
-            Notifications.Info("Tu es déjà sur la map du round");
+            Notifications.Info(Tr.AlreadyOnRoundMap);
         }
         else
         {
@@ -260,19 +260,19 @@ internal sealed class MultiplayerClient : INetEventListener
             {
                 if (!GameAccess.StartOfficialLevel(id, version, quickRetry: false))
                 {
-                    Notifications.Warn($"Impossible de charger la map {key} (version du jeu différente ?)");
+                    Notifications.Warn(Tr.MapLoadFailedVersion(key));
                 }
             }
             catch (Exception e)
             {
                 ModLog.Error($"Impossible de charger la map {key}", e);
-                Notifications.Warn($"Impossible de charger la map {key}");
+                Notifications.Warn(Tr.MapLoadFailed(key));
             }
         }
         else
         {
             ModLog.Warn($"Map de round non supportée : {key}");
-            Notifications.Warn($"Map non supportée par cette version du mod : {key}");
+            Notifications.Warn(Tr.MapNotSupported(key));
         }
     }
 
@@ -296,11 +296,11 @@ internal sealed class MultiplayerClient : INetEventListener
         var mine = Round.Current.Leaderboard.FirstOrDefault(e => e.PlayerId == LocalId);
         if (mine.Name == null || ms < mine.BestMs)
         {
-            Notifications.Good($"{Msg.FormatTime(ms)} - nouveau meilleur temps !");
+            Notifications.Good(Tr.NewBest(Msg.FormatTime(ms)));
         }
         else
         {
-            Notifications.Info($"{Msg.FormatTime(ms)} (meilleur : {Msg.FormatTime(mine.BestMs)}, +{(ms - mine.BestMs) / 1000f:0.000})");
+            Notifications.Info(Tr.TimeVsBest(Msg.FormatTime(ms), Msg.FormatTime(mine.BestMs), (ms - mine.BestMs) / 1000f));
         }
         SendFinish(finish.RoundId, ms);
     }
@@ -358,7 +358,7 @@ internal sealed class MultiplayerClient : INetEventListener
         catch (Exception e)
         {
             ModLog.Error("Échec de la tentative de connexion", e);
-            NotifyDisconnect($"Connexion impossible à {ModConfig.Current.Server} ({e.GetType().Name})");
+            NotifyDisconnect(Tr.CannotConnect(ModConfig.Current.Server, e.GetType().Name));
             server = null;
         }
     }
@@ -421,7 +421,7 @@ internal sealed class MultiplayerClient : INetEventListener
         catch (Exception e)
         {
             ModLog.Warn($"Pseudo Steam indisponible ({e.GetType().Name}), pseudo par défaut utilisé");
-            return "Joueur";
+            return "Player";
         }
     }
 
@@ -443,18 +443,26 @@ internal sealed class MultiplayerClient : INetEventListener
         }
         string reason = info.Reason switch
         {
-            _ when info.AdditionalData.AvailableBytes > 0 => info.AdditionalData.GetString(),
-            DisconnectReason.ConnectionFailed => $"Serveur injoignable ({serverAddress})",
-            DisconnectReason.Timeout => "Connexion au serveur perdue",
-            DisconnectReason.RemoteConnectionClose => "Le serveur a fermé la connexion",
-            DisconnectReason.ConnectionRejected => "Connexion refusée par le serveur",
+            _ when info.AdditionalData.AvailableBytes > 0 => TranslateServerReason(info.AdditionalData.GetString()),
+            DisconnectReason.ConnectionFailed => Tr.ServerUnreachable(serverAddress),
+            DisconnectReason.Timeout => Tr.ConnectionLost,
+            DisconnectReason.RemoteConnectionClose => Tr.ServerClosed,
+            DisconnectReason.ConnectionRejected => Tr.ConnectionRejected,
             _ => info.Reason.ToString(),
         };
         ModLog.Warn($"Déconnecté du serveur : {reason}. Nouvelle tentative dans {ReconnectDelaySeconds} s.");
-        NotifyDisconnect($"{reason} - nouvelle tentative toutes les {ReconnectDelaySeconds:0} s");
+        NotifyDisconnect(Tr.RetryingEvery(reason, (int)ReconnectDelaySeconds));
         server = null;
         ResetSessionState();
     }
+
+    /// <summary>Le serveur envoie des codes (SERVER_FULL, VERSION_MISMATCH:3) que le client traduit.</summary>
+    private static string TranslateServerReason(string code) => code switch
+    {
+        ServerReasons.Full => Tr.ServerFull,
+        _ when code.StartsWith(ServerReasons.VersionMismatch + ":") => Tr.VersionMismatch(code[(ServerReasons.VersionMismatch.Length + 1)..]),
+        _ => code, // serveur plus ancien : message en clair
+    };
 
     public void OnNetworkReceive(NetPeer peer, NetPacketReader reader, byte channel, DeliveryMethod method)
     {
@@ -493,7 +501,7 @@ internal sealed class MultiplayerClient : INetEventListener
                     if (Players.TryRemove(id, out RemotePlayer? p))
                     {
                         ModLog.Info($"{p.Name} (#{id}) est parti");
-                        Notifications.Info($"{p.Name} a quitté la partie");
+                        Notifications.Info(Tr.PlayerLeft(p.Name));
                     }
                     break;
                 }
@@ -555,7 +563,7 @@ internal sealed class MultiplayerClient : INetEventListener
         ModLog.Info($"{info.Name} (#{info.Id}) a rejoint{(info.MapKey == "" ? "" : $", sur {info.MapKey}")}");
         if (notify)
         {
-            Notifications.Info($"{info.Name} a rejoint la partie");
+            Notifications.Info(Tr.PlayerJoined(info.Name));
         }
     }
 

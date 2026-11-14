@@ -34,7 +34,7 @@ internal static class MultiplayerMenu
         {
             isOpen = false;
             ModLog.Error("Impossible d'ouvrir le menu multijoueur", e);
-            Notifications.Warn("Impossible d'ouvrir le menu multijoueur (voir SBMultiplayer.log)");
+            Notifications.Warn(Tr.MenuOpenFailed);
         }
     }
 
@@ -68,29 +68,29 @@ internal static class MultiplayerMenu
         Element Button(string text, Action onClick) => GameAccess.CreateButton(onClick).SetStyle(buttonStyle).Add(new Label(text));
 
         Element panel = new PanelStack(28f).SetStyle(ui.TextSmallStyle).AddMaybeNull(
-            new Label($"Multijoueur  (SBMultiplayer v{Version})").SetStyle(ui.StrongStyle),
+            new Label(Tr.MenuTitle(Version)).SetStyle(ui.StrongStyle),
             status,
-            Row("Serveur (adresse:port)", Field(serverInput)),
-            Row("Pseudo (vide = pseudo Steam)", Field(nameInput)),
+            Row(Tr.ServerField, Field(serverInput)),
+            Row(Tr.NameField, Field(nameInput)),
             new PanelStack(24f, vertical: false).Add(
-                Button("Se connecter", ApplyAndConnect),
-                Button("Se déconnecter", () => MultiplayerClient.Instance.Disconnect()),
-                Button("Rejoindre le round", () =>
+                Button(Tr.Connect, ApplyAndConnect),
+                Button(Tr.Disconnect, () => MultiplayerClient.Instance.Disconnect()),
+                Button(Tr.JoinRound, () =>
                 {
                     close();
                     MultiplayerClient.Instance.RejoinRound();
                 })),
-            options.GetCheckboxRow("Afficher les autres joueurs", ModSettings.ShowOtherPlayers),
-            options.GetSliderRow("Opacité des autres joueurs", ModSettings.GhostOpacity,
+            options.GetCheckboxRow(Tr.ShowOtherPlayers, ModSettings.ShowOtherPlayers),
+            options.GetSliderRow(Tr.OtherPlayersOpacity, ModSettings.GhostOpacity,
                 f => MathF.Round(float.Parse(f) * 100f) + "%", 0.1f, 1f, 0.1f),
-            options.GetCheckboxRow("Afficher les pseudos", ModSettings.ShowNameTags),
-            options.GetSliderRow("Distance des pseudos", ModSettings.NameTagMaxDistance,
+            options.GetCheckboxRow(Tr.ShowNameTags, ModSettings.ShowNameTags),
+            options.GetSliderRow(Tr.NameTagDistance, ModSettings.NameTagMaxDistance,
                 f => MathF.Round(float.Parse(f)) + " cm", 10f, 300f, 10f),
-            options.GetCheckboxRow("Panneau du round", ModSettings.ShowRoundPanel),
-            options.GetSliderRow("Taille du panneau du round", ModSettings.RoundPanelScale,
+            options.GetCheckboxRow(Tr.RoundPanel, ModSettings.ShowRoundPanel),
+            options.GetSliderRow(Tr.RoundPanelSize, ModSettings.RoundPanelScale,
                 f => MathF.Round(float.Parse(f) * 100f) + "%", 0.3f, 1.2f, 0.1f),
-            new Label($"{cfg.MenuKey} : ce menu      {cfg.RejoinKey} : rejoindre la map du round"),
-            Button("Retour", close)
+            new Label(Tr.KeysHint(cfg.MenuKey, cfg.RejoinKey)),
+            Button(Tr.Back, close)
         ).SetChildrenWidthToMaxChildWidth().SetNavigationStartToFirstNavigatable();
 
         canvas.Add(GameAccess.CreateMainPanel(panel));
@@ -112,13 +112,13 @@ internal static class MultiplayerMenu
         if (c.IsReady)
         {
             int n = c.Players.Count;
-            return $"Connecté à {c.ServerAddress} en tant que {c.PlayerName} ({n} autre{(n > 1 ? "s" : "")} joueur{(n > 1 ? "s" : "")})";
+            return Tr.StatusConnected(c.ServerAddress, c.PlayerName, n);
         }
         if (c.IsConnecting)
         {
-            return $"Connexion à {c.ServerAddress}...";
+            return Tr.StatusConnecting(c.ServerAddress);
         }
-        return c.IsUserDisconnected ? "Déconnecté" : "Hors ligne - nouvelle tentative automatique";
+        return c.IsUserDisconnected ? Tr.StatusDisconnected : Tr.StatusOffline;
     }
 
     /// <summary>Met à jour le statut et ferme le menu avec Échap.</summary>
