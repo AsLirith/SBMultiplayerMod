@@ -293,6 +293,7 @@ internal static class HideSeek
         Entities? entities = scene!.AllThings.OfType<Entities>().FirstOrDefault();
         RoundState.HideSeekState hs = Client.Round.HideSeek;
         string map = Client.CurrentMapKey;
+        Vector3 hunter = GameAccess.GetGhostState(board!).Position;
 
         RemotePlayer? best = null;
         float bestScore = float.MaxValue;
@@ -303,9 +304,13 @@ internal static class HideSeek
             {
                 continue;
             }
+            if (Vector3.Distance(hunter, position) > HideSeekRules.TagRange)
+            {
+                continue; // the hunter's board must be close to the mouse
+            }
             Vector3 to = position + Vector3.Up * BoardCenterHeight - origin;
             float distance = to.Length();
-            if (distance > HideSeekRules.TagRange || distance < 1f)
+            if (distance < 0.01f)
             {
                 continue;
             }
@@ -314,9 +319,9 @@ internal static class HideSeek
             {
                 continue; // behind the camera
             }
-            // Aim tolerance: 80 cm around the board, or about 3.5° far away.
+            // Aim tolerance: some room around the board (hard to click precisely at full speed).
             float offAxis = (to - forward * along).Length();
-            if (offAxis > Math.Max(80f, distance * 0.06f))
+            if (offAxis > Math.Max(HideSeekRules.AimTolerance, distance * 0.15f))
             {
                 continue;
             }

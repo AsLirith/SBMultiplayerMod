@@ -423,7 +423,7 @@ public sealed class GameServer : INetEventListener
             float distance = MathF.Sqrt(dx * dx + dy * dy + dz * dz);
             if (distance > HideSeekRules.ServerTagRange)
             {
-                Log($"Tag refused: {p.Name} is {distance / 100:0} m away from {mouseName}");
+                Log($"Tag refused: {p.Name} is {distance:0} cm away from {mouseName}");
                 return;
             }
         }
