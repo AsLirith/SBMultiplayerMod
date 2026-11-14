@@ -4,11 +4,11 @@
 
 Download `SBMultiplayer-Server-<version>.zip` from the [releases](https://github.com/AsLirith/SBMultiplayerMod/releases/latest) (requires the .NET 8 runtime or newer), or build it from source (`dotnet run --project src/SBMultiplayer.Server -c Release -- <options>`).
 
-The easiest way to start is to generate a fresh config file :
+The easiest way to start is to generate a fresh config file and start the server :
 
 ```sh
 dotnet SBMultiplayer.Server.dll --init-config server.json   # writes a commented template
-# edit server.json (maps, passwords, durations...), then:
+# edit server.json (maps, passwords, durations...) (or don't touch anything, you can edit the config in game when the server is started if you're not comfortable with config files), then:
 dotnet SBMultiplayer.Server.dll --config server.json
 ```
 
