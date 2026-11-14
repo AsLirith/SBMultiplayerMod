@@ -46,6 +46,9 @@ internal static class Tr
     public static string OtherPlayersOpacity => T("Other players' opacity", "Opacité des autres joueurs");
     public static string ShowNameTags => T("Show names", "Afficher les pseudos");
     public static string NameTagDistance => T("Name display distance", "Distance des pseudos");
+    public static string ShowSplits => T("Checkpoint splits", "Temps intermédiaires");
+    public static string SplitCheckpoint(int n) => $"CP {n}";
+    public static string SplitFinish => T("Finish", "Arrivée");
     public static string RoundPanel => T("Round panel", "Panneau du round");
     public static string RoundPanelSize => T("Round panel size", "Taille du panneau du round");
     public static string KeysHint(string menuKey, string rejoinKey) =>
@@ -91,6 +94,45 @@ internal static class Tr
     public static string MapLoadFailedVersion(string key) => T($"Could not load map {key} (different game version?)", $"Impossible de charger la map {key} (version du jeu différente ?)");
     public static string MapLoadFailed(string key) => T($"Could not load map {key}", $"Impossible de charger la map {key}");
     public static string MapNotSupported(string key) => T($"Map not supported by this mod version: {key}", $"Map non supportée par cette version du mod : {key}");
+    public static string BadPassword => T("Wrong server password: set it in the F8 menu, then Connect", "Mot de passe du serveur incorrect : renseigne-le dans le menu F8, puis Se connecter");
+    public static string Kicked => T("You were kicked from the server", "Tu as été expulsé du serveur");
+    public static string AdminLoginFailed => T("Wrong admin password", "Mot de passe admin incorrect");
+
+    public static string ServerEvent(string code, string arg) => code switch
+    {
+        SBMultiplayer.Protocol.ServerEvents.Paused => T($"Round paused by {arg}", $"Round mis en pause par {arg}"),
+        SBMultiplayer.Protocol.ServerEvents.Resumed => T($"Round resumed by {arg}", $"Round repris par {arg}"),
+        SBMultiplayer.Protocol.ServerEvents.Skipped => T($"Skipped by {arg}", $"Passé par {arg}"),
+        SBMultiplayer.Protocol.ServerEvents.Restarted => T($"Round restarted by {arg}", $"Round relancé par {arg}"),
+        SBMultiplayer.Protocol.ServerEvents.Extended => T($"Round extended by {arg} s", $"Round prolongé de {arg} s"),
+        SBMultiplayer.Protocol.ServerEvents.MapChosen => T($"Map changed by {arg}", $"Map changée par {arg}"),
+        SBMultiplayer.Protocol.ServerEvents.PlayerKicked => T($"{arg} was kicked", $"{arg} a été expulsé"),
+        SBMultiplayer.Protocol.ServerEvents.MatchReset => T($"Match scores reset by {arg}", $"Scores du match remis à zéro par {arg}"),
+        SBMultiplayer.Protocol.ServerEvents.AdminLoggedIn => T($"{arg} is now admin", $"{arg} est maintenant admin"),
+        _ => $"{code} {arg}",
+    };
+
+    // ---------- Panneau : pause et match ----------
+    public static string PausedHeader => T("PAUSED", "PAUSE");
+    public static string MatchStandings => T("Match", "Match");
+    public static string Points(int n) => T($"{n} pts", $"{n} pts");
+
+    // ---------- Admin ----------
+    public static string PasswordField => T("Server password", "Mot de passe du serveur");
+    public static string AdminTitle => T("Admin", "Admin");
+    public static string AdminNeedsConnection => T("Connect to a server to use the admin panel", "Connecte-toi à un serveur pour utiliser le panneau admin");
+    public static string AdminPasswordField => T("Admin password", "Mot de passe admin");
+    public static string AdminLoginButton => T("Log in as admin", "Connexion admin");
+    public static string AdminNext => T("Next (skip)", "Suivant (passer)");
+    public static string AdminRestart => T("Restart round", "Relancer le round");
+    public static string AdminPause => T("Pause / Resume", "Pause / Reprendre");
+    public static string AdminExtend => T("+1 min", "+1 min");
+    public static string AdminResetMatch => T("Reset match scores", "Remettre le match à zéro");
+    public static string AdminMaps => T("Go to map:", "Aller à la map :");
+    public static string AdminKick(string name) => T($"Kick {name}", $"Expulser {name}");
+    public static string AdminPlayers => T("Players:", "Joueurs :");
+    public static string AdminNoRotation => T("No map rotation on this server (free mode)", "Pas de rotation de maps sur ce serveur (mode libre)");
+
     public static string NewBest(string time) => T($"{time} - new personal best!", $"{time} - nouveau meilleur temps !");
     public static string TimeVsBest(string time, string best, float gapSeconds) =>
         T($"{time} (best: {best}, +{gapSeconds:0.000})", $"{time} (meilleur : {best}, +{gapSeconds:0.000})");

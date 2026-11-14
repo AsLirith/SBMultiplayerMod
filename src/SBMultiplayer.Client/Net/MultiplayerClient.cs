@@ -80,6 +80,31 @@ internal sealed class MultiplayerClient : INetEventListener
 
     public bool IsUserDisconnected => userDisconnected;
 
+    /// <summary>Connecté en admin sur ce serveur.</summary>
+    public bool IsAdmin { get; private set; }
+
+    /// <summary>Rotation de maps du serveur (reçue avec le statut admin).</summary>
+    public IReadOnlyList<string> AdminMaps { get; private set; } = Array.Empty<string>();
+
+    /// <summary>Incrémenté quand le statut admin change (le menu se reconstruit).</summary>
+    public int AdminVersion { get; private set; }
+
+    public void AdminLogin(string password)
+    {
+        if (IsReady)
+        {
+            Send(w => Msg.AdminLogin(w, password), DeliveryMethod.ReliableOrdered);
+        }
+    }
+
+    public void Admin(AdminCommand command, int argument = 0)
+    {
+        if (IsReady && IsAdmin)
+        {
+            Send(w => Msg.Admin(w, command, argument), DeliveryMethod.ReliableOrdered);
+        }
+    }
+
     /// <summary>Objet (scène) qui a déclaré la map courante ; seul lui peut la remettre à "" en partant.</summary>
     public object? MapOwner { get; private set; }
 
@@ -105,6 +130,7 @@ internal sealed class MultiplayerClient : INetEventListener
         }
 
         HandleHotkeys();
+        AdminMenu.Tick();
         TrackLocalSkin();
         EnsureConnected();
         FlushPendingFinish();
@@ -230,6 +256,11 @@ internal sealed class MultiplayerClient : INetEventListener
         Round.Reset();
         loadedRoundId = 0;
         notifiedRound = default;
+        if (IsAdmin)
+        {
+            IsAdmin = false;
+            AdminVersion++;
+        }
     }
 
     public void RejoinRound()
@@ -278,10 +309,10 @@ internal sealed class MultiplayerClient : INetEventListener
 
     // ---------- Temps ----------
 
-    private (int RoundId, Func<uint> ReadMs)? pendingFinish;
+    private (int RoundId, Func<uint> ReadMs, bool SendToServer)? pendingFinish;
 
-    /// <summary>Arrivée franchie : le temps sera lu et envoyé à la fin du tick (chrono alors définitif).</summary>
-    public void QueueFinish(int roundId, Func<uint> readMs) => pendingFinish = (roundId, readMs);
+    /// <summary>Arrivée franchie : le temps sera lu (et envoyé si besoin) à la fin du tick, chrono alors définitif.</summary>
+    public void QueueFinish(int roundId, Func<uint> readMs, bool sendToServer) => pendingFinish = (roundId, readMs, sendToServer);
 
     private void FlushPendingFinish()
     {
@@ -291,16 +322,19 @@ internal sealed class MultiplayerClient : INetEventListener
         }
         pendingFinish = null;
         uint ms = finish.ReadMs();
+        int? delta = SplitTracker.Finished(mapKey, finish.RoundId, ms);
+        if (!finish.SendToServer)
+        {
+            return; // hors round : affiché par les intermédiaires uniquement
+        }
         ModLog.Info($"Arrivée en {Msg.FormatTime(ms)} (round {finish.RoundId}) → envoi au serveur");
-
-        var mine = Round.Current.Leaderboard.FirstOrDefault(e => e.PlayerId == LocalId);
-        if (mine.Name == null || ms < mine.BestMs)
+        if (delta is not int d || d < 0)
         {
             Notifications.Good(Tr.NewBest(Msg.FormatTime(ms)));
         }
         else
         {
-            Notifications.Info(Tr.TimeVsBest(Msg.FormatTime(ms), Msg.FormatTime(mine.BestMs), (ms - mine.BestMs) / 1000f));
+            Notifications.Info(Tr.TimeVsBest(Msg.FormatTime(ms), Msg.FormatTime((uint)(ms - d)), d / 1000f));
         }
         SendFinish(finish.RoundId, ms);
     }
@@ -353,7 +387,7 @@ internal sealed class MultiplayerClient : INetEventListener
             var (host, port) = ModConfig.Current.ParseServer();
             serverAddress = $"{host}:{port}";
             ModLog.Info($"Connexion à {serverAddress} en tant que « {playerName} »…");
-            server = net.Connect(host, port, ProtocolInfo.ConnectionKey);
+            server = net.Connect(host, port, ProtocolInfo.ConnectionData(ModConfig.Current.ServerPassword));
         }
         catch (Exception e)
         {
@@ -441,25 +475,38 @@ internal sealed class MultiplayerClient : INetEventListener
         {
             return; // ancienne connexion fermée volontairement (Connect/Disconnect depuis le menu)
         }
-        string reason = info.Reason switch
+        // Code envoyé par le serveur (refus, kick…) : à lire une seule fois, la lecture consomme les octets.
+        string code = info.AdditionalData.AvailableBytes > 0 ? info.AdditionalData.GetString() : "";
+        string reason = code != "" ? TranslateReasonCode(code) : info.Reason switch
         {
-            _ when info.AdditionalData.AvailableBytes > 0 => TranslateServerReason(info.AdditionalData.GetString()),
             DisconnectReason.ConnectionFailed => Tr.ServerUnreachable(serverAddress),
             DisconnectReason.Timeout => Tr.ConnectionLost,
             DisconnectReason.RemoteConnectionClose => Tr.ServerClosed,
             DisconnectReason.ConnectionRejected => Tr.ConnectionRejected,
             _ => info.Reason.ToString(),
         };
-        ModLog.Warn($"Déconnecté du serveur : {reason}. Nouvelle tentative dans {ReconnectDelaySeconds} s.");
-        NotifyDisconnect(Tr.RetryingEvery(reason, (int)ReconnectDelaySeconds));
+        if (code is ServerReasons.BadPassword or ServerReasons.Kicked)
+        {
+            // Réessayer ne servirait à rien : on attend une action du joueur (menu F8).
+            userDisconnected = true;
+            ModLog.Warn($"Déconnecté du serveur : {reason}");
+            NotifyDisconnect(reason);
+        }
+        else
+        {
+            ModLog.Warn($"Déconnecté du serveur : {reason}. Nouvelle tentative dans {ReconnectDelaySeconds} s.");
+            NotifyDisconnect(Tr.RetryingEvery(reason, (int)ReconnectDelaySeconds));
+        }
         server = null;
         ResetSessionState();
     }
 
-    /// <summary>Le serveur envoie des codes (SERVER_FULL, VERSION_MISMATCH:3) que le client traduit.</summary>
-    private static string TranslateServerReason(string code) => code switch
+    /// <summary>Le serveur envoie des codes (SERVER_FULL, VERSION_MISMATCH:4, KICKED…) que le client traduit.</summary>
+    private static string TranslateReasonCode(string code) => code switch
     {
         ServerReasons.Full => Tr.ServerFull,
+        ServerReasons.BadPassword => Tr.BadPassword,
+        ServerReasons.Kicked => Tr.Kicked,
         _ when code.StartsWith(ServerReasons.VersionMismatch + ":") => Tr.VersionMismatch(code[(ServerReasons.VersionMismatch.Length + 1)..]),
         _ => code, // serveur plus ancien : message en clair
     };
@@ -539,6 +586,28 @@ internal sealed class MultiplayerClient : INetEventListener
                     Round.SetLeaderboard(roundId, entries);
                     break;
                 }
+                case MessageType.AdminStatus:
+                {
+                    var (isAdmin, maps) = Msg.GetAdminStatus(reader);
+                    if (!isAdmin)
+                    {
+                        Notifications.Warn(Tr.AdminLoginFailed);
+                    }
+                    IsAdmin = isAdmin;
+                    AdminMaps = maps;
+                    AdminVersion++;
+                    break;
+                }
+                case MessageType.ServerEvent:
+                {
+                    string code = reader.GetString(64);
+                    string arg = reader.GetString(128);
+                    Notifications.Show(Tr.ServerEvent(code, arg), new Microsoft.Xna.Framework.Color(255, 210, 90));
+                    break;
+                }
+                case MessageType.MatchStandings:
+                    Round.Standings = Msg.GetStandings(reader);
+                    break;
                 case MessageType.State:
                 {
                     int id = reader.GetInt();

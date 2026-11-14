@@ -1,39 +1,23 @@
 using System.Diagnostics;
+using System.Globalization;
+using System.Text;
+using System.Text.Json;
 using LiteNetLib;
 using LiteNetLib.Utils;
 using SBMultiplayer.Protocol;
 
 namespace SBMultiplayer.Server;
 
-public sealed class ServerOptions
-{
-    public int Port { get; set; } = ProtocolInfo.DefaultPort;
-
-    public int MaxPlayers { get; set; } = 32;
-
-    /// <summary>Renvoie à chaque joueur sa propre planche, retardée, sous un faux joueur « Echo ». Pour tester seul.</summary>
-    public bool Echo { get; set; }
-
-    public double EchoDelaySeconds { get; set; } = 2.0;
-
-    /// <summary>Rotation de maps ("o:1", "o:57:2001"…). Vide = mode libre, sans rounds.</summary>
-    public List<string> Maps { get; set; } = new();
-
-    public double RoundSeconds { get; set; } = 300;
-
-    public double ResultsSeconds { get; set; } = 15;
-}
-
 /// <summary>
-/// Serveur relais : il ne simule pas la physique. Il tient la liste des joueurs, leur map,
-/// relaie les états, et orchestre les rounds (map imposée, chrono, classement).
-/// Tout tourne sur un seul thread (Poll).
+/// Relay server: it does not simulate physics. It keeps the player list and their map, relays
+/// board states, and runs the rounds (imposed map, timer, leaderboard, match points, admin commands).
+/// Everything runs on a single thread (<see cref="Poll"/>).
 /// </summary>
 public sealed class GameServer : INetEventListener
 {
     private const int EchoIdOffset = 1_000_000;
 
-    /// <summary>Marge acceptée entre la durée d'une run et le temps écoulé depuis le début du round (latence, chargement).</summary>
+    /// <summary>Accepted margin between a run's duration and the time elapsed since the round started (latency, loading).</summary>
     private const double FinishToleranceSeconds = 3;
 
     private sealed class Player
@@ -44,6 +28,7 @@ public sealed class GameServer : INetEventListener
         public string MapKey { get; set; } = "";
         public bool HasSaidHello { get; set; }
         public int Skin { get; set; }
+        public bool IsAdmin { get; set; }
         public PlayerInfo Info => new(Id, Name, MapKey, Skin);
     }
 
@@ -54,15 +39,20 @@ public sealed class GameServer : INetEventListener
     private readonly Queue<(double Due, int PeerId, PlayerState State)> echoQueue = new();
     private readonly Stopwatch clock = Stopwatch.StartNew();
 
-    // ---------- État du round ----------
+    // ---------- Round state ----------
     private RoundPhase phase = RoundPhase.Free;
     private int roundId;
     private int mapIndex = -1;
     private double phaseStart;
     private double phaseEnd;
+    private bool paused;
+    private double pausedRemaining;
 
-    /// <summary>Meilleur temps de chaque joueur sur le round en cours (le nom est gardé si le joueur part).</summary>
+    /// <summary>Best time of each player in the current round (the name is kept if the player leaves).</summary>
     private readonly Dictionary<int, LeaderboardEntry> best = new();
+
+    /// <summary>Match standings, by player name (players get a new id when they reconnect).</summary>
+    private readonly Dictionary<string, StandingEntry> standings = new();
 
     public GameServer(ServerOptions options)
     {
@@ -81,16 +71,21 @@ public sealed class GameServer : INetEventListener
 
     private string CurrentMap => phase == RoundPhase.Free ? "" : options.Maps[mapIndex];
 
+    private double Now => clock.Elapsed.TotalSeconds;
+
     public void Start()
     {
         if (!net.Start(options.Port))
         {
             throw new InvalidOperationException($"Cannot listen on UDP port {options.Port}");
         }
-        Log($"Server started on UDP port {options.Port} (protocol v{ProtocolInfo.Version}, {options.MaxPlayers} players max{(options.Echo ? ", echo mode" : "")})");
+        Log($"\"{options.ServerName}\" started on UDP port {options.Port} (protocol v{ProtocolInfo.Version}, {options.MaxPlayers} players max"
+            + (options.Password != "" ? ", password protected" : "")
+            + (options.AdminPassword != "" ? ", in-game admin enabled" : "")
+            + (options.Echo ? ", echo mode" : "") + ")");
         Log(HasRotation
             ? $"Rotation: {string.Join(", ", options.Maps)} - {options.RoundSeconds:0} s rounds, {options.ResultsSeconds:0} s results"
-            : "No maps configured: free mode (use --maps to enable rounds)");
+            : "No maps configured: free mode (set Maps in the config or use --maps to enable rounds)");
     }
 
     public void Poll()
@@ -105,40 +100,41 @@ public sealed class GameServer : INetEventListener
 
     public void Stop() => net.Stop(sendDisconnectMessages: true);
 
+    // ---------- Console ----------
+
     public IEnumerable<string> DescribePlayers() =>
-        players.Values.Select(p => $"#{p.Id} {p.Name} - map: {(p.MapKey == "" ? "(menu)" : p.MapKey)} - ping {p.Peer.Ping} ms");
+        players.Values.Select(p => $"#{p.Id} {p.Name}{(p.IsAdmin ? " [admin]" : "")} - map: {(p.MapKey == "" ? "(menu)" : p.MapKey)} - ping {p.Peer.Ping} ms");
 
     public string DescribeRound() => phase switch
     {
         RoundPhase.Free => "Free mode",
-        _ => $"Round {roundId} - map {mapIndex + 1}/{options.Maps.Count} ({CurrentMap}) - {phase} - {Math.Max(0, phaseEnd - Now):0} s left",
+        _ => $"Round {roundId} - map {mapIndex + 1}/{options.Maps.Count} ({CurrentMap}) - {phase}{(paused ? " (paused)" : "")} - {Remaining:0} s left",
     };
 
-    /// <summary>Commande console : termine la phase en cours (round → résultats → map suivante).</summary>
-    public void SkipPhase()
-    {
-        if (phase != RoundPhase.Free)
-        {
-            phaseEnd = Now;
-        }
-    }
+    public IEnumerable<string> DescribeStandings() =>
+        SortedStandings().Select((e, i) => $"{i + 1}. {e.Name} - {e.Points} pts ({e.RoundsPlayed} rounds)");
+
+    /// <summary>Runs an admin command from the server console (no admin name).</summary>
+    public string? RunConsoleCommand(AdminCommand command, int argument) => ExecuteAdmin(null, command, argument);
 
     // ---------- Rounds ----------
 
+    private double Remaining => Math.Max(0, (paused ? pausedRemaining : phaseEnd - Now));
+
     private void UpdateRound()
     {
-        bool anyone = players.Values.Any(p => p.HasSaidHello);
         if (!HasRotation)
         {
             return;
         }
-        if (!anyone)
+        if (!players.Values.Any(p => p.HasSaidHello))
         {
             if (phase != RoundPhase.Free)
             {
                 Log("Nobody left: rotation paused");
                 phase = RoundPhase.Free;
                 mapIndex = -1;
+                paused = false;
             }
             return;
         }
@@ -147,15 +143,15 @@ public sealed class GameServer : INetEventListener
         {
             StartRound((mapIndex + 1) % options.Maps.Count);
         }
+        else if (paused)
+        {
+            phaseEnd = Now + pausedRemaining;
+        }
         else if (Now >= phaseEnd)
         {
             if (phase == RoundPhase.Playing)
             {
-                phase = RoundPhase.Results;
-                phaseStart = Now;
-                phaseEnd = Now + options.ResultsSeconds;
-                BroadcastRound();
-                LogResults();
+                EndRound();
             }
             else
             {
@@ -169,6 +165,7 @@ public sealed class GameServer : INetEventListener
         mapIndex = index;
         roundId++;
         phase = RoundPhase.Playing;
+        paused = false;
         phaseStart = Now;
         phaseEnd = Now + options.RoundSeconds;
         best.Clear();
@@ -177,15 +174,49 @@ public sealed class GameServer : INetEventListener
         BroadcastLeaderboard();
     }
 
+    private void EndRound()
+    {
+        phase = RoundPhase.Results;
+        paused = false;
+        phaseStart = Now;
+        phaseEnd = Now + options.ResultsSeconds;
+        AwardPoints();
+        BroadcastRound();
+        BroadcastStandings();
+        LogResults();
+        ExportResults();
+    }
+
+    private void AwardPoints()
+    {
+        List<LeaderboardEntry> board = SortedLeaderboard();
+        for (int rank = 0; rank < board.Count; rank++)
+        {
+            int points = rank < options.PointsTable.Count ? options.PointsTable[rank] : 0;
+            string name = board[rank].Name;
+            standings.TryGetValue(name, out StandingEntry previous);
+            standings[name] = new StandingEntry(name, previous.Points + points, previous.RoundsPlayed + 1);
+        }
+    }
+
     private RoundInfo CurrentRoundInfo() =>
-        new(roundId, CurrentMap, phase, (float)Math.Max(0, phaseEnd - Now), Math.Max(0, mapIndex), options.Maps.Count);
+        new(roundId, CurrentMap, phase, (float)Remaining, Math.Max(0, mapIndex), options.Maps.Count, paused);
 
     private void BroadcastRound() => Broadcast(Msg.Round(writer, CurrentRoundInfo()), DeliveryMethod.ReliableOrdered, except: null);
 
     private List<LeaderboardEntry> SortedLeaderboard() => best.Values.OrderBy(e => e.BestMs).ToList();
 
+    private List<StandingEntry> SortedStandings() =>
+        standings.Values.OrderByDescending(e => e.Points).ThenBy(e => e.Name, StringComparer.OrdinalIgnoreCase).ToList();
+
     private void BroadcastLeaderboard() =>
         Broadcast(Msg.Leaderboard(writer, roundId, SortedLeaderboard()), DeliveryMethod.ReliableOrdered, except: null);
+
+    private void BroadcastStandings() =>
+        Broadcast(Msg.Standings(writer, SortedStandings()), DeliveryMethod.ReliableOrdered, except: null);
+
+    private void BroadcastEvent(string code, string argument) =>
+        Broadcast(Msg.Event(writer, code, argument), DeliveryMethod.ReliableOrdered, except: null);
 
     private void OnFinish(Player p, int finishRoundId, uint timeMs)
     {
@@ -201,7 +232,7 @@ public sealed class GameServer : INetEventListener
         }
         else if (timeMs == 0 || timeMs / 1000.0 > elapsed + FinishToleranceSeconds)
         {
-            // Une run ne peut pas durer plus longtemps que le round n'a duré.
+            // A run can't last longer than the round has been running.
             reject = $"impossible time ({Msg.FormatTime(timeMs)} while the round started {elapsed:0.0} s ago)";
         }
 
@@ -230,7 +261,188 @@ public sealed class GameServer : INetEventListener
         }
     }
 
-    // ---------- Événements LiteNetLib ----------
+    /// <summary>Writes the round results (JSON) and the match standings (CSV) for tournament organizers.</summary>
+    private void ExportResults()
+    {
+        if (string.IsNullOrWhiteSpace(options.ResultsDirectory))
+        {
+            return;
+        }
+        try
+        {
+            Directory.CreateDirectory(options.ResultsDirectory);
+            string stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
+            string safeMap = string.Concat(CurrentMap.Select(c => char.IsLetterOrDigit(c) ? c : '_'));
+            var board = SortedLeaderboard();
+            var round = new
+            {
+                Round = roundId,
+                Map = CurrentMap,
+                EndedAt = DateTime.Now.ToString("o", CultureInfo.InvariantCulture),
+                Results = board.Select((e, i) => new
+                {
+                    Rank = i + 1,
+                    e.Name,
+                    TimeMs = e.BestMs,
+                    Time = Msg.FormatTime(e.BestMs),
+                    Points = i < options.PointsTable.Count ? options.PointsTable[i] : 0,
+                }),
+            };
+            File.WriteAllText(Path.Combine(options.ResultsDirectory, $"{stamp}_round{roundId}_{safeMap}.json"),
+                JsonSerializer.Serialize(round, ExportJson));
+
+            var csv = new StringBuilder("Rank,Name,Points,RoundsPlayed\n");
+            int rank = 1;
+            foreach (StandingEntry e in SortedStandings())
+            {
+                csv.Append(rank++).Append(',').Append(CsvField(e.Name)).Append(',').Append(e.Points).Append(',').Append(e.RoundsPlayed).Append('\n');
+            }
+            File.WriteAllText(Path.Combine(options.ResultsDirectory, "match_standings.csv"), csv.ToString());
+        }
+        catch (Exception e)
+        {
+            Log($"Could not export results: {e.Message}");
+        }
+    }
+
+    private static readonly JsonSerializerOptions ExportJson = new()
+    {
+        WriteIndented = true,
+        // Keep "+01:00" and accented names readable in the exported files.
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+    };
+
+    private static string CsvField(string s) => s.IndexOfAny(new[] { ',', '"', '\n' }) >= 0 ? $"\"{s.Replace("\"", "\"\"")}\"" : s;
+
+    // ---------- Admin ----------
+
+    private void OnAdminLogin(Player p, string password)
+    {
+        bool ok = options.AdminPassword != "" && password == options.AdminPassword;
+        if (ok && !p.IsAdmin)
+        {
+            p.IsAdmin = true;
+            Log($"{p.Name} (#{p.Id}) logged in as admin");
+            BroadcastEvent(ServerEvents.AdminLoggedIn, p.Name);
+        }
+        else if (!ok)
+        {
+            Log($"Failed admin login from {p.Name} (#{p.Id})");
+        }
+        p.Peer.Send(Msg.AdminStatus(writer, p.IsAdmin, p.IsAdmin ? options.Maps : Array.Empty<string>()), DeliveryMethod.ReliableOrdered);
+    }
+
+    private void OnAdminCommand(Player p, AdminCommand command, int argument)
+    {
+        if (!p.IsAdmin)
+        {
+            Log($"Admin command {command} refused for {p.Name} (#{p.Id}): not logged in");
+            return;
+        }
+        ExecuteAdmin(p, command, argument);
+    }
+
+    /// <summary>Runs an admin command. Returns an error message, or null on success.</summary>
+    private string? ExecuteAdmin(Player? admin, AdminCommand command, int argument)
+    {
+        string by = admin?.Name ?? "server";
+        bool inRound = phase != RoundPhase.Free;
+        switch (command)
+        {
+            case AdminCommand.NextPhase:
+                if (!inRound)
+                {
+                    return "No round in progress";
+                }
+                if (phase == RoundPhase.Playing)
+                {
+                    EndRound();
+                }
+                else
+                {
+                    StartRound((mapIndex + 1) % options.Maps.Count);
+                }
+                BroadcastEvent(ServerEvents.Skipped, by);
+                break;
+
+            case AdminCommand.RestartRound:
+                if (!inRound)
+                {
+                    return "No round in progress";
+                }
+                StartRound(mapIndex);
+                BroadcastEvent(ServerEvents.Restarted, by);
+                break;
+
+            case AdminCommand.TogglePause:
+                if (!inRound)
+                {
+                    return "No round in progress";
+                }
+                if (paused)
+                {
+                    paused = false;
+                    phaseEnd = Now + pausedRemaining;
+                }
+                else
+                {
+                    paused = true;
+                    pausedRemaining = Math.Max(0, phaseEnd - Now);
+                }
+                BroadcastRound();
+                BroadcastEvent(paused ? ServerEvents.Paused : ServerEvents.Resumed, by);
+                break;
+
+            case AdminCommand.Extend:
+                if (phase != RoundPhase.Playing || argument <= 0)
+                {
+                    return "Can only extend a running round by a positive number of seconds";
+                }
+                if (paused)
+                {
+                    pausedRemaining += argument;
+                }
+                else
+                {
+                    phaseEnd += argument;
+                }
+                BroadcastRound();
+                BroadcastEvent(ServerEvents.Extended, argument.ToString(CultureInfo.InvariantCulture));
+                break;
+
+            case AdminCommand.GotoMap:
+                if (argument < 0 || argument >= options.Maps.Count)
+                {
+                    return $"Map index out of range (0-{options.Maps.Count - 1})";
+                }
+                StartRound(argument);
+                BroadcastEvent(ServerEvents.MapChosen, by);
+                break;
+
+            case AdminCommand.Kick:
+                if (!players.TryGetValue(argument, out Player? target))
+                {
+                    return $"No player #{argument}";
+                }
+                Log($"{target.Name} (#{target.Id}) kicked by {by}");
+                BroadcastEvent(ServerEvents.PlayerKicked, target.Name);
+                target.Peer.Disconnect(NetDataWriter.FromString(ServerReasons.Kicked));
+                break;
+
+            case AdminCommand.ResetMatch:
+                standings.Clear();
+                BroadcastStandings();
+                BroadcastEvent(ServerEvents.MatchReset, by);
+                break;
+
+            default:
+                return $"Unknown command {command}";
+        }
+        Log($"Admin: {command}{(argument != 0 ? $" {argument}" : "")} by {by}");
+        return null;
+    }
+
+    // ---------- LiteNetLib events ----------
 
     public void OnConnectionRequest(ConnectionRequest request)
     {
@@ -239,15 +451,22 @@ public sealed class GameServer : INetEventListener
             request.Reject(NetDataWriter.FromString(ServerReasons.Full));
             return;
         }
-        // Vérification manuelle de la clé (au lieu de AcceptIfKey) pour expliquer le refus au joueur.
+        // Manual checks (instead of AcceptIfKey) so the player is told why they were refused.
         string key = request.Data.AvailableBytes > 0 ? request.Data.GetString(64) : "";
-        if (key == ProtocolInfo.ConnectionKey)
+        if (key != ProtocolInfo.ConnectionKey)
         {
-            request.Accept();
+            Log($"Connection refused from {request.RemoteEndPoint}: different mod version ({key})");
+            request.Reject(NetDataWriter.FromString($"{ServerReasons.VersionMismatch}:{ProtocolInfo.Version}"));
             return;
         }
-        Log($"Connection refused from {request.RemoteEndPoint}: different mod version ({key})");
-        request.Reject(NetDataWriter.FromString($"{ServerReasons.VersionMismatch}:{ProtocolInfo.Version}"));
+        string password = request.Data.AvailableBytes > 0 ? request.Data.GetString(128) : "";
+        if (options.Password != "" && password != options.Password)
+        {
+            Log($"Connection refused from {request.RemoteEndPoint}: wrong password");
+            request.Reject(NetDataWriter.FromString(ServerReasons.BadPassword));
+            return;
+        }
+        request.Accept();
     }
 
     public void OnPeerConnected(NetPeer peer)
@@ -306,6 +525,12 @@ public sealed class GameServer : INetEventListener
                 case MessageType.Finish:
                     OnFinish(p, reader.GetInt(), reader.GetUInt());
                     break;
+                case MessageType.AdminLogin:
+                    OnAdminLogin(p, reader.GetString(128));
+                    break;
+                case MessageType.AdminCommand:
+                    OnAdminCommand(p, (AdminCommand)reader.GetByte(), reader.GetInt());
+                    break;
                 default:
                     Log($"Unexpected message {type} from #{p.Id}");
                     break;
@@ -328,7 +553,7 @@ public sealed class GameServer : INetEventListener
     {
     }
 
-    // ---------- Logique joueurs ----------
+    // ---------- Players ----------
 
     private void OnHello(Player p, NetPacketReader reader)
     {
@@ -350,11 +575,15 @@ public sealed class GameServer : INetEventListener
         }
         Log($"{p.Name} (#{p.Id}) joined the game ({players.Count} connected)");
 
-        // Round en cours : le nouveau venu reçoit la map imposée et le classement.
+        // Round in progress: the newcomer gets the imposed map, the leaderboard and the match standings.
         if (phase != RoundPhase.Free)
         {
             p.Peer.Send(Msg.Round(writer, CurrentRoundInfo()), DeliveryMethod.ReliableOrdered);
             p.Peer.Send(Msg.Leaderboard(writer, roundId, SortedLeaderboard()), DeliveryMethod.ReliableOrdered);
+        }
+        if (standings.Count > 0)
+        {
+            p.Peer.Send(Msg.Standings(writer, SortedStandings()), DeliveryMethod.ReliableOrdered);
         }
     }
 
@@ -371,7 +600,7 @@ public sealed class GameServer : INetEventListener
 
     private void OnState(Player p, PlayerState state)
     {
-        // Les joueurs reçoivent tous les états ; c'est le client qui n'affiche que ceux de sa map.
+        // Everyone receives every state; clients only show players on their own map.
         Broadcast(Msg.State(writer, p.Id, state), DeliveryMethod.Unreliable, except: p);
         if (options.Echo)
         {
@@ -401,8 +630,6 @@ public sealed class GameServer : INetEventListener
             }
         }
     }
-
-    private double Now => clock.Elapsed.TotalSeconds;
 
     private static void Log(string message) => Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] {message}");
 }

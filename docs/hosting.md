@@ -2,37 +2,63 @@
 
 ## Running it
 
-Either download `SBMultiplayer-Server-<version>.zip` from the [releases](https://github.com/AsLirith/SBMultiplayerMod/releases/latest) (requires the .NET 8 runtime or newer):
+Download `SBMultiplayer-Server-<version>.zip` from the [releases](https://github.com/AsLirith/SBMultiplayerMod/releases/latest) (requires the .NET 8 runtime or newer), or build it from source (`dotnet run --project src/SBMultiplayer.Server -c Release -- <options>`).
+
+The easiest way is a configuration file:
 
 ```sh
-dotnet SBMultiplayer.Server.dll --maps o:1,o:2,o:3 --round 300
+dotnet SBMultiplayer.Server.dll --init-config server.json   # writes a commented template
+# edit server.json (maps, passwords, durations...), then:
+dotnet SBMultiplayer.Server.dll --config server.json
 ```
 
-or build it from source:
+Every setting can also be given (or overridden) on the command line:
 
-```sh
-dotnet run --project src/SBMultiplayer.Server -c Release -- --maps o:1,o:2,o:3 --round 300
-```
+| Option | Config key | Default | Description |
+|---|---|---|---|
+| `--port <n>` | `Port` | 24800 | UDP port |
+| `--max-players <n>` | `MaxPlayers` | 32 | Maximum number of players |
+| `--password <text>` | `Password` | (none) | Password required to join |
+| `--admin-password <text>` | `AdminPassword` | (none) | Password to use the in-game admin panel (F8 > Admin) |
+| `--maps <list>` | `Maps` | (none) | Map rotation, e.g. `o:1,o:2,o:57` (official level IDs). Without it, the server runs in free mode: no rounds, everyone rides wherever they want |
+| `--round <s>` | `RoundSeconds` | 300 | Round duration in seconds |
+| `--results <s>` | `ResultsSeconds` | 15 | Results screen duration in seconds |
+| | `PointsTable` | 10, 8, 6, 5, 4, 3, 2, 1 | Match points by rank at the end of each round |
+| | `ResultsDirectory` | `results` | Where results are exported (empty = no export) |
+| `--echo` | `Echo` | off | Sends each player their own board back with a delay, as a fake "Echo" player, to test alone |
 
-| Option | Default | Description |
+A player's current map key (e.g. `o:1:2001`) is shown in the server console when they enter a level. Use `o:<id>` in the rotation to accept any version of that level.
+
+## Running a match
+
+At the end of each round, players get **match points** according to their rank (`PointsTable`). The match standings are shown to players on the results screen, and kept until you reset them.
+
+Admins control the match from the game (**F8 > Admin**, then log in with `AdminPassword`) or from the server console:
+
+| Console | In-game admin panel | Effect |
 |---|---|---|
-| `--port <n>` | 24800 | UDP port |
-| `--max-players <n>` | 32 | Maximum number of players |
-| `--maps <list>` | (none) | Map rotation, e.g. `o:1,o:2,o:57` (official level IDs). Without it, the server runs in free mode: no rounds, everyone rides wherever they want |
-| `--round <s>` | 300 | Round duration in seconds |
-| `--results <s>` | 15 | Results screen duration in seconds |
-| `--echo` | off | Sends each player their own board back with a delay, as a fake "Echo" player, to test alone |
-| `--echo-delay <s>` | 2 | Echo delay in seconds |
+| `next` | Next (skip) | Ends the round now (results), or skips the results screen |
+| `restart` | Restart round | Restarts the current round on the same map (times cleared, no points given) |
+| `pause` | Pause / Resume | Freezes or resumes the round timer (players can still ride) |
+| `extend <s>` | +1 min | Adds time to the running round |
+| `map <index>` | Go to map | Starts a round on that map of the rotation (index starts at 0) |
+| `kick <id>` | Kick | Disconnects a player (`list` shows the ids) |
+| `resetmatch` | Reset match scores | Clears the match standings |
 
-Console commands: `list` (connected players), `round` (current round), `next` (skip to the next phase: round → results → next map), `quit`.
+Other console commands: `list` (connected players), `round` (current round), `standings` (match standings), `quit`.
 
-A player's current map key (e.g. `o:1:2001`) is shown in the server console when they join a level. Use `o:<id>` in `--maps` to accept any version of that level.
+### Exported results
+
+When `ResultsDirectory` is set, the server writes after every round:
+
+- `<date>_round<N>_<map>.json`: rank, name, time and points of every player in that round;
+- `match_standings.csv`: the current match standings (rank, name, points, rounds played).
 
 ## Network
 
 1. **Firewall** (Linux with ufw): `sudo ufw allow 24800/udp`
 2. **Router**: forward **UDP** port 24800 to the server's local IP.
-3. Players enter `PUBLIC_IP:24800` as the server address in the in-game menu (F8), or in `SBMultiplayer/SBMultiplayer.json`.
+3. Players enter `PUBLIC_IP:24800` as the server address (and the password, if any) in the in-game menu (F8).
 
 ### ⚠️ PC connected through both Ethernet AND Wi-Fi
 

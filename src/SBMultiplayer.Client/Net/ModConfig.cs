@@ -15,6 +15,12 @@ internal sealed class ModConfig
     /// <summary>Pseudo affiché. Vide = pseudo Steam.</summary>
     public string PlayerName { get; set; } = "";
 
+    /// <summary>Mot de passe du serveur (vide si le serveur est ouvert).</summary>
+    public string ServerPassword { get; set; } = "";
+
+    /// <summary>Mot de passe admin, retenu pour se reconnecter en admin facilement.</summary>
+    public string AdminPassword { get; set; } = "";
+
     public bool AutoConnect { get; set; } = true;
 
     /// <summary>Distance max (en unités du jeu, 1 unité = 1 cm) pour afficher le pseudo d'un joueur. 0 = jamais.</summary>
@@ -40,6 +46,9 @@ internal sealed class ModConfig
 
     /// <summary>Affiche les pseudos au-dessus des ghosts proches.</summary>
     public bool ShowNameTags { get; set; } = true;
+
+    /// <summary>Temps intermédiaires aux checkpoints, comparés à notre meilleure run du round.</summary>
+    public bool ShowSplits { get; set; } = true;
 
     /// <summary>Langue de l'interface du mod : "auto" (celle du jeu), "en" ou "fr".</summary>
     public string Language { get; set; } = "auto";

@@ -53,17 +53,20 @@ internal static class MultiplayerMenu
         float inputHeight = ui.FontSmall.Value.LineSpacing;
         var serverInput = new TextInput(GameAccess.UpdateSpeed, cfg.Server, 1100f, inputHeight) { MaxTextLength = 80 };
         var nameInput = new TextInput(GameAccess.UpdateSpeed, cfg.PlayerName, 1100f, inputHeight) { MaxTextLength = ProtocolInfo.MaxNameLength };
+        var passwordInput = new TextInput(GameAccess.UpdateSpeed, cfg.ServerPassword, 1100f, inputHeight) { MaxTextLength = 64 };
 
         void ApplyAndConnect()
         {
             cfg.Server = serverInput.Text.Trim();
             cfg.PlayerName = nameInput.Text.Trim();
+            cfg.ServerPassword = passwordInput.Text;
             ModConfig.ForgetEnvironmentOverride();
             ModConfig.Save();
             MultiplayerClient.Instance.Connect();
         }
         serverInput.OnEnter += () => { ApplyAndConnect(); return true; };
         nameInput.OnEnter += () => { ApplyAndConnect(); return true; };
+        passwordInput.OnEnter += () => { ApplyAndConnect(); return true; };
 
         Element Button(string text, Action onClick) => GameAccess.CreateButton(onClick).SetStyle(buttonStyle).Add(new Label(text));
 
@@ -71,6 +74,7 @@ internal static class MultiplayerMenu
             new Label(Tr.MenuTitle(Version)).SetStyle(ui.StrongStyle),
             status,
             Row(Tr.ServerField, Field(serverInput)),
+            Row(Tr.PasswordField, Field(passwordInput)),
             Row(Tr.NameField, Field(nameInput)),
             new PanelStack(24f, vertical: false).Add(
                 Button(Tr.Connect, ApplyAndConnect),
@@ -79,13 +83,15 @@ internal static class MultiplayerMenu
                 {
                     close();
                     MultiplayerClient.Instance.RejoinRound();
-                })),
+                }),
+                Button(Tr.AdminTitle, AdminMenu.Open)),
             options.GetCheckboxRow(Tr.ShowOtherPlayers, ModSettings.ShowOtherPlayers),
             options.GetSliderRow(Tr.OtherPlayersOpacity, ModSettings.GhostOpacity,
                 f => MathF.Round(float.Parse(f) * 100f) + "%", 0.1f, 1f, 0.1f),
             options.GetCheckboxRow(Tr.ShowNameTags, ModSettings.ShowNameTags),
             options.GetSliderRow(Tr.NameTagDistance, ModSettings.NameTagMaxDistance,
                 f => MathF.Round(float.Parse(f)) + " cm", 10f, 300f, 10f),
+            options.GetCheckboxRow(Tr.ShowSplits, ModSettings.ShowSplits),
             options.GetCheckboxRow(Tr.RoundPanel, ModSettings.ShowRoundPanel),
             options.GetSliderRow(Tr.RoundPanelSize, ModSettings.RoundPanelScale,
                 f => MathF.Round(float.Parse(f) * 100f) + "%", 0.3f, 1.2f, 0.1f),

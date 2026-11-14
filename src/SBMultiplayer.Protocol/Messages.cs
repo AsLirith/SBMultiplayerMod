@@ -5,7 +5,7 @@ namespace SBMultiplayer.Protocol;
 public static class ProtocolInfo
 {
     /// <summary>À incrémenter à chaque changement incompatible du format des messages.</summary>
-    public const int Version = 3;
+    public const int Version = 4;
 
     public const int DefaultPort = 24800;
 
@@ -13,6 +13,15 @@ public static class ProtocolInfo
 
     /// <summary>Clé de connexion LiteNetLib : un client d'une autre version est refusé dès la poignée de main.</summary>
     public static string ConnectionKey => $"SBMultiplayer/{Version}";
+
+    /// <summary>Données de la demande de connexion : clé de version puis mot de passe du serveur ("" si aucun).</summary>
+    public static NetDataWriter ConnectionData(string password)
+    {
+        var w = new NetDataWriter();
+        w.Put(ConnectionKey);
+        w.Put(password);
+        return w;
+    }
 }
 
 /// <summary>Codes de refus de connexion envoyés par le serveur, traduits par le client.</summary>
@@ -22,6 +31,41 @@ public static class ServerReasons
 
     /// <summary>Suivi de ":&lt;version du protocole du serveur&gt;".</summary>
     public const string VersionMismatch = "VERSION_MISMATCH";
+
+    public const string BadPassword = "BAD_PASSWORD";
+
+    public const string Kicked = "KICKED";
+}
+
+/// <summary>
+/// Événements annoncés par le serveur à tous les joueurs, traduits par le client.
+/// Argument : nom de l'admin, du joueur ou nombre de secondes selon l'événement.
+/// </summary>
+public static class ServerEvents
+{
+    public const string Paused = "PAUSED";
+    public const string Resumed = "RESUMED";
+    public const string Skipped = "SKIPPED";
+    public const string Restarted = "RESTARTED";
+    public const string Extended = "EXTENDED";
+    public const string MapChosen = "MAP_CHOSEN";
+    public const string PlayerKicked = "PLAYER_KICKED";
+    public const string MatchReset = "MATCH_RESET";
+    public const string AdminLoggedIn = "ADMIN_LOGGED_IN";
+}
+
+public enum AdminCommand : byte
+{
+    NextPhase = 1,
+    RestartRound = 2,
+    TogglePause = 3,
+    /// <summary>Argument : secondes à ajouter au round.</summary>
+    Extend = 4,
+    /// <summary>Argument : index de la map dans la rotation.</summary>
+    GotoMap = 5,
+    /// <summary>Argument : id du joueur.</summary>
+    Kick = 6,
+    ResetMatch = 7,
 }
 
 public enum MessageType : byte
@@ -55,6 +99,21 @@ public enum MessageType : byte
 
     /// <summary>C→S (sans id) et S→C (avec id), fiable. Skin de planche du joueur (id du jeu).</summary>
     SkinChanged = 10,
+
+    /// <summary>C→S, fiable. Mot de passe admin.</summary>
+    AdminLogin = 11,
+
+    /// <summary>S→C, fiable. Résultat de la connexion admin, et rotation de maps (pour le panneau admin).</summary>
+    AdminStatus = 12,
+
+    /// <summary>C→S, fiable. Commande admin (<see cref="Protocol.AdminCommand"/> + argument).</summary>
+    AdminCommand = 13,
+
+    /// <summary>S→C, fiable. Événement à annoncer (<see cref="ServerEvents"/> + argument).</summary>
+    ServerEvent = 14,
+
+    /// <summary>S→C, fiable. Classement du match (points cumulés sur les rounds).</summary>
+    MatchStandings = 15,
 }
 
 public enum RoundPhase : byte
@@ -71,9 +130,12 @@ public enum RoundPhase : byte
 
 /// <param name="MapKey">Map imposée ("o:&lt;id&gt;" ou "o:&lt;id&gt;:&lt;version&gt;"), "" en phase Free.</param>
 /// <param name="RemainingSeconds">Temps restant dans la phase, au moment de l'envoi.</param>
-public readonly record struct RoundInfo(int RoundId, string MapKey, RoundPhase Phase, float RemainingSeconds, int MapIndex, int MapCount);
+public readonly record struct RoundInfo(int RoundId, string MapKey, RoundPhase Phase, float RemainingSeconds, int MapIndex, int MapCount, bool Paused);
 
 public readonly record struct LeaderboardEntry(int PlayerId, string Name, uint BestMs);
+
+/// <param name="RoundsPlayed">Nombre de rounds où le joueur a réalisé un temps.</param>
+public readonly record struct StandingEntry(string Name, int Points, int RoundsPlayed);
 
 public readonly record struct Vec3(float X, float Y, float Z);
 
@@ -170,11 +232,88 @@ public static class Msg
         w.Put(r.RemainingSeconds);
         w.Put(r.MapIndex);
         w.Put(r.MapCount);
+        w.Put(r.Paused);
         return w;
     }
 
     public static RoundInfo GetRound(NetDataReader r) =>
-        new(r.GetInt(), r.GetString(256), (RoundPhase)r.GetByte(), r.GetFloat(), r.GetInt(), r.GetInt());
+        new(r.GetInt(), r.GetString(256), (RoundPhase)r.GetByte(), r.GetFloat(), r.GetInt(), r.GetInt(), r.GetBool());
+
+    public static NetDataWriter AdminLogin(NetDataWriter w, string password)
+    {
+        w.Reset();
+        w.Put((byte)MessageType.AdminLogin);
+        w.Put(password);
+        return w;
+    }
+
+    public static NetDataWriter AdminStatus(NetDataWriter w, bool isAdmin, IReadOnlyList<string> maps)
+    {
+        w.Reset();
+        w.Put((byte)MessageType.AdminStatus);
+        w.Put(isAdmin);
+        w.Put(maps.Count);
+        foreach (string m in maps)
+        {
+            w.Put(m);
+        }
+        return w;
+    }
+
+    public static (bool IsAdmin, List<string> Maps) GetAdminStatus(NetDataReader r)
+    {
+        bool isAdmin = r.GetBool();
+        int count = Math.Clamp(r.GetInt(), 0, 1000);
+        var maps = new List<string>(count);
+        for (int i = 0; i < count; i++)
+        {
+            maps.Add(r.GetString(256));
+        }
+        return (isAdmin, maps);
+    }
+
+    public static NetDataWriter Admin(NetDataWriter w, AdminCommand command, int argument)
+    {
+        w.Reset();
+        w.Put((byte)MessageType.AdminCommand);
+        w.Put((byte)command);
+        w.Put(argument);
+        return w;
+    }
+
+    public static NetDataWriter Event(NetDataWriter w, string code, string argument)
+    {
+        w.Reset();
+        w.Put((byte)MessageType.ServerEvent);
+        w.Put(code);
+        w.Put(argument);
+        return w;
+    }
+
+    public static NetDataWriter Standings(NetDataWriter w, IReadOnlyCollection<StandingEntry> entries)
+    {
+        w.Reset();
+        w.Put((byte)MessageType.MatchStandings);
+        w.Put(entries.Count);
+        foreach (StandingEntry e in entries)
+        {
+            w.Put(e.Name);
+            w.Put(e.Points);
+            w.Put(e.RoundsPlayed);
+        }
+        return w;
+    }
+
+    public static List<StandingEntry> GetStandings(NetDataReader r)
+    {
+        int count = Math.Clamp(r.GetInt(), 0, 256);
+        var list = new List<StandingEntry>(count);
+        for (int i = 0; i < count; i++)
+        {
+            list.Add(new StandingEntry(r.GetString(ProtocolInfo.MaxNameLength * 4), r.GetInt(), r.GetInt()));
+        }
+        return list;
+    }
 
     public static NetDataWriter Finish(NetDataWriter w, int roundId, uint timeMs)
     {

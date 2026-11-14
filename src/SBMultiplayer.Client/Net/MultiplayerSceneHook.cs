@@ -126,6 +126,16 @@ internal sealed class MultiplayerSceneHook : IUpdate, ICheckpointStorage, IGoalR
 
     public void StoreCheckpoint(ICheckpointInfo checkpointInfo)
     {
+        EnsureBoard();
+        int roundId = client.Round.Current.Info.RoundId;
+        if (checkpointInfo is FirstCheckpoint)
+        {
+            SplitTracker.RunStarted(mapKey, roundId);
+        }
+        else if (scene.AllThings.OfType<LevelTimer>().FirstOrDefault() is { } timer)
+        {
+            SplitTracker.CheckpointTaken(mapKey, roundId, timer.Counter.MS);
+        }
     }
 
     public void GoalReached()
@@ -141,10 +151,9 @@ internal sealed class MultiplayerSceneHook : IUpdate, ICheckpointStorage, IGoalR
             ModLog.Warn("Arrivée : chrono introuvable dans la scène");
             return;
         }
-        if (client.IsOnRoundMap && round.Info.Phase == RoundPhase.Playing)
-        {
-            client.QueueFinish(round.Info.RoundId, () => timer.Counter.MS);
-        }
+        // Le temps est toujours lu (intermédiaires), mais n'est envoyé au serveur que pendant un round, sur sa map.
+        bool counts = client.IsOnRoundMap && round.Info.Phase == RoundPhase.Playing;
+        client.QueueFinish(round.Info.RoundId, () => timer.Counter.MS, sendToServer: counts);
     }
 
     public void DrawBatch(Microsoft.Xna.Framework.Graphics.SpriteBatch spriteBatch, float extrapolation)
@@ -174,6 +183,10 @@ internal sealed class MultiplayerSceneHook : IUpdate, ICheckpointStorage, IGoalR
     {
         // Restart ou respawn : nouveau segment, les autres ne verront pas la planche glisser jusqu'au respawn.
         segment++;
+        if (checkpointInfo is FirstCheckpoint)
+        {
+            SplitTracker.RunStarted(mapKey, client.Round.Current.Info.RoundId);
+        }
     }
 
     public void Dispose()

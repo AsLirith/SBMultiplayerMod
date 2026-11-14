@@ -6,11 +6,14 @@ Unofficial multiplayer mod for [STUNTBOOST](https://store.steampowered.com/app/2
 
 ## Features
 
-- **Dedicated server** (console app, no game needed): map rotation, timed rounds, live leaderboard, results screen.
+- **Dedicated server** (console app, no game needed): map rotation, timed rounds, live leaderboard, results screen, match points, results export (JSON/CSV), optional password.
 - **Other players' ghosts** in real time, smoothly interpolated, with **their own skin** and **their name** when they're close.
 - **Round map loaded automatically**, instant retry when you cross the finish line instead of the end screen.
 - **In-game menu (F8)**: server address, name, connect/disconnect, other players' visibility and opacity, name tags, round panel size.
+- **Checkpoint splits** compared to your best run of the round.
+- **Admin panel (F8 > Admin)**: skip, restart, pause, extend the round, choose the map, kick players, reset the match.
 - **F7** to rejoin the round's map. On-screen notifications for connection, players, rounds and your times.
+- Interface in **English or French**, following the game's language.
 
 ⚠️ **While the mod is loaded, the game does not save any time**: not on the official leaderboards (the game blocks submissions by itself when a mod is detected), and not locally either.
 
@@ -31,10 +34,11 @@ To uninstall, remove the launch option. The log file is `SBMultiplayer/SBMultipl
 See [docs/hosting.md](docs/hosting.md) (firewall, port forwarding, Tailscale…), or grab the server zip from the [releases](../../releases/latest).
 
 ```sh
-dotnet run --project src/SBMultiplayer.Server -c Release -- --maps o:1,o:2,o:3 --round 300
+dotnet SBMultiplayer.Server.dll --init-config server.json   # commented template: maps, passwords, durations...
+dotnet SBMultiplayer.Server.dll --config server.json
 ```
 
-Main options: `--port` (default 24800, UDP), `--maps` (rotation of official level IDs), `--round` and `--results` (durations in seconds), `--max-players`. Console commands: `list`, `round`, `next`, `quit`.
+Matches, admin commands and exported results are described in the hosting guide.
 
 ## Building
 

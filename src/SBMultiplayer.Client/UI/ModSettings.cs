@@ -21,6 +21,8 @@ internal static class ModSettings
 
     public static ValueEvent<float> RoundPanelScale { get; } = Bind(ModConfig.Current.RoundPanelScale, v => ModConfig.Current.RoundPanelScale = v);
 
+    public static ValueEvent<bool> ShowSplits { get; } = Bind(ModConfig.Current.ShowSplits, v => ModConfig.Current.ShowSplits = v);
+
     private static ValueEvent<T> Bind<T>(T initial, Action<T> apply)
     {
         var value = new ValueEvent<T>(initial);

@@ -8,11 +8,14 @@ namespace SBMultiplayer.Client.Net;
 /// </summary>
 internal sealed class RoundState
 {
-    private volatile Snapshot current = new(new RoundInfo(0, "", RoundPhase.Free, 0, 0, 0), 0, new List<LeaderboardEntry>());
+    private volatile Snapshot current = new(new RoundInfo(0, "", RoundPhase.Free, 0, 0, 0, false), 0, new List<LeaderboardEntry>());
+
+    /// <summary>Classement du match (points cumulés), remplacé en bloc par le thread réseau.</summary>
+    public volatile IReadOnlyList<StandingEntry> Standings = new List<StandingEntry>();
 
     public sealed record Snapshot(RoundInfo Info, double ReceivedAt, IReadOnlyList<LeaderboardEntry> Leaderboard)
     {
-        public double RemainingSeconds => Math.Max(0, Info.RemainingSeconds - (NetClock.Now - ReceivedAt));
+        public double RemainingSeconds => Info.Paused ? Info.RemainingSeconds : Math.Max(0, Info.RemainingSeconds - (NetClock.Now - ReceivedAt));
 
         public bool IsRound => Info.Phase != RoundPhase.Free;
     }
@@ -36,5 +39,9 @@ internal sealed class RoundState
         }
     }
 
-    public void Reset() => current = new(new RoundInfo(0, "", RoundPhase.Free, 0, 0, 0), 0, new List<LeaderboardEntry>());
+    public void Reset()
+    {
+        current = new(new RoundInfo(0, "", RoundPhase.Free, 0, 0, 0, false), 0, new List<LeaderboardEntry>());
+        Standings = new List<StandingEntry>();
+    }
 }

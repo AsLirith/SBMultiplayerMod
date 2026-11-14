@@ -34,6 +34,10 @@ internal sealed class GlobalOverlay : SE.IDrawBatch2
             try
             {
                 DrawNotifications(sb, vp, scale);
+                if (ModConfig.Current.ShowSplits)
+                {
+                    DrawSplit(sb, vp, scale);
+                }
                 if (ModConfig.Current.ShowRoundPanel && MultiplayerClient.Instance.IsReady)
                 {
                     DrawRoundPanel(sb, vp, scale);
@@ -61,6 +65,33 @@ internal sealed class GlobalOverlay : SE.IDrawBatch2
         }
     }
 
+    private const double SplitDisplaySeconds = 2.5;
+
+    /// <summary>Dernier intermédiaire au centre de l'écran : temps et écart (vert = en avance, rouge = en retard).</summary>
+    private void DrawSplit(SpriteBatch sb, Viewport vp, float scale)
+    {
+        if (SplitTracker.Last is not { } split || !GameAccess.IsIngameScene(GameAccess.CurrentScene))
+        {
+            return;
+        }
+        double age = NetClock.Now - split.ShownAt;
+        if (age > SplitDisplaySeconds)
+        {
+            return;
+        }
+        float alpha = (float)Math.Clamp((SplitDisplaySeconds - age) / 0.4, 0, 1);
+        float s = scale * 0.9f;
+        bool finish = split.IsFinish;
+        string label = finish ? Tr.SplitFinish : Tr.SplitCheckpoint(split.Index + 1);
+        float y = vp.Height * 0.28f;
+        text.DrawCentered(sb, $"{label}   {Msg.FormatTime(split.Ms)}", vp.Width / 2f, ref y, Color.White, s, alpha);
+        if (split.DeltaMs is int delta)
+        {
+            Color color = delta < 0 ? new Color(110, 160, 255) : delta > 0 ? new Color(255, 110, 110) : Color.White;
+            text.DrawCentered(sb, SplitTracker.FormatDelta(delta), vp.Width / 2f, ref y, color, s * 1.2f, alpha);
+        }
+    }
+
     private void DrawRoundPanel(SpriteBatch sb, Viewport vp, float scale)
     {
         MultiplayerClient client = MultiplayerClient.Instance;
@@ -76,10 +107,12 @@ internal sealed class GlobalOverlay : SE.IDrawBatch2
 
         bool results = round.Info.Phase == RoundPhase.Results;
         int remaining = (int)Math.Ceiling(round.RemainingSeconds);
+        string clock = $"{remaining / 60}:{remaining % 60:00}";
         string header = results
             ? Tr.ResultsHeader(remaining)
-            : $"{GameAccess.DescribeMap(round.Info.MapKey)} ({round.Info.MapIndex + 1}/{round.Info.MapCount}) - {remaining / 60}:{remaining % 60:00}";
-        text.DrawRightAligned(sb, header, right, ref y, results ? Gold : Color.White, s * 1.15f);
+            : $"{GameAccess.DescribeMap(round.Info.MapKey)} ({round.Info.MapIndex + 1}/{round.Info.MapCount}) - "
+              + (round.Info.Paused ? $"{Tr.PausedHeader} {clock}" : clock);
+        text.DrawRightAligned(sb, header, right, ref y, results || round.Info.Paused ? Gold : Color.White, s * 1.15f);
         if (!client.IsOnRoundMap && !results)
         {
             text.DrawRightAligned(sb, Tr.NotOnRoundMap(ModConfig.Current.RejoinKey), right, ref y, Color.Orange, s * 0.85f);
@@ -90,10 +123,30 @@ internal sealed class GlobalOverlay : SE.IDrawBatch2
         if (board.Count == 0)
         {
             text.DrawRightAligned(sb, Tr.NoTimesYet, right, ref y, Color.LightGray, s);
-            return;
+        }
+        else
+        {
+            DrawLeaderboard(sb, board, client.LocalId, right, ref y, s);
         }
 
-        int? me = client.LocalId;
+        // Pendant les résultats : classement du match (points cumulés sur les rounds).
+        IReadOnlyList<StandingEntry> standings = client.Round.Standings;
+        if (results && standings.Count > 0)
+        {
+            y += text.LineHeight(s) * 0.5f;
+            text.DrawRightAligned(sb, Tr.MatchStandings, right, ref y, Gold, s * 1.05f);
+            string myName = client.PlayerName;
+            for (int i = 0; i < Math.Min(standings.Count, MaxLeaderboardLines); i++)
+            {
+                StandingEntry e = standings[i];
+                text.DrawRightAligned(sb, $"{i + 1}. {e.Name}   {Tr.Points(e.Points)}", right, ref y, e.Name == myName ? Gold : Color.Gainsboro, s);
+            }
+        }
+    }
+
+    private void DrawLeaderboard(SpriteBatch sb, IReadOnlyList<LeaderboardEntry> board, int? me, float right, ref float y, float s)
+    {
+
         int myIndex = -1;
         for (int i = 0; i < board.Count; i++)
         {
