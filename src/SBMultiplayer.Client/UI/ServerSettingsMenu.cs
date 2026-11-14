@@ -46,9 +46,9 @@ internal static class ServerSettingsMenu
     {
         MatchSettings working = WorkingCopy();
         var save = new ValueEvent<bool>(false);
-        var modeLabel = new Label(Tr.SettingsModeLabel(Tr.ModeName(working.Mode)));
-        var modeDescription = new Label(Tr.ModeDescription(working.Mode));
-        TextInput maps = Input(string.Join(", ", working.Maps.Select(GameAccess.MapKeyToCode)), 1800f, 2000);
+        var modeLabel = new Label(Tr.SettingsModeLabel(Tr.ModeName(working.Mode)), MenuWidth);
+        var modeDescription = new Label(Tr.ModeDescription(working.Mode), MenuWidth);
+        TextInput maps = Input(string.Join(", ", working.Maps.Select(GameAccess.MapKeyToCode)), 2000, MenuWidth - 40f);
 
         var modeButtons = Modes.Select(mode => Button(Tr.ModeName(mode), () =>
         {
@@ -95,17 +95,16 @@ internal static class ServerSettingsMenu
         return Stack(
             Title(Tr.SettingsModeAndMapsTitle),
             Section(Tr.SettingsModeSection),
-            Line(modeButtons),
+            Grid(modeButtons, 3),
             modeLabel,
             modeDescription,
             Section(Tr.SettingsMapsSection),
             Text(Tr.SettingsMapsField),
             Field(maps),
             Button(Tr.SettingsAddCurrentMap, AddCurrentMap),
-            Section(Tr.SettingsApplySection),
             Text(Tr.SettingsRestartWarning),
-            GameAccess.OptionsUi.GetCheckboxRow(Tr.SettingsSaveToFile, save),
-            Line(Button(Tr.SettingsApply, Apply), Button(Tr.Back, close)));
+            Check(Tr.SettingsSaveToFile, save),
+            Buttons(Button(Tr.SettingsApply, Apply), Button(Tr.Back, close)));
     }
 
     // ---------- Timings and points ----------
@@ -113,7 +112,6 @@ internal static class ServerSettingsMenu
     private static Element BuildTimingsAndPoints(Action close, Scene scene)
     {
         MatchSettings working = WorkingCopy();
-        SE.OptionsUI o = GameAccess.OptionsUi;
         GameMode mode = working.Mode;
         bool synchronized = mode.IsSynchronized();
         var save = new ValueEvent<bool>(false);
@@ -130,7 +128,7 @@ internal static class ServerSettingsMenu
         var hideSeconds = new ValueEvent<float>((float)working.HideSeconds);
         var infection = new ValueEvent<bool>(working.Infection);
         bool hideAndSeek = mode == GameMode.HideAndSeek;
-        TextInput points = Input(string.Join(", ", working.PointsTable), 1000f, 300);
+        TextInput points = Input(string.Join(", ", working.PointsTable), 300);
 
         void Apply()
         {
@@ -170,22 +168,21 @@ internal static class ServerSettingsMenu
             Title(Tr.SettingsTimingsTitle),
             Text(Tr.SettingsModeLabel(Tr.ModeName(mode))),
             Section(Tr.SettingsDurationsSection),
-            hideAndSeek ? o.GetSliderRow(Tr.SettingsHideSeconds, hideSeconds, Seconds, 10f, 180f, 5f) : null,
-            o.GetSliderRow(hideAndSeek ? Tr.SettingsHuntSeconds : synchronized ? Tr.SettingsTimeLimit : Tr.SettingsRoundSeconds, roundSeconds, Seconds, 30f, 900f, 30f),
-            o.GetSliderRow(Tr.SettingsResultsSeconds, resultsSeconds, Seconds, 5f, 60f, 5f),
-            o.GetSliderRow(Tr.SettingsMatchEnd, matchEnd, Seconds, 5f, 60f, 5f),
-            synchronized && !hideAndSeek ? o.GetSliderRow(Tr.SettingsFinishTimeout, finishTimeout, Seconds, 5f, 60f, 5f) : null,
-            synchronized ? o.GetSliderRow(Tr.SettingsPrepareTimeout, prepareTimeout, Seconds, 5f, 60f, 5f) : null,
-            synchronized ? o.GetSliderRow(Tr.SettingsCountdown, countdown, Seconds, 1f, 10f, 1f) : null,
+            hideAndSeek ? Slider(Tr.SettingsHideSeconds, hideSeconds, Seconds, 10f, 180f, 5f) : null,
+            Slider(hideAndSeek ? Tr.SettingsHuntSeconds : synchronized ? Tr.SettingsTimeLimit : Tr.SettingsRoundSeconds, roundSeconds, Seconds, 30f, 900f, 30f),
+            Slider(Tr.SettingsResultsSeconds, resultsSeconds, Seconds, 5f, 60f, 5f),
+            Slider(Tr.SettingsMatchEnd, matchEnd, Seconds, 5f, 60f, 5f),
+            synchronized && !hideAndSeek ? Slider(Tr.SettingsFinishTimeout, finishTimeout, Seconds, 5f, 60f, 5f) : null,
+            synchronized ? Slider(Tr.SettingsPrepareTimeout, prepareTimeout, Seconds, 5f, 60f, 5f) : null,
+            synchronized ? Slider(Tr.SettingsCountdown, countdown, Seconds, 1f, 10f, 1f) : null,
             Section(Tr.SettingsMatchSection),
-            synchronized ? o.GetSliderRow(Tr.SettingsRoundsPerMap, roundsPerMap, Whole, 1f, 10f, 1f) : null,
-            mode == GameMode.Cup ? o.GetSliderRow(Tr.SettingsCupLimit, cupLimit, Whole, 10f, 300f, 10f) : null,
-            mode == GameMode.Elimination ? o.GetSliderRow(Tr.SettingsEliminatedPerRound, eliminated, Whole, 1f, 5f, 1f) : null,
-            hideAndSeek ? o.GetCheckboxRow(Tr.SettingsInfection, infection) : null,
+            synchronized ? Slider(Tr.SettingsRoundsPerMap, roundsPerMap, Whole, 1f, 10f, 1f) : null,
+            mode == GameMode.Cup ? Slider(Tr.SettingsCupLimit, cupLimit, Whole, 10f, 300f, 10f) : null,
+            mode == GameMode.Elimination ? Slider(Tr.SettingsEliminatedPerRound, eliminated, Whole, 1f, 5f, 1f) : null,
+            hideAndSeek ? Check(Tr.SettingsInfection, infection) : null,
             mode is not (GameMode.Elimination or GameMode.HideAndSeek) ? Row(Tr.SettingsPointsTable, Field(points)) : null,
-            Section(Tr.SettingsApplySection),
-            o.GetCheckboxRow(Tr.SettingsSaveToFile, save),
-            Line(Button(Tr.SettingsApply, Apply), Button(Tr.Back, close))
-        ).SetChildrenWidthToMaxChildWidth();
+            Check(Tr.SettingsSaveToFile, save),
+            Buttons(Button(Tr.SettingsApply, Apply), Button(Tr.Back, close))
+        );
     }
 }

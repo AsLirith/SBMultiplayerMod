@@ -22,12 +22,12 @@ internal static class MultiplayerMenu
     private static Element BuildMain(Action close, Scene scene)
     {
         ModConfig cfg = ModConfig.Current;
-        var status = new Label(StatusText());
+        var status = new Label(StatusText(), MenuWidth);
         scene.Add(new StatusUpdater(status));
 
-        TextInput server = Input(cfg.Server, 1100f, 80);
-        TextInput password = Input(cfg.ServerPassword, 1100f, 64);
-        TextInput name = Input(cfg.PlayerName, 1100f, ProtocolInfo.MaxNameLength);
+        TextInput server = Input(cfg.Server, 80);
+        TextInput password = Input(cfg.ServerPassword, 64);
+        TextInput name = Input(cfg.PlayerName, ProtocolInfo.MaxNameLength);
 
         void ApplyAndConnect()
         {
@@ -51,7 +51,7 @@ internal static class MultiplayerMenu
             Row(Tr.ServerField, Field(server)),
             Row(Tr.PasswordField, Field(password)),
             Row(Tr.NameField, Field(name)),
-            Line(
+            Buttons(
                 Button(Tr.Connect, ApplyAndConnect),
                 Button(Tr.Disconnect, () => MultiplayerClient.Instance.Disconnect()),
                 Button(Tr.JoinRound, () =>
@@ -65,12 +65,12 @@ internal static class MultiplayerMenu
                     MultiplayerClient.Instance.SetSpectating(!MultiplayerClient.Instance.IsSpectating);
                 })),
             Section(Tr.PlayWithFriendsSection),
-            Line(
+            Buttons(
                 Button(HostedServer.IsRunning ? Tr.HostManageButton : Tr.HostSection, OpenHost),
                 SteamP2P.Available ? Button(Tr.JoinFriendSection, OpenFriends) : null,
                 SteamP2P.Available ? Button(Tr.PublicGamesButton, OpenPublicGames) : null),
             Section(Tr.SettingsSection),
-            Line(
+            Buttons(
                 Button(Tr.DisplayTitle, OpenDisplay),
                 Button(Tr.InterfaceTitle, OpenInterface),
                 Button(Tr.AdminTitle, AdminMenu.Open)),
@@ -91,14 +91,14 @@ internal static class MultiplayerMenu
                 Text(Tr.HostRunning(HostedServer.Port)),
                 Text(Tr.HostAddresses(addresses.Count > 0 ? string.Join(", ", addresses) : "?", HostedServer.Port)),
                 ModConfig.Current.SteamP2PHost && SteamP2P.Available ? Text(Tr.SteamHostVisible) : null,
-                SteamP2P.IsHosting ? GameAccess.OptionsUi.GetCheckboxRow(Tr.PublicGameCheckbox, ModSettings.PublicGame) : null,
+                SteamP2P.IsHosting ? Check(Tr.PublicGameCheckbox, ModSettings.PublicGame) : null,
                 Button(Tr.HostStop, () =>
                 {
                     close();
                     MultiplayerClient.Instance.StopHosting();
                 }));
         }
-        TextInput port = Input(ModConfig.Current.HostPort.ToString(), 300f, 5);
+        TextInput port = Input(ModConfig.Current.HostPort.ToString(), 5, 300f);
         void Host()
         {
             if (!int.TryParse(port.Text.Trim(), out int p) || p < 1 || p > 65535)
@@ -113,9 +113,9 @@ internal static class MultiplayerMenu
         }
         port.OnEnter += () => { Host(); return true; };
         return Stack(
-            Line(Text(Tr.HostPortLabel), Field(port), Button(Tr.HostButton, Host)),
-            SteamP2P.Available ? GameAccess.OptionsUi.GetCheckboxRow(Tr.SteamHostCheckbox, ModSettings.SteamP2PHost) : null,
-            SteamP2P.Available ? GameAccess.OptionsUi.GetCheckboxRow(Tr.PublicGameCheckbox, ModSettings.PublicGame) : null);
+            Row(Tr.HostPortLabel, Line(Field(port), Button(Tr.HostButton, Host))),
+            SteamP2P.Available ? Check(Tr.SteamHostCheckbox, ModSettings.SteamP2PHost) : null,
+            SteamP2P.Available ? Check(Tr.PublicGameCheckbox, ModSettings.PublicGame) : null);
     }
 
     // ---------- Join a Steam friend (P2P) ----------
@@ -134,7 +134,7 @@ internal static class MultiplayerMenu
             Title(Tr.JoinFriendSection),
             Text(Tr.JoinFriendHint),
             list,
-            Line(Button(Tr.Refresh, () =>
+            Buttons(Button(Tr.Refresh, () =>
             {
                 close();
                 OpenFriends();
@@ -160,7 +160,7 @@ internal static class MultiplayerMenu
                 Title(Tr.PublicGamesButton),
                 Text(Tr.PublicGamesHint),
                 list,
-                Line(Button(Tr.Refresh, SteamLobby.Refresh), Button(Tr.Back, close)));
+                Buttons(Button(Tr.Refresh, SteamLobby.Refresh), Button(Tr.Back, close)));
         }, () => SteamLobby.ListVersion);
     }
 
@@ -188,35 +188,33 @@ internal static class MultiplayerMenu
 
     private static void OpenDisplay() => Show("display", (close, _) =>
     {
-        SE.OptionsUI o = GameAccess.OptionsUi;
         return Stack(
             Title(Tr.DisplayTitle),
-            o.GetCheckboxRow(Tr.ShowOtherPlayers, ModSettings.ShowOtherPlayers),
-            o.GetSliderRow(Tr.OtherPlayersOpacity, ModSettings.GhostOpacity, Percent, 0.1f, 1f, 0.1f),
-            o.GetCheckboxRow(Tr.ShowNameTags, ModSettings.ShowNameTags),
-            o.GetSliderRow(Tr.NameTagDistance, ModSettings.NameTagMaxDistance, f => MathF.Round(float.Parse(f)) + " cm", 10f, 300f, 10f),
-            o.GetCheckboxRow(Tr.ShowNameTagDistance, ModSettings.ShowNameTagDistance),
+            Check(Tr.ShowOtherPlayers, ModSettings.ShowOtherPlayers),
+            Slider(Tr.OtherPlayersOpacity, ModSettings.GhostOpacity, Percent, 0.1f, 1f, 0.1f),
+            Check(Tr.ShowNameTags, ModSettings.ShowNameTags),
+            Slider(Tr.NameTagDistance, ModSettings.NameTagMaxDistance, f => MathF.Round(float.Parse(f)) + " cm", 10f, 300f, 10f),
+            Check(Tr.ShowNameTagDistance, ModSettings.ShowNameTagDistance),
             Button(Tr.Back, close)
-        ).SetChildrenWidthToMaxChildWidth();
+        );
     });
 
     // ---------- Interface: HUD elements of the mod ----------
 
     private static void OpenInterface() => Show("interface", (close, _) =>
     {
-        SE.OptionsUI o = GameAccess.OptionsUi;
         return Stack(
             Title(Tr.InterfaceTitle),
-            o.GetCheckboxRow(Tr.ShowSplits, ModSettings.ShowSplits),
+            Check(Tr.ShowSplits, ModSettings.ShowSplits),
             Section(Tr.ChatTitle),
-            o.GetCheckboxRow(Tr.ShowChat, ModSettings.ShowChat),
-            o.GetSliderRow(Tr.ChatSize, ModSettings.ChatScale, Percent, 0.5f, 2f, 0.1f),
-            o.GetCheckboxRow(Tr.NotificationsOnTop, ModSettings.NotificationsOnTop),
+            Check(Tr.ShowChat, ModSettings.ShowChat),
+            Slider(Tr.ChatSize, ModSettings.ChatScale, Percent, 0.5f, 2f, 0.1f),
+            Check(Tr.NotificationsOnTop, ModSettings.NotificationsOnTop),
             Section(Tr.RoundPanel),
-            o.GetCheckboxRow(Tr.RoundPanel, ModSettings.ShowRoundPanel),
-            o.GetSliderRow(Tr.RoundPanelSize, ModSettings.RoundPanelScale, Percent, 0.3f, 1.2f, 0.1f),
+            Check(Tr.RoundPanel, ModSettings.ShowRoundPanel),
+            Slider(Tr.RoundPanelSize, ModSettings.RoundPanelScale, Percent, 0.3f, 1.2f, 0.1f),
             Button(Tr.Back, close)
-        ).SetChildrenWidthToMaxChildWidth();
+        );
     });
 
     private static string StatusText()

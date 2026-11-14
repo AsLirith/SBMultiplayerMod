@@ -65,7 +65,8 @@ internal static class PopupMenu
     {
         OpenIds.Add(def.Id);
         var scene = new Scene();
-        Element content = def.Build(close, scene)
+        // Every screen has the same width: an invisible line of MenuWidth on top of the content.
+        Element content = new PanelStack(0f).Add(new Label("", MenuWidth, 1f, setSizeToText: false), def.Build(close, scene))
             .SetStyle(Ui.TextSmallStyle)
             .SetNavigationStartToFirstNavigatable();
         CanvasScale canvas = GameAccess.CreateCanvas();
@@ -99,6 +100,39 @@ internal static class PopupMenu
     }
 
     // ---------- Layout helpers ----------
+    // One layout for every screen (canvas units: the game's UI is laid out on 3840 x 2160):
+    // - every screen is MenuWidth wide; plain text wraps at that width;
+    // - settings rows (checkbox, slider, field) have their label on the left, right-aligned on RowLabelWidth like
+    //   the game's options, always on a single line (the game's rows have a fixed height): too long = shortened;
+    // - text fields are FieldWidth wide, buttons never wider than the screen.
+
+    public const float MenuWidth = 2800f;
+    public const float RowLabelWidth = 1400f;
+    public const float FieldWidth = MenuWidth - RowLabelWidth - 90f;
+
+    private static float Measure(string text) => Ui.FontSmall.Value.MeasureString(text).X;
+
+    /// <summary>Shortens the text with "..." so that it fits on one line of <paramref name="width"/>.</summary>
+    public static string Fit(string text, float width)
+    {
+        try
+        {
+            if (Measure(text) <= width)
+            {
+                return text;
+            }
+            int length = text.Length;
+            while (length > 1 && Measure(text[..length].TrimEnd() + "...") > width)
+            {
+                length--;
+            }
+            return text[..length].TrimEnd() + "...";
+        }
+        catch (Exception)
+        {
+            return text; // character missing from the font: leave it to the game
+        }
+    }
 
     /// <summary>Vertical stack of the screen's elements (nulls are skipped).</summary>
     public static Element Stack(params Element?[] children) => new PanelStack(26f).AddMaybeNull(children);
@@ -112,15 +146,19 @@ internal static class PopupMenu
     public static Element Section(string text) =>
         new Label(text) { Padding = Padding.GetTop(18f) }.SetStyle(new Style { Font = Ui.FontSmall });
 
-    public static Element Text(string text) => new Label(text);
+    /// <summary>Plain text, wrapped at the screen's width.</summary>
+    public static Element Text(string text) => new Label(text, MenuWidth);
 
     public static Element Button(string text, Action onClick) =>
         GameAccess.CreateButton(onClick)
             .SetStyle(new Style { ButtonAnimation = Ui.ButtonAnimation, ButtonPadding = new Padding(32f, 14f) })
-            .Add(new Label(text));
+            .Add(new Label(Fit(text, MenuWidth - 100f)));
 
     /// <summary>Horizontal line of elements (buttons…).</summary>
     public static Element Line(params Element?[] items) => new PanelStack(22f, vertical: false).AddMaybeNull(items);
+
+    /// <summary>A group of buttons: at most three per line, so it never gets wider than the screen (nulls are skipped).</summary>
+    public static Element Buttons(params Element?[] buttons) => Grid(buttons.Where(b => b != null).Cast<Element>().ToList(), 3);
 
     /// <summary>Grid of elements, <paramref name="perRow"/> per line.</summary>
     public static Element Grid(IReadOnlyList<Element> items, int perRow)
@@ -133,11 +171,28 @@ internal static class PopupMenu
         return new PanelStack(18f).Add(rows);
     }
 
-    /// <summary>Label on the left, field on the right (labels aligned on a common width).</summary>
-    public static Element Row(string label, Element field, float labelWidth = 640f) =>
-        new PanelStack(28f, vertical: false).Add(new Label(label, labelWidth) { Anchor = new Vector2(0f, 0.5f) }, field);
+    /// <summary>Label on the left (right-aligned, like the game's settings rows), field on the right.</summary>
+    public static Element Row(string label, Element field) =>
+        new PanelStack(32f, vertical: false).Add(new Label(Fit(label, RowLabelWidth), RowLabelWidth) { Anchor = new Vector2(1f, 0.5f) }, field);
 
-    public static TextInput Input(string text, float width, int maxLength) =>
+    /// <summary>Checkbox row of the game's options, with the common label width.</summary>
+    public static Element Check(string label, IValue<bool> value) =>
+        GameAccess.OptionsUi.GetCheckboxRow(Fit(label, RowLabelWidth), value, RowLabelWidth);
+
+    /// <summary>Slider row of the game's options, with the common label width.</summary>
+    public static Element Slider(string label, IValue<float> value, Func<string, string> valueText, float min, float max, float step)
+    {
+        SE.SliderIntRow row = GameAccess.OptionsUi.GetSliderRow(Fit(label, RowLabelWidth), value, valueText, min, max, step);
+        if (row.Children.FirstOrDefault() is Label rowLabel)
+        {
+            rowLabel.InitialWidth = RowLabelWidth;
+            rowLabel.Width = RowLabelWidth;
+        }
+        return row;
+    }
+
+    /// <summary>Text field (FieldWidth wide unless told otherwise, e.g. MenuWidth for a field alone on its line).</summary>
+    public static TextInput Input(string text, int maxLength, float width = FieldWidth) =>
         new(GameAccess.UpdateSpeed, text, width, Ui.FontSmall.Value.LineSpacing) { MaxTextLength = maxLength };
 
     /// <summary>A text field on the game's dark background.</summary>

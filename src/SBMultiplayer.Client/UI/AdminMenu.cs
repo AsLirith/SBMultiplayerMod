@@ -28,7 +28,7 @@ internal static class AdminMenu
         }
         if (!Client.IsAdmin)
         {
-            TextInput password = Input(ModConfig.Current.AdminPassword, 900f, 64);
+            TextInput password = Input(ModConfig.Current.AdminPassword, 64);
             void Login()
             {
                 ModConfig.Current.AdminPassword = password.Text;
@@ -39,26 +39,26 @@ internal static class AdminMenu
             return Stack(
                 Title(Tr.AdminTitle),
                 Row(Tr.AdminPasswordField, Field(password)),
-                Line(Button(Tr.AdminLoginButton, Login), Button(Tr.Back, close)));
+                Buttons(Button(Tr.AdminLoginButton, Login), Button(Tr.Back, close)));
         }
 
         return Stack(
             Title(Tr.AdminTitle),
             Text(StatusLine()),
             Section(Tr.AdminRoundSection),
-            Line(
+            Buttons(
                 Button(Tr.AdminNext, () => Client.Admin(AdminCommand.NextPhase)),
                 Button(Tr.AdminRestart, () => Client.Admin(AdminCommand.RestartRound)),
                 Button(Tr.AdminPause, () => Client.Admin(AdminCommand.TogglePause)),
                 Button(Tr.AdminExtend, () => Client.Admin(AdminCommand.Extend, 60))),
             Section(Tr.AdminMatchSection),
-            Line(
+            Buttons(
                 Button(Tr.AdminChangeMap, OpenMaps),
                 Button(Tr.AdminPlayersButton, OpenPlayers),
                 Client.ServerSettings?.Mode == GameMode.HideAndSeek ? Button(Tr.AdminNextHunter, OpenNextHunter) : null,
                 Button(Tr.AdminResetMatch, () => Client.Admin(AdminCommand.ResetMatch))),
             Section(Tr.AdminServerSection),
-            Line(
+            Buttons(
                 Button(Tr.SettingsModeAndMapsTitle, ServerSettingsMenu.OpenModeAndMaps),
                 Button(Tr.SettingsTimingsTitle, ServerSettingsMenu.OpenTimingsAndPoints)),
             Button(Tr.Back, close));
@@ -112,7 +112,7 @@ internal static class AdminMenu
         return Stack(
             Title(Tr.AdminNextHunter),
             Grid(buttons, 3),
-            Line(Button(Tr.AdminRandomHunter, () =>
+            Buttons(Button(Tr.AdminRandomHunter, () =>
             {
                 Client.Admin(AdminCommand.SetHunter, -1);
                 Notifications.Info(Tr.AdminHunterRandom);

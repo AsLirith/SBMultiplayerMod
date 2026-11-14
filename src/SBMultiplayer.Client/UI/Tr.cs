@@ -46,7 +46,7 @@ internal static class Tr
     public static string OtherPlayersOpacity => T("Other players' opacity", "Opacité des autres joueurs");
     public static string ShowNameTags => T("Show names", "Afficher les pseudos");
     public static string NameTagDistance => T("Name display distance", "Distance des pseudos");
-    public static string ShowNameTagDistance => T("Show the distance next to names", "Afficher la distance à côté des pseudos");
+    public static string ShowNameTagDistance => T("Distance next to names", "Distance à côté des pseudos");
     public static string ShowSplits => T("Checkpoint splits", "Temps intermédiaires");
     public static string RoundPanel => T("Round panel", "Panneau du round");
     public static string RoundPanelSize => T("Round panel size", "Taille du panneau du round");
@@ -55,7 +55,7 @@ internal static class Tr
           $"{menuKey} : ce menu    {rejoinKey} : rejoindre la map du round    {chatKey} : chat    {scoreboardKey} (maintenir) : joueurs");
     public static string ShowChat => T("Show chat", "Afficher le chat");
     public static string ChatSize => T("Chat size", "Taille du chat");
-    public static string NotificationsOnTop => T("Notifications at the top of the screen", "Notifications en haut de l'écran");
+    public static string NotificationsOnTop => T("Notifications at the top", "Notifications en haut");
     public static string ChatTitle => T("Chat", "Chat");
     public static string ChatHint => T("Enter: send    Escape: cancel    /help: commands", "Entrée : envoyer    Échap : annuler    /help : commandes");
 
@@ -186,13 +186,13 @@ internal static class Tr
         "Ta version de cette map du Workshop diffère de celle du serveur : tes temps ne compteront pas");
     public static string SettingsUnknownMap(string code) => T($"Unknown level \"{code}\"", $"Niveau inconnu \"{code}\"");
     public static string SettingsRestartWarning => T("Changing the mode or the maps restarts the match.", "Changer le mode ou les maps relance le match.");
-    public static string SettingsSaveToFile => T("Also save to the server's config file", "Enregistrer aussi dans le fichier de config du serveur");
+    public static string SettingsSaveToFile => T("Save to the config file", "Enregistrer dans la config");
     public static string SettingsApply => T("Apply", "Appliquer");
     public static string SettingsRoundSeconds => T("Round duration", "Durée du round");
     public static string SettingsTimeLimit => T("Time limit after the start", "Limite de temps après le départ");
     public static string SettingsResultsSeconds => T("Results screen", "Écran de résultats");
     public static string SettingsRoundsPerMap => T("Rounds per map", "Manches par map");
-    public static string SettingsFinishTimeout => T("End of round after the 1st finisher", "Fin de manche après le 1er arrivé");
+    public static string SettingsFinishTimeout => T("Round end after 1st finisher", "Fin après le 1er arrivé");
     public static string SettingsPrepareTimeout => T("Max wait for players", "Attente max des joueurs");
     public static string SettingsCountdown => T("Start countdown", "Compte à rebours du départ");
     public static string SettingsCupLimit => T("Cup: points to become a finalist", "Cup : points pour être finaliste");
@@ -270,7 +270,7 @@ internal static class Tr
     public static string PublicGamesSearching => T("Searching...", "Recherche...");
     public static string NoPublicGames => T("No public game right now. Host one: F8 > Host a game, with \"List my game publicly\" ticked.",
         "Aucune partie publique pour le moment. Héberges-en une : F8 > Héberger une partie, avec \"Rendre ma partie publique\" coché.");
-    public static string PublicGameCheckbox => T("List my game publicly (anyone on Steam can join)", "Rendre ma partie publique (tout joueur Steam peut la rejoindre)");
+    public static string PublicGameCheckbox => T("Public game (anyone on Steam)", "Partie publique (tout Steam)");
     public static string PublicListingOn => T("Your game is now listed in F8 > Public games", "Ta partie apparaît maintenant dans F8 > Parties publiques");
     public static string PublicListingFailed => T("Could not list your game publicly (Steam lobbies unavailable)", "Impossible de rendre ta partie publique (lobbies Steam indisponibles)");
     public static string PasswordTag => T("password", "mot de passe");
@@ -326,7 +326,7 @@ internal static class Tr
     public static string HsHidingClock => T("Hiding", "Cache");
     public static string SettingsHideSeconds => T("Hiding time", "Temps pour se cacher");
     public static string SettingsHuntSeconds => T("Hunting time", "Temps de recherche");
-    public static string SettingsInfection => T("Found mice become hunters (infection)", "Les souris trouvées deviennent chasseuses (contagion)");
+    public static string SettingsInfection => T("Infection: found mice hunt too", "Contagion : trouvées = chasseuses");
     public static string AdminNextHunter => T("Next hunter", "Prochain chasseur");
     public static string AdminRandomHunter => T("Random", "Au hasard");
     public static string AdminHunterSet(string name) => T($"{name} will be the next hunter", $"{name} sera le prochain chasseur");
@@ -353,7 +353,7 @@ internal static class Tr
         $"Tes amis se connectent à : {local} (réseau local), ou ton IP publique:{port} (internet, ouvre le port sur ta box)");
 
     // ---------- Steam P2P ----------
-    public static string SteamHostCheckbox => T("Steam friends can join without opening a port (Steam P2P)", "Les amis Steam peuvent rejoindre sans ouvrir de port (P2P Steam)");
+    public static string SteamHostCheckbox => T("Steam friends join via P2P (no port)", "Amis Steam via P2P (sans port)");
     public static string SteamHostVisible => T("Your Steam friends can join you: F8 > Join a Steam friend", "Tes amis Steam peuvent te rejoindre : F8 > Rejoindre un ami Steam");
     public static string SteamUnavailable => T("Steam P2P unavailable (see SBMultiplayer.log)", "P2P Steam indisponible (voir SBMultiplayer.log)");
     public static string JoinFriendSection => T("Join a Steam friend", "Rejoindre un ami Steam");
