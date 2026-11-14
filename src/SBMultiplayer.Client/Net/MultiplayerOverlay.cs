@@ -28,7 +28,7 @@ internal sealed class MultiplayerOverlay
     {
         ModConfig cfg = ModConfig.Current;
         if (disabled || localPosition is not Vector3 local || !cfg.ShowOtherPlayers || !cfg.ShowNameTags
-            || cfg.NameTagMaxDistance <= 0 || !text.EnsureFont())
+            || cfg.NameTagMaxDistance <= 0 || HideSeek.HidesNameTags || !text.EnsureFont())
         {
             return;
         }

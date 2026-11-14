@@ -61,6 +61,10 @@ internal sealed class GlobalOverlay : SE.IDrawBatch2
                 {
                     DrawStartStatus(sb, vp, scale);
                 }
+                if (MultiplayerClient.Instance.IsReady && HideSeek.IsActive && !Spectator.IsWatching && GameAccess.IsIngameScene(GameAccess.CurrentScene))
+                {
+                    DrawHideSeekHud(sb, vp, scale);
+                }
                 if (ModConfig.Current.ShowRoundPanel && MultiplayerClient.Instance.IsReady)
                 {
                     DrawRoundPanel(sb, vp, scale);
@@ -132,7 +136,7 @@ internal sealed class GlobalOverlay : SE.IDrawBatch2
         else
         {
             winner = standings.FirstOrDefault(s => s.Status == StandingStatus.Winner).Name
-                     ?? (mode == GameMode.Rounds && standings.Count > 0 ? standings[0].Name : null);
+                     ?? (mode is GameMode.Rounds or GameMode.HideAndSeek && standings.Count > 0 ? standings[0].Name : null);
             for (int i = 0; i < standings.Count; i++)
             {
                 StandingEntry e = standings[i];
@@ -230,6 +234,93 @@ internal sealed class GlobalOverlay : SE.IDrawBatch2
         string? name = Spectator.Target?.Name;
         text.DrawCentered(sb, name != null ? $"{title} - {Tr.Following(name)}" : $"{title} - {Tr.NobodyToFollow}", vp.Width / 2f, ref y, Color.White, s);
         text.DrawCentered(sb, Tr.SpectatorKeys, vp.Width / 2f, ref y, Color.LightGray, s * 0.8f);
+    }
+
+    /// <summary>
+    /// Hide and Seek: role and countdowns in the middle of the screen, the hunter's crosshair, and the frozen
+    /// mouse's controls at the bottom.
+    /// </summary>
+    private void DrawHideSeekHud(SpriteBatch sb, Viewport vp, float scale)
+    {
+        if (HideSeek.SeekStart is not double seekStart)
+        {
+            return;
+        }
+        double now = NetClock.Now;
+        float cx = vp.Width / 2f;
+        HideSeek.Role role = HideSeek.LocalRole;
+        MultiplayerClient client = MultiplayerClient.Instance;
+        bool found = client.LocalId is int me && HideSeek.IsFound(me);
+
+        if (now < seekStart)
+        {
+            int left = (int)Math.Ceiling(seekStart - now);
+            float y = vp.Height * 0.2f;
+            if (role == HideSeek.Role.Hunter)
+            {
+                text.DrawCentered(sb, Tr.HsYouAreHunter, cx, ref y, new Color(255, 110, 90), scale * 1.1f);
+                text.DrawCentered(sb, Tr.HsMiceHiding, cx, ref y, Color.White, scale * 0.8f);
+                text.DrawCentered(sb, $"{left / 60}:{left % 60:00}", cx, ref y, Gold, scale * 2.2f);
+            }
+            else if (role == HideSeek.Role.Mouse && client.Round.Current.GoAt is double goAt && now >= goAt)
+            {
+                text.DrawCentered(sb, Tr.HsYouAreMouse, cx, ref y, new Color(140, 220, 255), scale * 0.9f);
+                text.DrawCentered(sb, $"{Tr.HsHide} {left / 60}:{left % 60:00}", cx, ref y, Gold, scale * 1.4f);
+            }
+            return;
+        }
+
+        if (now - seekStart < 2.0)
+        {
+            float y = vp.Height * 0.25f;
+            text.DrawCentered(sb, Tr.HsHuntBegins, cx, ref y, new Color(255, 110, 90), scale * 1.8f);
+        }
+
+        if (role == HideSeek.Role.Hunter)
+        {
+            // Crosshair: what the hunter aims at with the grind button.
+            string cross = "+";
+            Vector2 size = text.Measure(cross, scale * 1.2f);
+            text.DrawOutlined(sb, cross, new Vector2(cx, vp.Height / 2f) - size / 2f, Color.White, scale * 1.2f);
+            float y = vp.Height * 0.9f;
+            text.DrawCentered(sb, Tr.HsAimHint, cx, ref y, Color.LightGray, scale * 0.6f);
+        }
+        else if (role == HideSeek.Role.Mouse && HideSeek.KeepFrozen)
+        {
+            float y = vp.Height * 0.86f;
+            string title = found ? Tr.HsFoundTitle : Tr.HsFrozenTitle;
+            string? name = HideSeek.FollowRequested ? Spectator.Target?.Name : null;
+            text.DrawCentered(sb, name != null ? $"{title} - {Tr.Following(name)}" : title, cx, ref y, found ? new Color(255, 120, 120) : new Color(140, 220, 255), scale * 0.75f);
+            text.DrawCentered(sb, Tr.HsFrozenKeys, cx, ref y, Color.LightGray, scale * 0.6f);
+        }
+        else if (role == HideSeek.Role.Mouse && !found)
+        {
+            float y = vp.Height * 0.3f;
+            text.DrawCentered(sb, Tr.HsLandToFreeze, cx, ref y, Gold, scale * 0.8f);
+        }
+    }
+
+    /// <summary>Hide and Seek round panel: hunters, then the mice and whether they've been found.</summary>
+    private void DrawHideSeekPanel(SpriteBatch sb, MultiplayerClient client, float right, ref float y, float s)
+    {
+        RoundState.HideSeekState hs = client.Round.HideSeek;
+        if (hs.RoundId != client.Round.Current.Info.RoundId || hs.Hunters.Count + hs.Mice.Count == 0)
+        {
+            return;
+        }
+        string NameOf(int id) => id == client.LocalId ? client.PlayerName
+            : client.Players.TryGetValue(id, out RemotePlayer? p) ? p.Name : "?";
+        // Infection: found mice are hunters too, but stay listed with the mice.
+        var hunters = hs.Hunters.Where(id => !hs.Mice.Contains(id)).Select(NameOf).ToList();
+        text.DrawRightAligned(sb, Tr.HsHunters(string.Join(", ", hunters)), right, ref y, new Color(255, 130, 110), s);
+        int hidden = hs.Mice.Count(id => !hs.Found.Contains(id));
+        text.DrawRightAligned(sb, Tr.HsMiceLeft(hidden, hs.Mice.Count), right, ref y, Gold, s);
+        foreach (int id in hs.Mice.OrderBy(id => hs.Found.Contains(id)).ThenBy(NameOf, StringComparer.OrdinalIgnoreCase).Take(MaxLeaderboardLines))
+        {
+            bool isFound = hs.Found.Contains(id);
+            Color color = isFound ? new Color(150, 150, 150) : id == client.LocalId ? Gold : Color.Gainsboro;
+            text.DrawRightAligned(sb, isFound ? $"{NameOf(id)}  {Tr.HsFoundTag}" : NameOf(id), right, ref y, color, s);
+        }
     }
 
     /// <summary>Rounds mode: waiting for players, countdown, "GO!", or why we're waiting on the start line.</summary>
@@ -369,6 +460,14 @@ internal sealed class GlobalOverlay : SE.IDrawBatch2
 
         bool results = round.Info.Phase == RoundPhase.Results;
         int remaining = (int)Math.Ceiling(round.RemainingSeconds);
+        bool hideAndSeek = round.Info.Mode == GameMode.HideAndSeek;
+        string clockPrefix = "";
+        if (hideAndSeek && HideSeek.SeekStart is double seekStart && NetClock.Now < seekStart && round.Info.Phase == RoundPhase.Playing)
+        {
+            // Hiding time: the clock counts down to the hunt.
+            remaining = (int)Math.Ceiling(seekStart - NetClock.Now);
+            clockPrefix = Tr.HsHidingClock + " ";
+        }
         string clock = $"{remaining / 60}:{remaining % 60:00}";
         string roundPart = round.Info.RoundsPerMap > 1 ? $" - {Tr.RoundOf(round.Info.RoundInMap, round.Info.RoundsPerMap)}" : "";
         string header = results
@@ -376,7 +475,7 @@ internal sealed class GlobalOverlay : SE.IDrawBatch2
             : round.Info.Phase == RoundPhase.Preparing
                 ? $"{GameAccess.DescribeMap(round.Info.MapKey)} ({round.Info.MapIndex + 1}/{round.Info.MapCount}){roundPart}"
                 : $"{GameAccess.DescribeMap(round.Info.MapKey)} ({round.Info.MapIndex + 1}/{round.Info.MapCount}){roundPart} - "
-                  + (round.Info.Paused ? $"{Tr.PausedHeader} {clock}" : clock);
+                  + (round.Info.Paused ? $"{Tr.PausedHeader} {clock}" : clockPrefix + clock);
         text.DrawRightAligned(sb, header, right, ref y, results || round.Info.Paused ? Gold : Color.White, s * 1.15f);
         if (!client.IsOnRoundMap && !results)
         {
@@ -385,7 +484,14 @@ internal sealed class GlobalOverlay : SE.IDrawBatch2
         y += text.LineHeight(s) * 0.3f;
 
         IReadOnlyList<LeaderboardEntry> board = round.Leaderboard;
-        if (board.Count == 0)
+        if (hideAndSeek)
+        {
+            if (!results)
+            {
+                DrawHideSeekPanel(sb, client, right, ref y, s);
+            }
+        }
+        else if (board.Count == 0)
         {
             text.DrawRightAligned(sb, Tr.NoTimesYet, right, ref y, Color.LightGray, s);
         }
@@ -394,9 +500,9 @@ internal sealed class GlobalOverlay : SE.IDrawBatch2
             DrawLeaderboard(sb, board, client.LocalId, right, ref y, s);
         }
 
-        // During results: match standings (points accumulated over the rounds).
+        // During results (and the whole Hide and Seek round, points come as mice are found): match standings.
         IReadOnlyList<StandingEntry> standings = client.Round.Standings;
-        if (results && standings.Count > 0)
+        if ((results || hideAndSeek) && standings.Count > 0)
         {
             y += text.LineHeight(s) * 0.5f;
             text.DrawRightAligned(sb, Tr.MatchStandings, right, ref y, Gold, s * 1.05f);

@@ -56,7 +56,7 @@ internal static class Compatibility
         foreach (string m in new[] { "GetTopmostScene", "LevelFinished", "currentScene", "currentLevel", "uiAssets", "optionsUI", "stuff",
                      "StartLevel", "SetCurrentChallenge", "GetMaxNonSpoileryMedal", "ShowPopup", "CreateCanvas", "CreateButton",
                      "IsNavigatingInTextInput", "customMaps", "DownloadWorkshopCode", "StartCustomMapEntry", "flyCameraToggler",
-                     "globalContentLoader", "globalAssets", "SaveState", "levelOrder" })
+                     "globalContentLoader", "globalAssets", "SaveState", "levelOrder", "inputOutgame" })
         {
             Member(typeof(GlobalGame), m);
         }
@@ -79,6 +79,12 @@ internal static class Compatibility
         MemberOf("SE.ClickToStartSceneCloser", "Update");
         MemberOf("SE.ClickToStartSceneCloser", "Close");
         MemberOf("SE.FlyCameraToggler", "CanFly");
+        // Hide and Seek: freezing a mouse with the game's free camera, grounded check, grind input, line of sight.
+        MemberOf("SE.FlyCameraToggler", "SetFly");
+        MemberOf("SE.FlyCameraToggler", "EndFlying");
+        Member(typeof(Player), "State");
+        Member(typeof(InputOutgameRaw), "GrindOrStartSkatingRaw");
+        Member(typeof(Entities), "GetNearestTriangleRaycastSolid");
         MemberOf("SE.CustomMapCatalogue", "ReadMap");
         MemberOf("SE.CustomMapCatalogue", "Maps");
         MemberOf("SE.CustomMapCatalogue+Entry", "WorkshopItemId");

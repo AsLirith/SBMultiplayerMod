@@ -77,6 +77,32 @@ public sealed class GameServer : INetEventListener
     /// <summary>Match standings, by player name (players get a new id when they reconnect).</summary>
     private readonly Dictionary<string, StandingEntry> standings = new();
 
+    // ---------- Hide and Seek ----------
+    private bool IsHideAndSeek => options.Mode == GameMode.HideAndSeek;
+
+    /// <summary>Hunters of the round (found mice join them in infection mode), by id, with their name.</summary>
+    private readonly Dictionary<int, string> hunters = new();
+
+    /// <summary>Mice of the round (found ones included), by id, with their name.</summary>
+    private readonly Dictionary<int, string> mice = new();
+
+    private readonly HashSet<int> found = new();
+
+    /// <summary>Hunter(s) of the previous round: never hunter twice in a row (unless chosen by an admin).</summary>
+    private readonly HashSet<string> lastHunters = new(StringComparer.Ordinal);
+
+    /// <summary>Next hunter chosen by an admin (by name), or null for a random one.</summary>
+    private string? nextHunter;
+
+    /// <summary>Players in the round when it started (hunter included): finding a mouse is worth RoundSeconds / this.</summary>
+    private int huntPlayerCount;
+
+    /// <summary>Last board position of each player, to check that a hunter is really close to the mouse they found.</summary>
+    private readonly Dictionary<int, Vec3> lastPosition = new();
+
+    /// <summary>Start of the hunt: the mice are frozen, the hunter is released.</summary>
+    private double SeekStart => (startAt ?? double.MaxValue / 2) + options.HideSeconds;
+
     public GameServer(ServerOptions options, string? configPath = null)
     {
         this.options = options;
@@ -117,6 +143,7 @@ public sealed class GameServer : INetEventListener
                 ? $"{options.Mode} mode - rotation: {string.Join(", ", options.Maps)} - {options.RoundsPerMap} rounds per map, {options.RoundSeconds:0} s limit, {options.ResultsSeconds:0} s results"
                   + (options.Mode == GameMode.Cup ? $", {options.CupPointsLimit} points to become a finalist" : "")
                   + (options.Mode == GameMode.Elimination ? $", {options.EliminatedPerRound} eliminated per round" : "")
+                  + (IsHideAndSeek ? $", {options.HideSeconds:0} s to hide{(options.Infection ? ", infection" : "")}" : "")
                 : $"Time Attack - rotation: {string.Join(", ", options.Maps)} - {options.RoundSeconds:0} s rounds, {options.ResultsSeconds:0} s results")
             : "Free mode: no rounds, everyone rides wherever they want");
     }
@@ -211,7 +238,7 @@ public sealed class GameServer : INetEventListener
                 BeginCountdown();
             }
         }
-        else if (phase == RoundPhase.Playing && IsRoundsMode && RoundsRaceIsOver())
+        else if (phase == RoundPhase.Playing && IsRoundsMode && (IsHideAndSeek ? HuntIsOver() : RoundsRaceIsOver()))
         {
             EndRound();
         }
@@ -266,6 +293,9 @@ public sealed class GameServer : INetEventListener
         gaveUp.Clear();
         startAt = null;
         firstFinishAt = null;
+        hunters.Clear();
+        mice.Clear();
+        found.Clear();
         if (IsRoundsMode)
         {
             phase = RoundPhase.Preparing;
@@ -280,6 +310,10 @@ public sealed class GameServer : INetEventListener
         }
         BroadcastRound();
         BroadcastLeaderboard();
+        if (IsHideAndSeek)
+        {
+            BroadcastHideSeek();
+        }
     }
 
     /// <summary>Rounds mode: everyone ready (or timeout). The players ready now are the participants of the race.</summary>
@@ -289,10 +323,172 @@ public sealed class GameServer : INetEventListener
         participants.UnionWith(ready);
         startAt = Now + options.CountdownSeconds;
         phaseStart = startAt.Value;
-        phaseEnd = startAt.Value + options.RoundSeconds;
+        phaseEnd = startAt.Value + options.RoundSeconds + (IsHideAndSeek ? options.HideSeconds : 0);
         Log($"Round {roundId}: start in {options.CountdownSeconds:0} s ({participants.Count} participant(s))");
+        if (IsHideAndSeek)
+        {
+            ChooseHunters();
+        }
         BroadcastRound();
     }
+
+    // ---------- Hide and Seek ----------
+
+    /// <summary>
+    /// Picks the hunter among the players ready on the start line: the one chosen by an admin, otherwise a random
+    /// player who wasn't the hunter of the previous round. Everyone else is a mouse.
+    /// </summary>
+    private void ChooseHunters()
+    {
+        hunters.Clear();
+        mice.Clear();
+        found.Clear();
+        var candidates = participants.Where(players.ContainsKey).Select(id => players[id]).ToList();
+        huntPlayerCount = candidates.Count;
+        if (candidates.Count == 0)
+        {
+            return;
+        }
+        Player? hunter = nextHunter != null ? candidates.FirstOrDefault(c => c.Name == nextHunter) : null;
+        nextHunter = null;
+        if (hunter == null)
+        {
+            var pool = candidates.Where(c => !lastHunters.Contains(c.Name)).ToList();
+            if (pool.Count == 0)
+            {
+                pool = candidates;
+            }
+            hunter = pool[Random.Shared.Next(pool.Count)];
+        }
+        hunters[hunter.Id] = hunter.Name;
+        lastHunters.Clear();
+        lastHunters.Add(hunter.Name);
+        foreach (Player c in candidates.Where(c => c != hunter))
+        {
+            mice[c.Id] = c.Name;
+        }
+        Log($"Round {roundId}: {hunter.Name} is the hunter, {mice.Count} mice");
+        BroadcastEvent(ServerEvents.HunterChosen, hunter.Name);
+        BroadcastHideSeek();
+    }
+
+    /// <summary>Mice not found yet and still connected.</summary>
+    private IEnumerable<int> HiddenMice() =>
+        mice.Keys.Where(id => !found.Contains(id) && !hunters.ContainsKey(id) && players.ContainsKey(id));
+
+    /// <summary>After the hiding time: every mouse found (or gone), or no hunter left.</summary>
+    private bool HuntIsOver()
+    {
+        if (startAt == null || Now < SeekStart)
+        {
+            return false;
+        }
+        return !HiddenMice().Any() || !hunters.Keys.Any(players.ContainsKey);
+    }
+
+    private int FinderPoints => huntPlayerCount == 0 ? 0 : (int)Math.Round(options.RoundSeconds / huntPlayerCount);
+
+    /// <summary>One point per second spent hidden during the hunt.</summary>
+    private int SurvivalPoints(double until) =>
+        (int)Math.Max(0, Math.Floor(Math.Min(until, SeekStart + options.RoundSeconds) - SeekStart));
+
+    private void AddPoints(string name, int points, int rounds = 0)
+    {
+        standings.TryGetValue(name, out StandingEntry previous);
+        standings[name] = new StandingEntry(name, previous.Points + points, previous.RoundsPlayed + rounds, previous.Status);
+    }
+
+    private void OnTag(Player p, int tagRoundId, int targetId)
+    {
+        if (!IsHideAndSeek || phase != RoundPhase.Playing || tagRoundId != roundId || Now < SeekStart
+            || !mice.TryGetValue(targetId, out string? mouseName) || found.Contains(targetId) || hunters.ContainsKey(targetId))
+        {
+            return;
+        }
+        if (targetId == p.Id)
+        {
+            // The mouse left its hiding place (restart from the pause menu...): counts as found, by nobody.
+            MouseOut(targetId, mouseName);
+            Log($"{mouseName} left their hiding place");
+            BroadcastEvent(ServerEvents.MouseForfeit, mouseName);
+            return;
+        }
+        if (!hunters.ContainsKey(p.Id))
+        {
+            return;
+        }
+        if (lastPosition.TryGetValue(p.Id, out Vec3 a) && lastPosition.TryGetValue(targetId, out Vec3 b))
+        {
+            float dx = a.X - b.X, dy = a.Y - b.Y, dz = a.Z - b.Z;
+            float distance = MathF.Sqrt(dx * dx + dy * dy + dz * dz);
+            if (distance > HideSeekRules.ServerTagRange)
+            {
+                Log($"Tag refused: {p.Name} is {distance / 100:0} m away from {mouseName}");
+                return;
+            }
+        }
+        AddPoints(p.Name, FinderPoints);
+        MouseOut(targetId, mouseName);
+        Log($"{p.Name} found {mouseName}");
+        BroadcastEvent(ServerEvents.MouseFound, $"{p.Name}\n{mouseName}");
+    }
+
+    /// <summary>A mouse is out of the hunt (found, gave up or left): survival points, and a hunter in infection mode.</summary>
+    private void MouseOut(int id, string name)
+    {
+        found.Add(id);
+        AddPoints(name, SurvivalPoints(Now));
+        if (options.Infection && players.ContainsKey(id))
+        {
+            hunters[id] = name;
+        }
+        BroadcastHideSeek();
+        BroadcastStandings();
+    }
+
+    /// <summary>A mouse disconnects or becomes a spectator during the round: out of the hunt.</summary>
+    private void OnLeftHunt(Player p)
+    {
+        if (IsHideAndSeek && phase == RoundPhase.Playing && mice.ContainsKey(p.Id) && !found.Contains(p.Id))
+        {
+            MouseOut(p.Id, p.Name);
+        }
+    }
+
+    /// <summary>End of a Hide and Seek round: the mice still hidden get their survival points.</summary>
+    private void AwardHideSeekPoints()
+    {
+        var survivors = mice.Where(m => !found.Contains(m.Key)).ToList();
+        foreach (var (_, name) in survivors)
+        {
+            AddPoints(name, SurvivalPoints(Now));
+        }
+        foreach (string name in mice.Values.Concat(hunters.Values).Distinct())
+        {
+            AddPoints(name, 0, rounds: 1);
+        }
+        if (startAt == null || Now < SeekStart || mice.Count == 0)
+        {
+            return; // skipped before the hunt
+        }
+        if (survivors.Count == 0)
+        {
+            Log("Every mouse was found: the hunters win the round");
+            BroadcastEvent(ServerEvents.HuntersWin, string.Join(", ", hunters.Where(h => !mice.ContainsKey(h.Key)).Select(h => h.Value)));
+        }
+        else
+        {
+            string names = string.Join(", ", survivors.Select(m => m.Value));
+            Log($"Time is up, surviving mice: {names}");
+            BroadcastEvent(ServerEvents.MiceSurvived, names);
+        }
+    }
+
+    private void BroadcastHideSeek() =>
+        Broadcast(Msg.HideSeek(writer, CurrentHideSeek()), DeliveryMethod.ReliableOrdered, except: null);
+
+    private HideSeekInfo CurrentHideSeek() =>
+        new(roundId, hunters.Keys.ToArray(), mice.Keys.ToArray(), found.ToArray());
 
     /// <summary>Rounds mode: all participants finished or gave up, or the finish timeout expired.</summary>
     private bool RoundsRaceIsOver()
@@ -334,6 +530,7 @@ public sealed class GameServer : INetEventListener
         {
             ready.Remove(p.Id);
             participants.Remove(p.Id); // the round doesn't wait for them anymore
+            OnLeftHunt(p);
         }
         Log($"{p.Name} {(spectating ? "is now spectating" : "is back in the game")}");
         Broadcast(Msg.Spectate(writer, p.Id, spectating), DeliveryMethod.ReliableOrdered, except: p);
@@ -345,7 +542,7 @@ public sealed class GameServer : INetEventListener
 
     private void OnGiveUp(Player p, int giveUpRoundId)
     {
-        if (IsRoundsMode && giveUpRoundId == roundId && phase == RoundPhase.Playing && participants.Contains(p.Id)
+        if (IsRoundsMode && !IsHideAndSeek && giveUpRoundId == roundId && phase == RoundPhase.Playing && participants.Contains(p.Id)
             && !best.ContainsKey(p.Id) && gaveUp.Add(p.Id))
         {
             Log($"{p.Name} gave up");
@@ -364,7 +561,7 @@ public sealed class GameServer : INetEventListener
 
         // End of a game: each Time Attack round (end of the timer), the end of the rotation in Rounds mode,
         // or a Cup / Elimination winner.
-        if (options.Mode == GameMode.Rounds && mapIndex == options.Maps.Count - 1 && roundInMap >= Math.Max(1, options.RoundsPerMap))
+        if ((options.Mode is GameMode.Rounds or GameMode.HideAndSeek) && mapIndex == options.Maps.Count - 1 && roundInMap >= Math.Max(1, options.RoundsPerMap))
         {
             matchOver = true;
             string? winner = SortedStandings().FirstOrDefault().Name;
@@ -393,6 +590,9 @@ public sealed class GameServer : INetEventListener
                 break;
             case GameMode.Elimination:
                 ApplyElimination();
+                break;
+            case GameMode.HideAndSeek:
+                AwardHideSeekPoints();
                 break;
             default:
                 List<LeaderboardEntry> board = SortedLeaderboard();
@@ -510,7 +710,9 @@ public sealed class GameServer : INetEventListener
             ReadyCount: ready.Count,
             PlayerCount: players.Values.Count(p => p.IsPlaying && !eliminated.Contains(p.Name)),
             PointsLimit: options.Mode == GameMode.Cup ? options.CupPointsLimit : 0,
-            MatchEnded: phase == RoundPhase.Results && matchEnded);
+            MatchEnded: phase == RoundPhase.Results && matchEnded,
+            HideSeconds: IsHideAndSeek ? (float)options.HideSeconds : 0f,
+            Infection: IsHideAndSeek && options.Infection);
 
     private void BroadcastRound() => Broadcast(Msg.Round(writer, CurrentRoundInfo()), DeliveryMethod.ReliableOrdered, except: null);
 
@@ -535,6 +737,10 @@ public sealed class GameServer : INetEventListener
         if (phase != RoundPhase.Playing || finishRoundId != roundId)
         {
             reject = "outside of a round";
+        }
+        else if (IsHideAndSeek)
+        {
+            reject = "no times in Hide and Seek";
         }
         else if (p.IsSpectator)
         {
@@ -572,6 +778,10 @@ public sealed class GameServer : INetEventListener
 
     private void LogResults()
     {
+        if (IsHideAndSeek)
+        {
+            return; // no times: the finds and the surviving mice are already in the log
+        }
         var board = SortedLeaderboard();
         Log($"Round {roundId} results ({CurrentMap}):" + (board.Count == 0 ? " no times" : ""));
         for (int i = 0; i < board.Count; i++)
@@ -827,6 +1037,19 @@ public sealed class GameServer : INetEventListener
                 BroadcastEvent(ServerEvents.MatchReset, by);
                 break;
 
+            case AdminCommand.SetHunter:
+                if (argument < 0)
+                {
+                    nextHunter = null;
+                    break;
+                }
+                if (!players.TryGetValue(argument, out Player? chosen))
+                {
+                    return (CommandResults.NoPlayer, $"#{argument}");
+                }
+                nextHunter = chosen.Name;
+                break;
+
             default:
                 return (CommandResults.Unknown, command.ToString());
         }
@@ -897,6 +1120,7 @@ public sealed class GameServer : INetEventListener
             "map" => AdminCommand.GotoMap,
             "kick" => AdminCommand.Kick,
             "resetmatch" => AdminCommand.ResetMatch,
+            "hunter" => AdminCommand.SetHunter,
             _ => null,
         };
         if (admin is not AdminCommand cmd)
@@ -932,6 +1156,20 @@ public sealed class GameServer : INetEventListener
                     return;
                 }
                 argument = target.Id;
+                break;
+            case AdminCommand.SetHunter:
+                if (arg == "")
+                {
+                    argument = -1; // random
+                    break;
+                }
+                Player? hunter = FindPlayer(arg);
+                if (hunter == null)
+                {
+                    Reply(p, CommandResults.NoPlayer, arg);
+                    return;
+                }
+                argument = hunter.Id;
                 break;
         }
 
@@ -1003,6 +1241,8 @@ public sealed class GameServer : INetEventListener
             return;
         }
         Log($"Disconnection of {p.Name} (#{p.Id}): {info.Reason}");
+        lastPosition.Remove(p.Id);
+        OnLeftHunt(p);
         if (p.HasSaidHello)
         {
             Broadcast(Msg.PlayerLeft(writer, p.Id), DeliveryMethod.ReliableOrdered, except: null);
@@ -1064,6 +1304,9 @@ public sealed class GameServer : INetEventListener
                 case MessageType.Spectate:
                     OnSpectate(p, reader.GetBool());
                     break;
+                case MessageType.Tag:
+                    OnTag(p, reader.GetInt(), reader.GetInt());
+                    break;
                 case MessageType.Settings:
                 {
                     var (settings, save) = Msg.GetSettings(reader);
@@ -1119,6 +1362,10 @@ public sealed class GameServer : INetEventListener
         {
             p.Peer.Send(Msg.Round(writer, CurrentRoundInfo()), DeliveryMethod.ReliableOrdered);
             p.Peer.Send(Msg.Leaderboard(writer, roundId, SortedLeaderboard()), DeliveryMethod.ReliableOrdered);
+            if (IsHideAndSeek)
+            {
+                p.Peer.Send(Msg.HideSeek(writer, CurrentHideSeek()), DeliveryMethod.ReliableOrdered);
+            }
         }
         if (standings.Count > 0)
         {
@@ -1135,6 +1382,14 @@ public sealed class GameServer : INetEventListener
             p.Peer.Send(Msg.MapChanged(writer, EchoIdOffset + p.Id, mapKey), DeliveryMethod.ReliableOrdered);
         }
         Log($"{p.Name} (#{p.Id}) → {(mapKey == "" ? "menu" : mapKey)}");
+
+        // Hide and Seek: a mouse leaving the map during the hunt can't be found anymore: it's out.
+        if (IsHideAndSeek && phase == RoundPhase.Playing && Now >= SeekStart && mice.ContainsKey(p.Id) && !found.Contains(p.Id)
+            && !Msg.MapMatches(mapKey, CurrentMap))
+        {
+            MouseOut(p.Id, p.Name);
+            BroadcastEvent(ServerEvents.MouseForfeit, p.Name);
+        }
     }
 
     private void OnState(Player p, PlayerState state)
@@ -1144,6 +1399,7 @@ public sealed class GameServer : INetEventListener
         {
             return; // spectators are invisible
         }
+        lastPosition[p.Id] = state.Position;
         Broadcast(Msg.State(writer, p.Id, state), DeliveryMethod.Unreliable, except: p);
         if (options.Echo)
         {

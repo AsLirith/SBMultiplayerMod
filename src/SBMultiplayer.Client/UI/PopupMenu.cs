@@ -117,7 +117,7 @@ internal static class PopupMenu
             .Add(new Label(text));
 
     /// <summary>Horizontal line of elements (buttons…).</summary>
-    public static Element Line(params Element[] items) => new PanelStack(22f, vertical: false).Add(items);
+    public static Element Line(params Element?[] items) => new PanelStack(22f, vertical: false).AddMaybeNull(items);
 
     /// <summary>Grid of elements, <paramref name="perRow"/> per line.</summary>
     public static Element Grid(IReadOnlyList<Element> items, int perRow)

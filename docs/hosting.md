@@ -71,6 +71,15 @@ A player's current map key (e.g. `o:1:2001`) is shown in the server console when
   Players who arrive after the start wait on the start line until the next round.
 - **Cup**: like Rounds, but reaching `CupPointsLimit` points makes you a **finalist** (your points stop there). A finalist who wins a round **wins the cup**. Then a new match starts.
 - **Elimination**: like Rounds, but each round the last `EliminatedPerRound` players are **eliminated** (players who gave up count as last, and at least one player always survives). Eliminated players watch the others from the start line. The last player standing wins, then a new match starts.
+- **Hide and Seek**: one player is the **hunter**, the others are **mice**.
+  1. Everyone waits on the start line, like in Rounds. Then the hunter is picked: the player chosen by an admin (F8 > Admin > Next hunter, or `/hunter <name>`), otherwise a random player, never the hunter of the previous round.
+  2. The mice leave and have `HideSeconds` to hide. Meanwhile the hunter stays frozen on the start line and can't see them.
+  3. When the hiding time is over, each mouse is **frozen where it is**, as soon as it touches a surface (never in mid-air). A frozen mouse can use the free camera (F) or follow a player (Left / Right, Down to stop) to watch the hunt, but can't move its board. Leaving the hiding place (restarting, leaving the map) counts as being found.
+  4. The hunter has `RoundSeconds` to find the mice: **aim at a mouse and press the grind button** (left click by default). The mouse must be within 25 m, near the crosshair, and not behind a wall. The hunter doesn't see name tags and can't use the free camera.
+  5. Found mice watch the rest of the hunt, or become hunters too with `Infection`. The round ends when every mouse is found or at the time limit.
+  6. **Points**: each mouse found gives its finder `RoundSeconds / number of players` points; each mouse gets 1 point per second spent hidden during the hunt. The match lasts `RoundsPerMap` rounds per map, over the rotation.
+
+  Best on big maps with hiding spots, such as freeroam levels (B7, C9, E6).
 
 ## End-of-game screen
 
@@ -78,7 +87,8 @@ At the end of a game, every player sees a full-screen summary with the winner an
 
 - **Time Attack**: at the end of each round (end of the timer): best times, gaps and match points;
 - **Rounds**: at the end of the rotation (last round of the last map): match points; then a new match starts;
-- **Cup** and **Elimination**: when the winner is decided; then a new match starts.
+- **Cup** and **Elimination**: when the winner is decided; then a new match starts;
+- **Hide and Seek**: at the end of the rotation, like Rounds.
 
 ## Spectators
 

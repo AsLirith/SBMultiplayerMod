@@ -61,8 +61,8 @@ internal static class Tr
     public static string CommandReply(string code, string arg) => code switch
     {
         SBMultiplayer.Protocol.CommandResults.Help when arg == "admin" => T(
-            "Commands: /help, /login <password>, /next, /restart, /pause, /extend [seconds], /map <number>, /kick <name>, /resetmatch",
-            "Commandes : /help, /login <mot de passe>, /next, /restart, /pause, /extend [secondes], /map <numéro>, /kick <pseudo>, /resetmatch"),
+            "Commands: /help, /login <password>, /next, /restart, /pause, /extend [seconds], /map <number>, /kick <name>, /resetmatch, /hunter [name]",
+            "Commandes : /help, /login <mot de passe>, /next, /restart, /pause, /extend [secondes], /map <numéro>, /kick <pseudo>, /resetmatch, /hunter [pseudo]"),
         SBMultiplayer.Protocol.CommandResults.Help => T(
             "Commands: /help, /login <admin password> (admin commands: /next, /restart, /pause, /extend, /map, /kick, /resetmatch)",
             "Commandes : /help, /login <mot de passe admin> (commandes admin : /next, /restart, /pause, /extend, /map, /kick, /resetmatch)"),
@@ -139,6 +139,11 @@ internal static class Tr
         SBMultiplayer.Protocol.ServerEvents.Eliminated => T($"Eliminated: {arg}", $"Éliminé(s) : {arg}"),
         SBMultiplayer.Protocol.ServerEvents.Finalist => T($"{arg} is now a finalist", $"{arg} est finaliste"),
         SBMultiplayer.Protocol.ServerEvents.MatchWon => T($"{arg} wins the match!", $"{arg} remporte le match !"),
+        SBMultiplayer.Protocol.ServerEvents.HunterChosen => T($"{arg} is the hunter!", $"{arg} est le chasseur !"),
+        SBMultiplayer.Protocol.ServerEvents.MouseFound => MouseFound(arg),
+        SBMultiplayer.Protocol.ServerEvents.MouseForfeit => T($"{arg} left their hiding place", $"{arg} a quitté sa cachette"),
+        SBMultiplayer.Protocol.ServerEvents.HuntersWin => T($"Every mouse was found: {arg} wins the round!", $"Toutes les souris ont été trouvées : victoire de {arg} !"),
+        SBMultiplayer.Protocol.ServerEvents.MiceSurvived => T($"Time's up! Surviving mice: {arg}", $"Temps écoulé ! Souris survivantes : {arg}"),
         _ => $"{code} {arg}",
     };
 
@@ -163,6 +168,7 @@ internal static class Tr
         SBMultiplayer.Protocol.GameMode.Rounds => "Rounds",
         SBMultiplayer.Protocol.GameMode.Cup => "Cup",
         SBMultiplayer.Protocol.GameMode.Elimination => T("Elimination", "Élimination"),
+        SBMultiplayer.Protocol.GameMode.HideAndSeek => T("Hide and Seek", "Cache-cache"),
         _ => mode.ToString(),
     };
 
@@ -184,7 +190,7 @@ internal static class Tr
     public static string SettingsRoundSeconds => T("Round duration", "Durée du round");
     public static string SettingsTimeLimit => T("Time limit after the start", "Limite de temps après le départ");
     public static string SettingsResultsSeconds => T("Results screen", "Écran de résultats");
-    public static string SettingsRoundsPerMap => T("Rounds per map (Rounds, Cup, Elimination)", "Manches par map (Rounds, Cup, Élimination)");
+    public static string SettingsRoundsPerMap => T("Rounds per map", "Manches par map");
     public static string SettingsFinishTimeout => T("End of round after the 1st finisher", "Fin de manche après le 1er arrivé");
     public static string SettingsPrepareTimeout => T("Max wait for players", "Attente max des joueurs");
     public static string SettingsCountdown => T("Start countdown", "Compte à rebours du départ");
@@ -218,6 +224,8 @@ internal static class Tr
         SBMultiplayer.Protocol.GameMode.Rounds => T("Synchronized start, one attempt per round, points by race time.", "Départ synchronisé, une tentative par manche, points selon le temps."),
         SBMultiplayer.Protocol.GameMode.Cup => T("Like Rounds; reach the points limit to become a finalist, then win a round to win the cup.", "Comme Rounds ; atteins la limite de points pour être finaliste, puis gagne une manche pour remporter la Cup."),
         SBMultiplayer.Protocol.GameMode.Elimination => T("Like Rounds; the slowest players are eliminated each round until one is left.", "Comme Rounds ; les plus lents sont éliminés à chaque manche jusqu'au dernier."),
+        SBMultiplayer.Protocol.GameMode.HideAndSeek => T("A hunter is frozen while the mice hide, then the mice are frozen and the hunter has to find them (aim + grind button).",
+            "Un chasseur est gelé pendant que les souris se cachent, puis les souris sont gelées et le chasseur doit les trouver (viser + bouton de grind)."),
         _ => "",
     };
 
@@ -240,6 +248,7 @@ internal static class Tr
         SBMultiplayer.Protocol.GameMode.Rounds => T("End of the match - Rounds", "Fin du match - Rounds"),
         SBMultiplayer.Protocol.GameMode.Cup => T("End of the cup", "Fin de la Cup"),
         SBMultiplayer.Protocol.GameMode.Elimination => T("End of the elimination", "Fin de l'élimination"),
+        SBMultiplayer.Protocol.GameMode.HideAndSeek => T("End of the match - Hide and Seek", "Fin du match - Cache-cache"),
         _ => T("End of the game", "Fin de partie"),
     };
     public static string WinnerAnnounce(string name) => T($"Winner: {name}", $"Vainqueur : {name}");
@@ -247,6 +256,39 @@ internal static class Tr
     public static string AndMore(int n) => T($"... and {n} more", $"... et {n} autre{(n > 1 ? "s" : "")}");
     public static string NextGameIn(int seconds) => T($"Next game in {seconds} s", $"Partie suivante dans {seconds} s");
     public static string SettingsMatchEnd => T("End-of-game screen", "Écran de fin de partie");
+
+    // ---------- Hide and Seek ----------
+    private static string MouseFound(string arg)
+    {
+        string[] names = arg.Split('\n');
+        string hunter = names[0];
+        string mouse = names.Length > 1 ? names[1] : "?";
+        return T($"{hunter} found {mouse}!", $"{hunter} a trouvé {mouse} !");
+    }
+    public static string HsYouAreHunter => T("You are the HUNTER", "Tu es le CHASSEUR");
+    public static string HsYouAreMouse => T("You are a MOUSE", "Tu es une SOURIS");
+    public static string HsMiceHiding => T("The mice are hiding... you'll be released in", "Les souris se cachent... tu seras libéré dans");
+    public static string HsHide => T("Hide!", "Cache-toi !");
+    public static string HsHuntBegins => T("The hunt begins!", "La chasse commence !");
+    public static string HsAimHint => T("Aim at a mouse and press grind (left click) to find it", "Vise une souris et appuie sur grind (clic gauche) pour la trouver");
+    public static string HsFrozen => T("Frozen in your hiding place", "Gelé dans ta cachette");
+    public static string HsFrozenTitle => T("FROZEN", "GELÉ");
+    public static string HsFoundTitle => T("FOUND", "TROUVÉ");
+    public static string HsFrozenKeys => T("F: free camera / your view    Left / Right: follow a player    Down: stop following",
+        "F : caméra libre / ta vue    Gauche / Droite : suivre un joueur    Bas : arrêter de suivre");
+    public static string HsLandToFreeze => T("Hunt started: you'll be frozen as soon as you touch a surface", "La chasse a commencé : tu seras gelé dès que tu touches une surface");
+    public static string HsYouAreHunterNow => T("You were found: you're a hunter now!", "Tu as été trouvé : tu es chasseur maintenant !");
+    public static string HsHunters(string names) => T($"Hunter: {names}", $"Chasseur : {names}");
+    public static string HsMiceLeft(int hidden, int total) => T($"Mice hidden: {hidden}/{total}", $"Souris cachées : {hidden}/{total}");
+    public static string HsFoundTag => T("found", "trouvée");
+    public static string HsHidingClock => T("Hiding", "Cache");
+    public static string SettingsHideSeconds => T("Hiding time", "Temps pour se cacher");
+    public static string SettingsHuntSeconds => T("Hunting time", "Temps de recherche");
+    public static string SettingsInfection => T("Found mice become hunters (infection)", "Les souris trouvées deviennent chasseuses (contagion)");
+    public static string AdminNextHunter => T("Next hunter", "Prochain chasseur");
+    public static string AdminRandomHunter => T("Random", "Au hasard");
+    public static string AdminHunterSet(string name) => T($"{name} will be the next hunter", $"{name} sera le prochain chasseur");
+    public static string AdminHunterRandom => T("The next hunter will be random", "Le prochain chasseur sera tiré au hasard");
 
     public static string IncompatibleNotice(string version) =>
         T($"SBMultiplayer v{version}: incompatible with this game version, update the mod",

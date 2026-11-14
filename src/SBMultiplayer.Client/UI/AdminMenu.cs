@@ -55,6 +55,7 @@ internal static class AdminMenu
             Line(
                 Button(Tr.AdminChangeMap, OpenMaps),
                 Button(Tr.AdminPlayersButton, OpenPlayers),
+                Client.ServerSettings?.Mode == GameMode.HideAndSeek ? Button(Tr.AdminNextHunter, OpenNextHunter) : null,
                 Button(Tr.AdminResetMatch, () => Client.Admin(AdminCommand.ResetMatch))),
             Section(Tr.AdminServerSection),
             Line(
@@ -92,6 +93,32 @@ internal static class AdminMenu
         })).ToList();
         return Stack(Title(Tr.AdminChangeMap), Grid(buttons, 3), Button(Tr.Back, close));
     }, () => Client.AdminVersion);
+
+    // ---------- Hide and Seek: next hunter ----------
+
+    private static void OpenNextHunter() => Show("admin-hunter", (close, _) =>
+    {
+        var everyone = Client.Players.Values.Where(p => p.Id < EchoIdOffset).Select(p => (p.Id, p.Name)).ToList();
+        if (Client.LocalId is int me)
+        {
+            everyone.Add((me, Client.PlayerName));
+        }
+        var buttons = everyone.OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase).Select(p => Button(p.Name, () =>
+        {
+            Client.Admin(AdminCommand.SetHunter, p.Id);
+            Notifications.Info(Tr.AdminHunterSet(p.Name));
+            close();
+        })).ToList();
+        return Stack(
+            Title(Tr.AdminNextHunter),
+            Grid(buttons, 3),
+            Line(Button(Tr.AdminRandomHunter, () =>
+            {
+                Client.Admin(AdminCommand.SetHunter, -1);
+                Notifications.Info(Tr.AdminHunterRandom);
+                close();
+            }), Button(Tr.Back, close)));
+    }, () => Client.Players.Count * 31 + Client.AdminVersion);
 
     // ---------- Players (kick) ----------
 

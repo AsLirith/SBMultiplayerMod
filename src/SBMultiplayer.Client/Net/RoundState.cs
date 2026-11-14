@@ -25,6 +25,18 @@ internal sealed class RoundState
 
     public Snapshot Current => current;
 
+    /// <summary>Hide and Seek roles of a round (sets of player ids).</summary>
+    public sealed record HideSeekState(int RoundId, HashSet<int> Hunters, HashSet<int> Mice, HashSet<int> Found)
+    {
+        public static readonly HideSeekState Empty = new(-1, new HashSet<int>(), new HashSet<int>(), new HashSet<int>());
+    }
+
+    /// <summary>Hide and Seek roles, replaced as a whole by the network thread.</summary>
+    public volatile HideSeekState HideSeek = HideSeekState.Empty;
+
+    public void SetHideSeek(HideSeekInfo info) =>
+        HideSeek = new HideSeekState(info.RoundId, new HashSet<int>(info.Hunters), new HashSet<int>(info.Mice), new HashSet<int>(info.Found));
+
     /// <param name="oneWayLatencySeconds">Server → client delay, to compute the start signal time.</param>
     public void SetInfo(RoundInfo info, double oneWayLatencySeconds)
     {
@@ -51,5 +63,6 @@ internal sealed class RoundState
     {
         current = new(new RoundInfo(0, "", RoundPhase.Free, 0, 0, 0, false), 0, new List<LeaderboardEntry>());
         Standings = new List<StandingEntry>();
+        HideSeek = HideSeekState.Empty;
     }
 }

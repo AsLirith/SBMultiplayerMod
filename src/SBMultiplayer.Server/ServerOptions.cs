@@ -25,10 +25,10 @@ public sealed class ServerOptions
     /// <summary>Map rotation ("o:1", "o:57:2001"…). Empty = free mode, no rounds.</summary>
     public List<string> Maps { get; set; } = new();
 
-    /// <summary>Game mode: Free, TimeAttack, Rounds, Cup or Elimination (see the hosting guide).</summary>
+    /// <summary>Game mode: Free, TimeAttack, Rounds, Cup, Elimination or HideAndSeek (see the hosting guide).</summary>
     public GameMode Mode { get; set; } = GameMode.TimeAttack;
 
-    /// <summary>Time Attack: round duration. Rounds: time limit of a round after the start.</summary>
+    /// <summary>Time Attack: round duration. Rounds: time limit of a round after the start. Hide and Seek: hunting time.</summary>
     public double RoundSeconds { get; set; } = 300;
 
     /// <summary>Rounds mode: number of rounds played on each map before moving to the next one.</summary>
@@ -57,6 +57,12 @@ public sealed class ServerOptions
     /// <summary>Duration of the end-of-game screen (end of a Time Attack round, of a Rounds rotation, Cup or Elimination won).</summary>
     public double MatchEndSeconds { get; set; } = 20;
 
+    /// <summary>Hide and Seek: time the mice get to hide while the hunter is frozen on the start line.</summary>
+    public double HideSeconds { get; set; } = 30;
+
+    /// <summary>Hide and Seek: found mice become hunters (otherwise they watch the hunt).</summary>
+    public bool Infection { get; set; }
+
     /// <summary>Folder where round results and match standings are written ("" = no export).</summary>
     public string ResultsDirectory { get; set; } = "results";
 
@@ -80,6 +86,8 @@ public sealed class ServerOptions
         CupPointsLimit = CupPointsLimit,
         EliminatedPerRound = EliminatedPerRound,
         MatchEndSeconds = MatchEndSeconds,
+        HideSeconds = HideSeconds,
+        Infection = Infection,
     };
 
     /// <summary>Applies settings received from an admin, clamped to sane ranges. Returns an error, or null.</summary>
@@ -107,6 +115,8 @@ public sealed class ServerOptions
         CupPointsLimit = Math.Clamp(s.CupPointsLimit, 1, 100_000);
         EliminatedPerRound = Math.Clamp(s.EliminatedPerRound, 1, 16);
         MatchEndSeconds = Math.Clamp(s.MatchEndSeconds, 3, 300);
+        HideSeconds = Math.Clamp(s.HideSeconds, 5, 600);
+        Infection = s.Infection;
         return null;
     }
 
@@ -132,6 +142,8 @@ public sealed class ServerOptions
             .Replace("\"CupPointsLimit\": 100", $"\"CupPointsLimit\": {CupPointsLimit}")
             .Replace("\"EliminatedPerRound\": 1", $"\"EliminatedPerRound\": {EliminatedPerRound}")
             .Replace("\"MatchEndSeconds\": 20", $"\"MatchEndSeconds\": {N(MatchEndSeconds)}")
+            .Replace("\"HideSeconds\": 30", $"\"HideSeconds\": {N(HideSeconds)}")
+            .Replace("\"Infection\": false", $"\"Infection\": {(Infection ? "true" : "false")}")
             .Replace("\"PointsTable\": [ 10, 8, 6, 5, 4, 3, 2, 1 ]", $"\"PointsTable\": [ {string.Join(", ", PointsTable)} ]")
             .Replace("\"ResultsDirectory\": \"results\"", $"\"ResultsDirectory\": {J(ResultsDirectory)}");
         File.WriteAllText(path, text);
@@ -172,9 +184,11 @@ public sealed class ServerOptions
           //    going back to the start means giving up), points by race time.
           //  - "Cup": like Rounds; reaching CupPointsLimit makes you a finalist, and a finalist who wins a round wins the cup.
           //  - "Elimination": like Rounds, but the slowest players of each round are eliminated until one is left.
+          //  - "HideAndSeek": a random hunter (never twice in a row) is frozen while the mice hide; then the mice are
+          //    frozen where they are and the hunter has RoundSeconds to find them (aim at a mouse and click).
           "Mode": "TimeAttack",
 
-          // Time Attack: round duration. Rounds: time limit after the start. In seconds.
+          // Time Attack: round duration. Rounds: time limit after the start. Hide and Seek: hunting time. In seconds.
           "RoundSeconds": 300,
           "ResultsSeconds": 15,
 
@@ -197,6 +211,11 @@ public sealed class ServerOptions
           // End-of-game screen (final standings and winner), in seconds: shown at the end of each Time Attack
           // round, at the end of the rotation in Rounds mode, and when a Cup or an Elimination is won.
           "MatchEndSeconds": 20,
+
+          // Hide and Seek: hiding time in seconds, and whether found mice become hunters ("infection").
+          // Points: the finder gets RoundSeconds / number of players per mouse found, mice get 1 point per second hidden.
+          "HideSeconds": 30,
+          "Infection": false,
 
           // Folder for round results (JSON) and match standings (CSV). Empty = no export.
           "ResultsDirectory": "results"

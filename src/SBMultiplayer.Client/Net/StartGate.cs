@@ -119,7 +119,10 @@ internal static class StartGate
         switch (state)
         {
             case RunState.Waiting:
-                if (round.Info.Phase != RoundPhase.Playing || round.GoAt is not double goAt || NetClock.Now < goAt)
+            {
+                // Hide and Seek: the mice leave at the start signal, the hunter after the hiding time.
+                double? releaseAt = round.Info.Mode == GameMode.HideAndSeek ? HideSeek.ReleaseTime(HideSeek.LocalRole) : round.GoAt;
+                if (round.Info.Phase != RoundPhase.Playing || releaseAt is not double goAt || NetClock.Now < goAt)
                 {
                     return false; // waiting for players or for the countdown
                 }
@@ -133,6 +136,10 @@ internal static class StartGate
                 ModLog.Info($"Start! (round {round.Info.RoundId}, {(NetClock.Now - goAt) * 1000:0} ms after the signal)");
                 release();
                 return true;
+            }
+
+            case RunState.Racing when round.Info.Mode == GameMode.HideAndSeek:
+                return true; // Hide and Seek: back to the start (restart, finish line) is allowed, nothing to give up
 
             case RunState.Racing:
                 // Back on the start line after the release: restarting = giving up this round.

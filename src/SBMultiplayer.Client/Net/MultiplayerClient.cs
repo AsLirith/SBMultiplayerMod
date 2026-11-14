@@ -156,6 +156,7 @@ internal sealed class MultiplayerClient : INetEventListener
         HandleHotkeys();
         PopupMenu.Tick();
         StartGate.Tick(this);
+        HideSeek.Tick();
         TrackLocalSkin();
         EnsureConnected();
         FlushPendingFinish();
@@ -214,6 +215,22 @@ internal sealed class MultiplayerClient : INetEventListener
             if (Pressed(keys, "Left"))
             {
                 Spectator.Cycle(-1);
+            }
+        }
+        else if (HideSeek.KeepFrozen)
+        {
+            // Frozen mouse: follow a player (the hunter first) or go back to the free camera.
+            if (Pressed(keys, "Right") || Pressed(keys, "Left"))
+            {
+                if (HideSeek.FollowRequested)
+                {
+                    Spectator.Cycle(Pressed(keys, "Right") ? +1 : -1);
+                }
+                HideSeek.FollowRequested = true;
+            }
+            if (Pressed(keys, "Down"))
+            {
+                HideSeek.FollowRequested = false;
             }
         }
         previousKeys = keys;
@@ -519,6 +536,9 @@ internal sealed class MultiplayerClient : INetEventListener
     public void SendReady(int roundId) => Send(w => Msg.Ready(w, roundId), DeliveryMethod.ReliableOrdered);
 
     public void SendGiveUp(int roundId) => Send(w => Msg.GiveUp(w, roundId), DeliveryMethod.ReliableOrdered);
+
+    /// <summary>Hide and Seek: we found this mouse (or, with our own id, we left our hiding place).</summary>
+    public void SendTag(int roundId, int targetId) => Send(w => Msg.Tag(w, roundId, targetId), DeliveryMethod.ReliableOrdered);
 
     public void SendChat(string text)
     {
@@ -849,6 +869,9 @@ internal sealed class MultiplayerClient : INetEventListener
                     break;
                 case MessageType.MatchStandings:
                     Round.Standings = Msg.GetStandings(reader);
+                    break;
+                case MessageType.HideSeek:
+                    Round.SetHideSeek(Msg.GetHideSeek(reader));
                     break;
                 case MessageType.State:
                 {

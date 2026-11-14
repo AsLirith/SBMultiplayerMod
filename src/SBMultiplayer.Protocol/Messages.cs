@@ -5,7 +5,7 @@ namespace SBMultiplayer.Protocol;
 public static class ProtocolInfo
 {
     /// <summary>Increment on every incompatible change to the message format.</summary>
-    public const int Version = 10;
+    public const int Version = 11;
 
     public const int DefaultPort = 24800;
 
@@ -65,6 +65,16 @@ public static class ServerEvents
     public const string Finalist = "FINALIST";
     /// <summary>Argument: name of the match winner (Rounds: end of the rotation).</summary>
     public const string MatchWon = "MATCH_WON";
+    /// <summary>Hide and Seek: argument = names of this round's hunters, comma-separated.</summary>
+    public const string HunterChosen = "HUNTER_CHOSEN";
+    /// <summary>Hide and Seek: argument = "hunter name\nmouse name".</summary>
+    public const string MouseFound = "MOUSE_FOUND";
+    /// <summary>Hide and Seek: argument = name of the mouse that left its hiding place (counts as found).</summary>
+    public const string MouseForfeit = "MOUSE_FORFEIT";
+    /// <summary>Hide and Seek: every mouse was found. Argument = names of the hunters.</summary>
+    public const string HuntersWin = "HUNTERS_WIN";
+    /// <summary>Hide and Seek: time is up. Argument = names of the surviving mice, comma-separated.</summary>
+    public const string MiceSurvived = "MICE_SURVIVED";
 }
 
 /// <summary>Replies to chat commands, sent to the issuer only and translated by the client. Argument depends on the code.</summary>
@@ -101,6 +111,8 @@ public enum AdminCommand : byte
     /// <summary>Argument: player id.</summary>
     Kick = 6,
     ResetMatch = 7,
+    /// <summary>Hide and Seek: argument = id of the player who will be the next hunter (-1 = random).</summary>
+    SetHunter = 8,
 }
 
 public enum MessageType : byte
@@ -167,6 +179,12 @@ public enum MessageType : byte
 
     /// <summary>C→S (without id) and S→C (with id), reliable. Switch to spectator or back into the game.</summary>
     Spectate = 21,
+
+    /// <summary>C→S, reliable. Hide and Seek: the hunter found a mouse (round id, mouse id). A mouse sending its own id forfeits.</summary>
+    Tag = 22,
+
+    /// <summary>S→C, reliable. Hide and Seek: hunters, mice and found mice of the current round.</summary>
+    HideSeek = 23,
 }
 
 public enum RoundPhase : byte
@@ -200,12 +218,15 @@ public enum GameMode : byte
 
     /// <summary>No rounds: everyone rides wherever they want (even with a map list).</summary>
     Free = 4,
+
+    /// <summary>Hunters look for the hidden mice; the mice are frozen once the hiding time is over.</summary>
+    HideAndSeek = 5,
 }
 
 public static class GameModes
 {
     /// <summary>Synchronized-start modes (one attempt per round).</summary>
-    public static bool IsSynchronized(this GameMode mode) => mode is GameMode.Rounds or GameMode.Cup or GameMode.Elimination;
+    public static bool IsSynchronized(this GameMode mode) => mode is GameMode.Rounds or GameMode.Cup or GameMode.Elimination or GameMode.HideAndSeek;
 }
 
 public enum StandingStatus : byte
@@ -237,6 +258,10 @@ public sealed class MatchSettings
     public int CupPointsLimit { get; set; } = 100;
     public int EliminatedPerRound { get; set; } = 1;
     public double MatchEndSeconds { get; set; } = 20;
+    /// <summary>Hide and Seek: time the mice get to hide while the hunter is frozen.</summary>
+    public double HideSeconds { get; set; } = 30;
+    /// <summary>Hide and Seek: found mice become hunters (otherwise they watch).</summary>
+    public bool Infection { get; set; }
 
     /// <summary>Serialization metadata generated at compile time (no reflection needed).</summary>
     public static System.Text.Json.Serialization.Metadata.JsonTypeInfo<MatchSettings> JsonInfo => ProtocolJson.Default.MatchSettings;
@@ -255,9 +280,30 @@ internal partial class ProtocolJson : System.Text.Json.Serialization.JsonSeriali
 /// <param name="PointsLimit">Cup: points limit to become a finalist.</param>
 /// <param name="MatchEnded">Results phase: the game is over (end of the round in Time Attack, end of the rotation in Rounds,
 /// a winner in Cup / Elimination): clients show the end-of-game screen.</param>
+/// <param name="HideSeconds">Hide and Seek: hiding time after the start; the hunt starts at StartIn + HideSeconds.</param>
+/// <param name="Infection">Hide and Seek: found mice become hunters.</param>
 public readonly record struct RoundInfo(int RoundId, string MapKey, RoundPhase Phase, float RemainingSeconds, int MapIndex, int MapCount, bool Paused,
     GameMode Mode = GameMode.TimeAttack, float StartIn = 0, int RoundInMap = 1, int RoundsPerMap = 1, int ReadyCount = 0, int PlayerCount = 0,
-    int PointsLimit = 0, bool MatchEnded = false);
+    int PointsLimit = 0, bool MatchEnded = false, float HideSeconds = 0, bool Infection = false);
+
+/// <summary>Hide and Seek roles of a round (player ids). Found mice are also listed in <paramref name="Mice"/>.</summary>
+public readonly record struct HideSeekInfo(int RoundId, int[] Hunters, int[] Mice, int[] Found)
+{
+    public static HideSeekInfo None => new(-1, Array.Empty<int>(), Array.Empty<int>(), Array.Empty<int>());
+}
+
+/// <summary>Hide and Seek rules shared by the server and the clients.</summary>
+public static class HideSeekRules
+{
+    /// <summary>Maximum distance between the hunter's camera and a mouse to find it, in game units (cm).</summary>
+    public const float TagRange = 2500;
+
+    /// <summary>Server check, measured between boards (the camera is behind the board): generous margin for latency.</summary>
+    public const float ServerTagRange = TagRange * 1.5f + 800;
+
+    /// <summary>A mouse still in the air this long after the hiding time is frozen anyway.</summary>
+    public const double MaxAirSecondsBeforeFreeze = 5;
+}
 
 public readonly record struct LeaderboardEntry(int PlayerId, string Name, uint BestMs);
 
@@ -369,12 +415,14 @@ public static class Msg
         w.Put(r.PlayerCount);
         w.Put(r.PointsLimit);
         w.Put(r.MatchEnded);
+        w.Put(r.HideSeconds);
+        w.Put(r.Infection);
         return w;
     }
 
     public static RoundInfo GetRound(NetDataReader r) =>
         new(r.GetInt(), r.GetString(256), (RoundPhase)r.GetByte(), r.GetFloat(), r.GetInt(), r.GetInt(), r.GetBool(),
-            (GameMode)r.GetByte(), r.GetFloat(), r.GetInt(), r.GetInt(), r.GetInt(), r.GetInt(), r.GetInt(), r.GetBool());
+            (GameMode)r.GetByte(), r.GetFloat(), r.GetInt(), r.GetInt(), r.GetInt(), r.GetInt(), r.GetInt(), r.GetBool(), r.GetFloat(), r.GetBool());
 
     /// <summary>S→C (admins): current settings. C→S: settings to apply (+ save to the config file).</summary>
     public static NetDataWriter Settings(NetDataWriter w, MatchSettings settings, bool saveToFile)
@@ -628,6 +676,50 @@ public static class Msg
         }
         w.Put(spectating);
         return w;
+    }
+
+    /// <summary>C→S, Hide and Seek: the hunter found this mouse (or a mouse gives up with its own id).</summary>
+    public static NetDataWriter Tag(NetDataWriter w, int roundId, int targetId)
+    {
+        w.Reset();
+        w.Put((byte)MessageType.Tag);
+        w.Put(roundId);
+        w.Put(targetId);
+        return w;
+    }
+
+    /// <summary>S→C, Hide and Seek: roles of the current round.</summary>
+    public static NetDataWriter HideSeek(NetDataWriter w, in HideSeekInfo info)
+    {
+        w.Reset();
+        w.Put((byte)MessageType.HideSeek);
+        w.Put(info.RoundId);
+        PutIds(w, info.Hunters);
+        PutIds(w, info.Mice);
+        PutIds(w, info.Found);
+        return w;
+    }
+
+    public static HideSeekInfo GetHideSeek(NetDataReader r) => new(r.GetInt(), GetIds(r), GetIds(r), GetIds(r));
+
+    private static void PutIds(NetDataWriter w, IReadOnlyCollection<int> ids)
+    {
+        w.Put(ids.Count);
+        foreach (int id in ids)
+        {
+            w.Put(id);
+        }
+    }
+
+    private static int[] GetIds(NetDataReader r)
+    {
+        int count = Math.Clamp(r.GetInt(), 0, 1024);
+        var ids = new int[count];
+        for (int i = 0; i < count; i++)
+        {
+            ids[i] = r.GetInt();
+        }
+        return ids;
     }
 
     public static void Put(NetDataWriter w, in PlayerInfo p)

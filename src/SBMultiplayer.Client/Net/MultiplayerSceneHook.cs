@@ -59,6 +59,7 @@ internal sealed class MultiplayerSceneHook : IUpdate, ICheckpointStorage, IGoalR
         client.SetMap(this, mapKey);
         // Synchronized start (Rounds mode) needs to know whether a start-line popup is a start or a respawn.
         StartGate.CheckpointManager = scene.AllThings.OfType<CheckpointManager>().FirstOrDefault();
+        HideSeek.Attach(scene, board);
         // Splits: the game's own time difference display compares with our best run of the round.
         SplitTracker.AttachTo(scene.AllThings.OfType<TimeDiffOnCheckpoints>().FirstOrDefault(), mapKey, client.Round.Current.Info.RoundId);
         return true;
@@ -74,17 +75,24 @@ internal sealed class MultiplayerSceneHook : IUpdate, ICheckpointStorage, IGoalR
         tick++;
         if (tick % SendEveryTicks == 0)
         {
-            GhostState s = GameAccess.GetGhostState(board);
-            localPosition = s.Position;
-            client.SendState(new PlayerState(NetClock.Now,
-                new Vec3(s.Position.X, s.Position.Y, s.Position.Z),
-                new Vec3(s.Orientation.X, s.Orientation.Y, s.Orientation.Z),
-                segment,
-                new Vec3(s.CamPosition.X, s.CamPosition.Y, s.CamPosition.Z),
-                new Vec3(s.CamOrientation.X, s.CamOrientation.Y, s.CamOrientation.Z)));
+            SendState();
         }
 
         SyncGhosts();
+    }
+
+    private double nextFrozenStateAt;
+
+    private void SendState()
+    {
+        GhostState s = GameAccess.GetGhostState(board!);
+        localPosition = s.Position;
+        client.SendState(new PlayerState(NetClock.Now,
+            new Vec3(s.Position.X, s.Position.Y, s.Position.Z),
+            new Vec3(s.Orientation.X, s.Orientation.Y, s.Orientation.Z),
+            segment,
+            new Vec3(s.CamPosition.X, s.CamPosition.Y, s.CamPosition.Z),
+            new Vec3(s.CamOrientation.X, s.CamOrientation.Y, s.CamOrientation.Z)));
     }
 
     /// <summary>Creates or removes ghosts to match the list of players on our map.</summary>
@@ -92,7 +100,7 @@ internal sealed class MultiplayerSceneHook : IUpdate, ICheckpointStorage, IGoalR
     {
         foreach (RemotePlayer p in client.Players.Values)
         {
-            bool shouldShow = UI.ModSettings.ShowOtherPlayers.Value && p.MapKey == mapKey && !p.IsSpectator;
+            bool shouldShow = UI.ModSettings.ShowOtherPlayers.Value && p.MapKey == mapKey && !p.IsSpectator && !HideSeek.HideFromLocal(p);
             bool shown = ghosts.TryGetValue(p.Id, out var entry) && ReferenceEquals(entry.Player, p);
             if (shouldShow && !shown)
             {
@@ -149,7 +157,7 @@ internal sealed class MultiplayerSceneHook : IUpdate, ICheckpointStorage, IGoalR
             return;
         }
         // The time is always read (splits), but only sent to the server during a round, on its map.
-        bool counts = client.IsOnRoundMap && round.Info.Phase == RoundPhase.Playing;
+        bool counts = client.IsOnRoundMap && round.Info.Phase == RoundPhase.Playing && round.Info.Mode != GameMode.HideAndSeek;
         client.QueueFinish(round.Info.RoundId, timer, scene.AllThings.OfType<TimeDiffOnCheckpoints>().FirstOrDefault(), sendToServer: counts);
     }
 
@@ -165,6 +173,12 @@ internal sealed class MultiplayerSceneHook : IUpdate, ICheckpointStorage, IGoalR
         {
             // Other players are also visible while waiting at the start.
             SyncGhosts();
+            if (HideSeek.KeepFrozen && NetClock.Now >= nextFrozenStateAt)
+            {
+                // Frozen mouse: the scene no longer updates, but the server and newcomers still need our position.
+                nextFrozenStateAt = NetClock.Now + 0.5;
+                SendState();
+            }
         }
         Spectator.Sync(scene); // spectator camera on top of the scene's cameras (also under the start-line popup)
         try

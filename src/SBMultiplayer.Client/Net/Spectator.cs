@@ -31,18 +31,19 @@ internal static class Spectator
         get
         {
             MultiplayerClient client = MultiplayerClient.Instance;
-            return client.IsReady && (client.IsSpectating || StartGate.IsEliminated);
+            return client.IsReady && (client.IsSpectating || StartGate.IsEliminated || HideSeek.IsWatcher);
         }
     }
 
-    /// <summary>Players that can be followed: on our map, not spectating.</summary>
+    /// <summary>Players that can be followed: on our map, not spectating (Hide and Seek: hunters first).</summary>
     private static List<RemotePlayer> Candidates()
     {
         MultiplayerClient client = MultiplayerClient.Instance;
         string map = client.CurrentMapKey;
         return client.Players.Values
-            .Where(p => !p.IsSpectator && p.MapKey == map && map != "")
-            .OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase)
+            .Where(p => !p.IsSpectator && p.MapKey == map && map != "" && !HideSeek.HideFromLocal(p))
+            .OrderBy(p => HideSeek.RoleOf(p.Id) == HideSeek.Role.Hunter ? 0 : 1)
+            .ThenBy(p => p.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
     }
 
@@ -71,8 +72,10 @@ internal static class Spectator
     {
         IngameCameras? cameras = GameAccess.GetIngameCameras(scene);
         bool watching = IsWatching;
+        // Hide and Seek: a frozen mouse can follow a player instead of using the free camera.
+        bool following = watching || (HideSeek.KeepFrozen && HideSeek.FollowRequested);
 
-        if (watching)
+        if (following)
         {
             var candidates = Candidates();
             if (Target is not { } target || !candidates.Contains(target))
@@ -81,7 +84,7 @@ internal static class Spectator
             }
         }
 
-        bool showCamera = watching && TargetId != null && cameras != null;
+        bool showCamera = following && TargetId != null && cameras != null;
         if (cameraOwner != null && (!showCamera || cameraOwner != cameras))
         {
             cameraOwner.Cameras.Remove(Camera);
@@ -92,6 +95,12 @@ internal static class Spectator
             // Last camera of the list wins. The game's free camera, added later, goes on top of ours.
             cameras!.Cameras.Add(Camera);
             cameraOwner = cameras;
+        }
+        else if (showCamera && HideSeek.KeepFrozen && cameras!.Cameras.Count > 0 && cameras.Cameras[^1] != Camera)
+        {
+            // The free camera of the freeze was added after ours: put ours back on top.
+            cameras.Cameras.Remove(Camera);
+            cameras.Cameras.Add(Camera);
         }
 
         SyncFreeCamera(watching);
@@ -107,7 +116,8 @@ internal static class Spectator
         }
         if (toggler != null)
         {
-            CanFlyProperty.SetValue(toggler, watching || flyWasAllowed);
+            // Hide and Seek: no free camera for the players of the round (frozen mice get it from the freeze).
+            CanFlyProperty.SetValue(toggler, !HideSeek.BlocksFreeCamera && (watching || flyWasAllowed));
         }
     }
 
