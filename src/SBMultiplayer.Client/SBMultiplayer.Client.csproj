@@ -18,12 +18,17 @@
     <Reference Include="STUNTBOOST" HintPath="$(GameDir)/STUNTBOOST.dll" Private="false" />
     <Reference Include="BytingLib" HintPath="$(GameLibDir)/BytingLib.dll" Private="false" />
     <Reference Include="MonoGame.Framework" HintPath="$(GameLibDir)/MonoGame.Framework.dll" Private="false" />
+    <Reference Include="Steamworks.NET" HintPath="$(GameLibDir)/Steamworks.NET.dll" Private="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../SBMultiplayer.Protocol/SBMultiplayer.Protocol.csproj" />
   </ItemGroup>
 
   <!-- Après chaque build : copie du mod dans le dossier du jeu -->
   <Target Name="DeployMod" AfterTargets="Build" Condition="Exists('$(GameDir)/STUNTBOOST.dll')">
     <ItemGroup>
-      <ModFiles Include="$(OutDir)SBMultiplayer.Client.dll;$(OutDir)SBMultiplayer.Client.pdb;$(OutDir)0Harmony.dll" />
+      <ModFiles Include="$(OutDir)SBMultiplayer.Client.dll;$(OutDir)SBMultiplayer.Client.pdb;$(OutDir)0Harmony.dll;$(OutDir)LiteNetLib.dll;$(OutDir)SBMultiplayer.Protocol.dll" />
     </ItemGroup>
     <MakeDir Directories="$(ModDeployDir)" />
     <Copy SourceFiles="@(ModFiles)" DestinationFolder="$(ModDeployDir)" SkipUnchangedFiles="true" />

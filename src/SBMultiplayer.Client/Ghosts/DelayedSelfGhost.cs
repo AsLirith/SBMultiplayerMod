@@ -19,7 +19,7 @@ internal sealed class DelayedSelfGhost : IUpdate, ICheckpointStorage, IGhostPose
     private Board? board;
     private NetGhostBoard? ghost;
     private int tick;
-    private bool pendingTeleport = true;
+    private ushort segment;
 
     public DelayedSelfGhost(Scene scene)
     {
@@ -43,8 +43,7 @@ internal sealed class DelayedSelfGhost : IUpdate, ICheckpointStorage, IGhostPose
 
         tick++;
         GhostState s = GameAccess.GetGhostState(board);
-        buffer.Add(new Snapshot(tick / (double)GameAccess.TicksPerSecond, s.Position, s.Orientation, pendingTeleport));
-        pendingTeleport = false;
+        buffer.Add(new Snapshot(tick / (double)GameAccess.TicksPerSecond, s.Position, s.Orientation, segment));
     }
 
     public bool TryGetPose(float extrapolation, out Vector3 position, out Vector3 orientation)
@@ -67,6 +66,6 @@ internal sealed class DelayedSelfGhost : IUpdate, ICheckpointStorage, IGhostPose
     public void LoadCheckpoint(ICheckpointInfo checkpointInfo)
     {
         // Restart ou respawn : la planche est téléportée, le ghost ne doit pas « glisser » jusqu'au point de respawn.
-        pendingTeleport = true;
+        segment++;
     }
 }

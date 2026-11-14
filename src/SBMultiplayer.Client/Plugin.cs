@@ -11,6 +11,8 @@ internal static class Plugin
     public static void Load()
     {
         ModLog.Info($"Runtime .NET {Environment.Version}, Harmony {typeof(Harmony).Assembly.GetName().Version}");
+        Net.ModConfig.Load(Path.GetDirectoryName(typeof(Plugin).Assembly.Location)!);
+        ModLog.Info($"Serveur configuré : {Net.ModConfig.Current.Server}");
 
         Harmony = new Harmony(HarmonyId);
         Harmony.PatchAll(typeof(Plugin).Assembly);

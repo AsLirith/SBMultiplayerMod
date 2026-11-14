@@ -1,0 +1,23 @@
+SBMultiplayer — mod multijoueur non officiel pour STUNTBOOST (version de test)
+==============================================================================
+
+⚠ Tant que le mod est actif, le jeu n'enregistre AUCUN temps, ni en ligne ni en local.
+  Pour désinstaller, il suffit de retirer l'option de lancement Steam.
+
+1) Copier le dossier "SBMultiplayer" dans le dossier du jeu
+   (Steam > STUNTBOOST > clic droit > Gérer > Parcourir les fichiers locaux).
+
+2) Ouvrir SBMultiplayer/SBMultiplayer.json et remplacer l'adresse du serveur :
+     "Server": "ADRESSE_DU_SERVEUR:24800",
+
+3) Steam > STUNTBOOST > Propriétés > Options de lancement :
+
+   Linux :
+     DOTNET_STARTUP_HOOKS="/chemin/vers/STUNTBOOST/SBMultiplayer/SBMultiplayer.Client.dll" %command%
+
+   Windows (pas d'espace avant le && !) :
+     cmd /c "set DOTNET_STARTUP_HOOKS=C:\chemin\vers\STUNTBOOST\SBMultiplayer\SBMultiplayer.Client.dll&& %command%"
+
+4) Lancer un niveau. Les joueurs présents sur le même niveau apparaissent en planches translucides.
+
+Problème ? Envoyer le fichier SBMultiplayer/SBMultiplayer.log.

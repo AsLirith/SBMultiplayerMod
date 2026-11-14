@@ -8,8 +8,9 @@ namespace SBMultiplayer.Client.Ghosts;
 /// </summary>
 /// <param name="Time">Horodatage en secondes (temps local pour l'instant, temps serveur plus tard).</param>
 /// <param name="Orientation">(pitch, yaw, roll) comme <c>SE.GhostState.Orientation</c>.</param>
-/// <param name="Teleport">Vrai si la planche a été téléportée (restart, respawn) : pas d'interpolation depuis l'état précédent.</param>
-internal readonly record struct Snapshot(double Time, Vector3 Position, Vector3 Orientation, bool Teleport);
+/// <param name="Segment">Incrémenté à chaque téléportation (restart, respawn) : on n'interpole jamais entre deux segments.
+/// Plus robuste qu'un simple drapeau quand des paquets se perdent ou arrivent dans le désordre.</param>
+internal readonly record struct Snapshot(double Time, Vector3 Position, Vector3 Orientation, ushort Segment);
 
 /// <summary>
 /// Tampon d'états horodatés, triés par temps, avec interpolation.
@@ -88,7 +89,7 @@ internal sealed class SnapshotBuffer
         Snapshot a = snapshots[bi - 1];
         Snapshot b = snapshots[bi];
 
-        if (b.Teleport)
+        if (a.Segment != b.Segment)
         {
             (position, orientation) = (a.Position, a.Orientation);
             return true;

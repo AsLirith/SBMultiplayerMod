@@ -2,3 +2,4 @@ _decompiled/
 bin/
 obj/
 *.user
+dist/

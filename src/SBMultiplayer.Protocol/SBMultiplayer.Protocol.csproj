@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Partagé par le client (dans le jeu) et le serveur. Aucune dépendance au jeu ni à MonoGame. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="LiteNetLib" Version="1.3.1" />
+  </ItemGroup>
+
+</Project>

@@ -1,5 +1,7 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/SBMultiplayer.Client/SBMultiplayer.Client.csproj" />
+    <Project Path="src/SBMultiplayer.Protocol/SBMultiplayer.Protocol.csproj" />
+    <Project Path="src/SBMultiplayer.Server/SBMultiplayer.Server.csproj" />
   </Folder>
 </Solution>

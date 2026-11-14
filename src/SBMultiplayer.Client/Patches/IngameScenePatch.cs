@@ -1,6 +1,7 @@
 using System.Reflection;
 using BytingLib;
 using HarmonyLib;
+using SBMultiplayer.Client.Net;
 
 namespace SBMultiplayer.Client.Patches;
 
@@ -33,9 +34,15 @@ internal static class IngameScenePatch
                 return;
             }
 
-            scene.Add(new DebugProbe(scene));
-            scene.Add(new Ghosts.DelayedSelfGhost(scene));
-            ModLog.Info("Sonde et ghost retardé ajoutés à une nouvelle scène de niveau");
+            scene.Add(new MultiplayerSceneHook(scene));
+            if (ModConfig.Current.DebugProbe)
+            {
+                scene.Add(new DebugProbe(scene));
+            }
+            if (ModConfig.Current.DebugDelayedSelfGhost)
+            {
+                scene.Add(new Ghosts.DelayedSelfGhost(scene));
+            }
         }
         catch (Exception e)
         {
