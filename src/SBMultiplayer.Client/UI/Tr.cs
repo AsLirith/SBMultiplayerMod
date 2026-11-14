@@ -49,9 +49,9 @@ internal static class Tr
     public static string ShowSplits => T("Checkpoint splits", "Temps intermédiaires");
     public static string RoundPanel => T("Round panel", "Panneau du round");
     public static string RoundPanelSize => T("Round panel size", "Taille du panneau du round");
-    public static string KeysHint(string menuKey, string rejoinKey, string chatKey) =>
-        T($"{menuKey}: this menu    {rejoinKey}: join the round's map    {chatKey}: chat",
-          $"{menuKey} : ce menu    {rejoinKey} : rejoindre la map du round    {chatKey} : chat");
+    public static string KeysHint(string menuKey, string rejoinKey, string chatKey, string scoreboardKey) =>
+        T($"{menuKey}: this menu    {rejoinKey}: join the round's map    {chatKey}: chat    {scoreboardKey} (hold): players",
+          $"{menuKey} : ce menu    {rejoinKey} : rejoindre la map du round    {chatKey} : chat    {scoreboardKey} (maintenir) : joueurs");
     public static string ShowChat => T("Show chat", "Afficher le chat");
     public static string ChatSize => T("Chat size", "Taille du chat");
     public static string NotificationsOnTop => T("Notifications at the top of the screen", "Notifications en haut de l'écran");
@@ -61,11 +61,11 @@ internal static class Tr
     public static string CommandReply(string code, string arg) => code switch
     {
         SBMultiplayer.Protocol.CommandResults.Help when arg == "admin" => T(
-            "Commands: /help, /login <password>, /next, /restart, /pause, /extend [seconds], /map <number>, /kick <name>, /resetmatch, /hunter [name]",
-            "Commandes : /help, /login <mot de passe>, /next, /restart, /pause, /extend [secondes], /map <numéro>, /kick <pseudo>, /resetmatch, /hunter [pseudo]"),
+            "Commands: /help, /locate <name|all>, /goto <name>, /ignore [name], /unignore <name>, /login <password>, /next, /restart, /pause, /extend [seconds], /map <number>, /kick <name>, /resetmatch, /hunter [name]",
+            "Commandes : /help, /locate <pseudo|all>, /goto <pseudo>, /ignore [pseudo], /unignore <pseudo>, /login <mot de passe>, /next, /restart, /pause, /extend [secondes], /map <numéro>, /kick <pseudo>, /resetmatch, /hunter [pseudo]"),
         SBMultiplayer.Protocol.CommandResults.Help => T(
-            "Commands: /help, /login <admin password> (admin commands: /next, /restart, /pause, /extend, /map, /kick, /resetmatch)",
-            "Commandes : /help, /login <mot de passe admin> (commandes admin : /next, /restart, /pause, /extend, /map, /kick, /resetmatch)"),
+            "Commands: /help, /locate <name|all>, /goto <name>, /ignore [name], /unignore <name>, /login <admin password> (admin commands: /next, /restart, /pause, /extend, /map, /kick, /resetmatch, /hunter)",
+            "Commandes : /help, /locate <pseudo|all>, /goto <pseudo>, /ignore [pseudo], /unignore <pseudo>, /login <mot de passe admin> (commandes admin : /next, /restart, /pause, /extend, /map, /kick, /resetmatch, /hunter)"),
         SBMultiplayer.Protocol.CommandResults.NotAdmin => T("Admin only: log in with /login <password> or F8 > Admin", "Réservé aux admins : connecte-toi avec /login <mot de passe> ou F8 > Admin"),
         SBMultiplayer.Protocol.CommandResults.NoRound => T("No round in progress", "Aucun round en cours"),
         SBMultiplayer.Protocol.CommandResults.Usage => T($"Usage: {arg}", $"Utilisation : {arg}"),
@@ -256,6 +256,29 @@ internal static class Tr
     public static string AndMore(int n) => T($"... and {n} more", $"... et {n} autre{(n > 1 ? "s" : "")}");
     public static string NextGameIn(int seconds) => T($"Next game in {seconds} s", $"Partie suivante dans {seconds} s");
     public static string SettingsMatchEnd => T("End-of-game screen", "Écran de fin de partie");
+
+    // ---------- Local commands and player list ----------
+    public static string Usage(string usage) => T($"Usage: {usage}", $"Utilisation : {usage}");
+    public static string NoPlayerMatching(string query) => T($"No player matching \"{query}\"", $"Aucun joueur ne correspond à \"{query}\"");
+    public static string LocateMenus => T("in the menus", "dans les menus");
+    public static string LocateLocalMap => T("a local map (not on the Workshop)", "une map locale (pas sur le Workshop)");
+    public static string GotoInMenus(string name) => T($"{name} is in the menus", $"{name} est dans les menus");
+    public static string GotoLocalMap(string name) => T($"{name} is on a local map: you can't join it", $"{name} est sur une map locale : impossible de le rejoindre");
+    public static string GotoSameMap(string name) => T($"You're already on {name}'s map", $"Tu es déjà sur la map de {name}");
+    public static string GotoLoading(string name, string map) => T($"Joining {name} on {map}", $"Direction la map de {name} : {map}");
+    public static string IgnoreListEmpty => T("You're not ignoring anyone (/ignore <name>)", "Tu n'ignores personne (/ignore <pseudo>)");
+    public static string IgnoreList(string names) => T($"Ignored: {names}", $"Ignorés : {names}");
+    public static string Ignored(string name) => T($"{name}'s messages are now hidden (/unignore {name} to undo)", $"Les messages de {name} sont masqués (/unignore {name} pour annuler)");
+    public static string Unignored(string name) => T($"{name}'s messages are shown again", $"Les messages de {name} sont de nouveau affichés");
+    public static string ScoreboardTitle(int count) => T($"Players ({count})", $"Joueurs ({count})");
+    public static string ScoreName => T("Player", "Joueur");
+    public static string ScoreMap => T("Map", "Map");
+    public static string ScoreStatus => T("Status", "Statut");
+    public static string ScorePoints => T("Points", "Points");
+    public static string RoleHunter => T("hunter", "chasseur");
+    public static string RoleMouse => T("mouse", "souris");
+    public static string RoleFound => T("found", "trouvé");
+    public static string YouTag => T("(you)", "(toi)");
 
     // ---------- Hide and Seek ----------
     private static string MouseFound(string arg)

@@ -19,7 +19,13 @@ internal static class ChatLog
 
     public static readonly Color SystemColor = new(170, 170, 170);
 
-    public static void AddPlayer(string name, string text) => Add(new Entry(name, text, Color.White, NetClock.Now));
+    public static void AddPlayer(string name, string text)
+    {
+        if (!LocalCommands.IsIgnored(name))
+        {
+            Add(new Entry(name, text, Color.White, NetClock.Now));
+        }
+    }
 
     public static void AddSystem(string text, Color? color = null)
     {

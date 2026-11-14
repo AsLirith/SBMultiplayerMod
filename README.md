@@ -16,7 +16,8 @@ Unofficial multiplayer mod for [STUNTBOOST](https://store.steampowered.com/app/2
 - **Checkpoint splits** compared to your best run of the round.
 - **End-of-game screen** with the winner and the final standings (end of a Time Attack round, of a Rounds rotation, of a Cup or an Elimination).
 - **Spectator mode** (F8 > Spectate): invisible and out of the rounds, watch through any player's own camera (Left / Right to switch) or the game's free camera (F). Eliminated players spectate automatically.
-- **Chat (Tab)** with admin commands (`/next`, `/map`, `/kick`… see `/help`).
+- **Chat (Enter)** with commands: `/locate <name|all>` (which map a player is on), `/goto <name>` (join a player's map), `/ignore <name>`, and admin commands (`/next`, `/map`, `/kick`… see `/help`).
+- **Player list (hold Tab)**: everyone connected, their map, status (spectator, hunter...) and match points.
 - **Admin panel (F8 > Admin)**: skip, restart, pause, extend the round, choose the map, kick players, reset the match.
 - **F7** to rejoin the round's map. On-screen notifications for connection, players, rounds and your times.
 - Interface in **English or French**, following the game's language.

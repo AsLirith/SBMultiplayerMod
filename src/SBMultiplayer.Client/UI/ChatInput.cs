@@ -9,7 +9,8 @@ using SBMultiplayer.Protocol;
 namespace SBMultiplayer.Client.UI;
 
 /// <summary>
-/// Chat input (Tab by default): a small popup with the game's text field. Enter sends, Escape cancels.
+/// Chat input (Enter by default): a small popup with the game's text field. Enter sends, Escape cancels.
+/// Commands the mod handles itself (<see cref="LocalCommands"/>) are not sent to the server.
 /// Like any game popup, it pauses the local game while typing.
 /// </summary>
 internal static class ChatInput
@@ -17,6 +18,11 @@ internal static class ChatInput
     private static readonly Color InputBackground = new(0x5F, 0x5A, 0x59);
 
     public static bool IsOpen { get; private set; }
+
+    /// <summary>The key that opened the chat may also be Enter: ignore it for a moment, or the chat would send at once.</summary>
+    private const double OpenGuardSeconds = 0.2;
+
+    private static double openedAt;
 
     public static void Open()
     {
@@ -38,12 +44,17 @@ internal static class ChatInput
     private static Scene Create(Action close)
     {
         IsOpen = true;
+        openedAt = NetClock.Now;
         SE.UIAssets ui = GameAccess.UiAssets;
         var input = new TextInput(GameAccess.UpdateSpeed, "", 1800f, ui.FontSmall.Value.LineSpacing) { MaxTextLength = ProtocolInfo.MaxChatLength };
         input.OnEnter += () =>
         {
+            if (NetClock.Now - openedAt < OpenGuardSeconds)
+            {
+                return true;
+            }
             string text = input.Text.Trim();
-            if (text.Length > 0)
+            if (text.Length > 0 && !LocalCommands.TryHandle(text))
             {
                 MultiplayerClient.Instance.SendChat(text);
             }

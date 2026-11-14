@@ -72,6 +72,10 @@ internal sealed class GlobalOverlay : SE.IDrawBatch2
             }
             finally
             {
+                if (MultiplayerClient.ScoreboardHeld && MultiplayerClient.Instance.IsReady)
+                {
+                    DrawScoreboard(sb, vp, scale); // on top of everything while the key is held
+                }
                 sb.End();
             }
         }
@@ -79,6 +83,96 @@ internal sealed class GlobalOverlay : SE.IDrawBatch2
         {
             disabled = true;
             ModLog.Error("Global overlay disabled after an error", e);
+        }
+    }
+
+    // ---------- Player list (held key) ----------
+
+    private readonly record struct ScoreRow(string Name, string Place, string Status, string Points, Color Color);
+
+    /// <summary>Everyone connected: name, map, status (spectator, hunter, eliminated...) and match points.</summary>
+    private void DrawScoreboard(SpriteBatch sb, Viewport vp, float scale)
+    {
+        MultiplayerClient client = MultiplayerClient.Instance;
+        RoundState.Snapshot round = client.Round.Current;
+        IReadOnlyList<StandingEntry> standings = client.Round.Standings;
+
+        var players = client.Players.Values.Where(p => p.Id < 1_000_000)
+            .Select(p => (Id: p.Id, p.Name, p.MapKey, Spectating: (bool)p.IsSpectator, Me: false)).ToList();
+        if (client.LocalId is int myId)
+        {
+            players.Add((myId, client.PlayerName, client.CurrentMapKey, client.IsSpectating, true));
+        }
+
+        string StatusOf(int id, string name, bool spectating)
+        {
+            if (spectating)
+            {
+                return Tr.SpectatorTitle.ToLowerInvariant();
+            }
+            switch (HideSeek.RoleOf(id))
+            {
+                case HideSeek.Role.Hunter:
+                    return Tr.RoleHunter;
+                case HideSeek.Role.Mouse:
+                    return HideSeek.IsFound(id) ? Tr.RoleFound : Tr.RoleMouse;
+            }
+            return standings.FirstOrDefault(s => s.Name == name).Status switch
+            {
+                StandingStatus.Finalist => Tr.FinalistTag,
+                StandingStatus.Eliminated => Tr.EliminatedTag,
+                StandingStatus.Winner => Tr.WinnerTag,
+                _ => "",
+            };
+        }
+
+        var rows = players
+            .Select(p => (p, Points: standings.FirstOrDefault(s => s.Name == p.Name).Points))
+            .OrderByDescending(x => x.Points).ThenBy(x => x.p.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(x => new ScoreRow(
+                x.p.Me ? $"{x.p.Name} {Tr.YouTag}" : x.p.Name,
+                LocalCommands.DescribePlace(x.p.MapKey, false),
+                StatusOf(x.p.Id, x.p.Name, x.p.Spectating),
+                standings.Count > 0 ? x.Points.ToString() : "",
+                x.p.Me ? Gold : x.p.Spectating ? new Color(170, 170, 170) : Color.Gainsboro))
+            .ToList();
+
+        const int MaxRows = 24;
+        float rowScale = scale * (rows.Count > 16 ? 0.48f : 0.58f);
+        float lineHeight = text.LineHeight(rowScale) * 1.1f;
+        float titleScale = scale * 0.8f;
+        int shown = Math.Min(rows.Count, MaxRows);
+        int panelWidth = (int)Math.Min(vp.Width - 32, 1250 * scale);
+        int panelHeight = (int)(text.LineHeight(titleScale) * 1.6f + lineHeight * (shown + 1 + (shown < rows.Count ? 1 : 0)) + 50 * scale);
+        var panel = new Rectangle((vp.Width - panelWidth) / 2, (int)(vp.Height * 0.14f), panelWidth, panelHeight);
+        FillRect(sb, panel, new Color(20, 20, 24) * 0.85f);
+
+        float cx = vp.Width / 2f;
+        float y = panel.Y + 18 * scale;
+        string subtitle = round.IsRound ? $"  -  {Tr.ModeName(round.Info.Mode)}: {GameAccess.DescribeMap(round.Info.MapKey)}" : "";
+        text.DrawCentered(sb, Tr.ScoreboardTitle(players.Count) + subtitle, cx, ref y, Color.White, titleScale);
+        y += 8 * scale;
+
+        // Columns: name | map | status | points.
+        float left = panel.X + 30 * scale;
+        float width = panelWidth - 60 * scale;
+        float[] at = { 0f, 0.3f, 0.72f, 0.9f };
+        void Columns(string a, string b, string c, string d, Color color, float s)
+        {
+            text.DrawOutlined(sb, text.Fit(a, width * 0.28f, s), new Vector2(left + width * at[0], y), color, s);
+            text.DrawOutlined(sb, text.Fit(b, width * 0.4f, s), new Vector2(left + width * at[1], y), color, s);
+            text.DrawOutlined(sb, text.Fit(c, width * 0.17f, s), new Vector2(left + width * at[2], y), color, s);
+            text.DrawOutlined(sb, d, new Vector2(left + width * at[3], y), color, s);
+            y += lineHeight;
+        }
+        Columns(Tr.ScoreName, Tr.ScoreMap, Tr.ScoreStatus, standings.Count > 0 ? Tr.ScorePoints : "", Gold, rowScale);
+        foreach (ScoreRow row in rows.Take(shown))
+        {
+            Columns(row.Name, row.Place, row.Status, row.Points, row.Color, rowScale);
+        }
+        if (shown < rows.Count)
+        {
+            text.DrawCentered(sb, Tr.AndMore(rows.Count - shown), cx, ref y, Color.LightGray, rowScale * 0.9f);
         }
     }
 

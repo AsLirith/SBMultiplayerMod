@@ -30,6 +30,9 @@ internal static class PopupMenu
 
     public static bool IsOpen(string id) => OpenIds.Contains(id);
 
+    /// <summary>One of the mod's menus is open.</summary>
+    public static bool AnyOpen => OpenIds.Count > 0;
+
     private static void Show(Definition def)
     {
         if (OpenIds.Contains(def.Id) || GameAccess.Game == null)

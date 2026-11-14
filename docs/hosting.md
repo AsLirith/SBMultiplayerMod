@@ -107,7 +107,7 @@ Durations and points apply from the next round. Changing the mode or the maps re
 
 At the end of each round, players get **match points** according to their rank (`PointsTable`). The match standings are shown to players on the results screen, and kept until you reset them.
 
-Admins control the match from the game, either with the admin panel (**F8 > Admin**) or with chat commands (**Tab** opens the chat), after logging in with `AdminPassword` (in the panel, or `/login <password>` in the chat). The server console has the same commands:
+Admins control the match from the game, either with the admin panel (**F8 > Admin**) or with chat commands (**Enter** opens the chat), after logging in with `AdminPassword` (in the panel, or `/login <password>` in the chat). The server console has the same commands:
 
 | Console | Chat | In-game admin panel | Effect |
 |---|---|---|---|

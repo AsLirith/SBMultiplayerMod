@@ -65,8 +65,14 @@ internal sealed class ModConfig
     /// <summary>Key to join the current round's map.</summary>
     public string RejoinKey { get; set; } = "F7";
 
-    /// <summary>Key to write in the chat.</summary>
-    public string ChatKey { get; set; } = "Tab";
+    /// <summary>Key to write in the chat. With Enter (the game's confirm key), the chat only opens in a level.</summary>
+    public string ChatKey { get; set; } = "Enter";
+
+    /// <summary>Key to hold to show the player list (name, map, role, points).</summary>
+    public string ScoreboardKey { get; set; } = "Tab";
+
+    /// <summary>Players whose chat messages are hidden (/ignore).</summary>
+    public List<string> IgnoredPlayers { get; set; } = new();
 
     /// <summary>Shows the chat (messages and events) at the bottom left.</summary>
     public bool ShowChat { get; set; } = true;
@@ -137,6 +143,13 @@ internal sealed class ModConfig
         {
             ModLog.Error($"Unreadable configuration ({path}), using default values", e);
             Current = new ModConfig();
+        }
+
+        // Before 0.16, Tab opened the chat: it's the player list now, and the chat moves to Enter.
+        if (Current.ChatKey.Equals("Tab", StringComparison.OrdinalIgnoreCase))
+        {
+            Current.ChatKey = "Enter";
+            Save();
         }
 
         string envServer = Environment.GetEnvironmentVariable("SBMULTI_SERVER") ?? "";

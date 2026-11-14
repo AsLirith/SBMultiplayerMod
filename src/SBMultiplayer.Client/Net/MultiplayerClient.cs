@@ -192,9 +192,11 @@ internal sealed class MultiplayerClient : INetEventListener
         if (GameAccess.IsTyping() || ChatInput.IsOpen)
         {
             previousKeys = keys; // no hotkeys while typing text
+            ScoreboardHeld = false;
             return;
         }
-        if (Pressed(keys, ModConfig.Current.ChatKey))
+        ScoreboardHeld = Down(keys, ModConfig.Current.ScoreboardKey) && !PopupMenu.AnyOpen;
+        if (Pressed(keys, ModConfig.Current.ChatKey) && CanOpenChat())
         {
             ChatInput.Open();
         }
@@ -234,6 +236,40 @@ internal sealed class MultiplayerClient : INetEventListener
             }
         }
         previousKeys = keys;
+    }
+
+    /// <summary>The player list key is held (see <see cref="GlobalOverlay"/>).</summary>
+    public static bool ScoreboardHeld { get; private set; }
+
+    private static bool Down(KeyboardState keys, string keyName) =>
+        Enum.TryParse(keyName, ignoreCase: true, out Keys key) && keys.IsKeyDown(key);
+
+    private static readonly Type? ClickToStartSceneType = HarmonyLib.AccessTools.TypeByName("SE.ClickToStartScene");
+
+    /// <summary>
+    /// Enter is also the game's confirm key: with it, the chat only opens in a level, with no menu on top
+    /// (the start-line popup and the frozen Hide and Seek view are fine). Any other key works everywhere.
+    /// </summary>
+    private static bool CanOpenChat()
+    {
+        if (!ModConfig.Current.ChatKey.Equals("Enter", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+        BytingLib.Scene? scene = GameAccess.CurrentScene;
+        if (PopupMenu.AnyOpen || !GameAccess.IsIngameScene(scene))
+        {
+            return false;
+        }
+        BytingLib.Scene top = scene!.GetTopmostScene();
+        return ReferenceEquals(top, scene) || (ClickToStartSceneType?.IsInstanceOfType(top) ?? false);
+    }
+
+    /// <summary>Loads a map ("o:&lt;id&gt;" or "c:M&lt;id&gt;"), e.g. to join a player with /goto.</summary>
+    public void GoToMap(string key)
+    {
+        gameReady = true; // explicit request
+        LoadRoundMap(key);
     }
 
     private bool Pressed(KeyboardState keys, string keyName) =>
