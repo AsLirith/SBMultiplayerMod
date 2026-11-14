@@ -4,8 +4,8 @@ using SBMultiplayer.Client.Net;
 namespace SBMultiplayer.Client.UI;
 
 /// <summary>
-/// Réglages modifiables en jeu, sous forme de ValueEvent (le type attendu par les sliders et cases du jeu).
-/// Chaque changement s'applique immédiatement et est enregistré dans SBMultiplayer.json.
+/// Settings editable in game, as ValueEvent (the type expected by the game's sliders and checkboxes).
+/// Every change applies immediately and is saved to SBMultiplayer.json.
 /// </summary>
 internal static class ModSettings
 {

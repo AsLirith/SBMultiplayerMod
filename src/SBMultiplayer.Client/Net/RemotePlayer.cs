@@ -5,7 +5,7 @@ using SBMultiplayer.Protocol;
 
 namespace SBMultiplayer.Client.Net;
 
-/// <summary>Horloge locale monotone, en secondes.</summary>
+/// <summary>Monotonic local clock, in seconds.</summary>
 internal static class NetClock
 {
     private static readonly Stopwatch Watch = Stopwatch.StartNew();
@@ -14,13 +14,13 @@ internal static class NetClock
 }
 
 /// <summary>
-/// Un autre joueur. Écrit depuis le thread réseau, lu depuis le thread de rendu : tout passe par <see cref="gate"/>.
+/// Another player. Written from the network thread, read from the render thread: everything goes through <see cref="gate"/>.
 /// </summary>
 internal sealed class RemotePlayer : IGhostPoseSource
 {
     /// <summary>
-    /// Retard volontaire d'affichage : on dessine le passé pour toujours avoir deux états entre lesquels interpoler.
-    /// À 30 états/s (33 ms d'écart), 100 ms absorbent la gigue et un paquet perdu de temps en temps.
+    /// Deliberate display delay: the past is drawn so there are always two states to interpolate between.
+    /// At 30 states/s (33 ms apart), 100 ms absorb jitter and an occasional lost packet.
     /// </summary>
     public const double InterpolationDelay = 0.1;
 
@@ -38,7 +38,7 @@ internal sealed class RemotePlayer : IGhostPoseSource
         IsSpectator = info.IsSpectator;
     }
 
-    /// <summary>Skin de planche du joueur (id du jeu). Modifié par le thread réseau.</summary>
+    /// <summary>Player's board skin (game id). Changed by the network thread.</summary>
     public volatile int Skin;
 
     public int? SkinId => Skin;
@@ -75,8 +75,8 @@ internal sealed class RemotePlayer : IGhostPoseSource
         double now = NetClock.Now;
         lock (gate)
         {
-            // Écart entre l'horloge de l'émetteur et la nôtre (latence comprise). On retient le minimum observé,
-            // c.-à-d. le paquet le plus rapide, et on le laisse remonter très lentement si la latence augmente.
+            // Offset between the sender's clock and ours (latency included). The minimum observed is kept,
+            // i.e. the fastest packet, and allowed to creep up very slowly if latency increases.
             double sample = now - s.Time;
             if (clockOffset is not double offset || sample < offset)
             {

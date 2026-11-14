@@ -7,8 +7,8 @@ using SBMultiplayer.Client.UI;
 namespace SBMultiplayer.Client.Net;
 
 /// <summary>
-/// Pseudos au-dessus des ghosts proches. Dessiné dans la scène du niveau (il faut sa caméra).
-/// Le panneau du round et les notifications sont dans <see cref="GlobalOverlay"/>.
+/// Names above nearby ghosts. Drawn in the level scene (its camera is needed).
+/// The round panel and notifications are in <see cref="GlobalOverlay"/>.
 /// </summary>
 internal sealed class MultiplayerOverlay
 {
@@ -20,7 +20,7 @@ internal sealed class MultiplayerOverlay
         if (!disabled)
         {
             disabled = true;
-            ModLog.Error("Pseudos désactivés suite à une erreur", e);
+            ModLog.Error("Name tags disabled after an error", e);
         }
     }
 
@@ -61,7 +61,7 @@ internal sealed class MultiplayerOverlay
                 Vector4 clip = Vector4.Transform(new Vector4(pos + Vector3.Up * cfg.NameTagHeight, 1f), viewProjection);
                 if (clip.W <= 0.01f)
                 {
-                    continue; // derrière la caméra
+                    continue; // behind the camera
                 }
                 var ndc = new Vector2(clip.X / clip.W, clip.Y / clip.W);
                 if (Math.Abs(ndc.X) > 1.2f || Math.Abs(ndc.Y) > 1.2f)
@@ -70,7 +70,7 @@ internal sealed class MultiplayerOverlay
                 }
                 var screen = new Vector2((ndc.X * 0.5f + 0.5f) * vp.Width, (0.5f - ndc.Y * 0.5f) * vp.Height);
 
-                // Fondu sur le dernier quart de la distance, pour éviter l'apparition brutale.
+                // Fade over the last quarter of the distance, to avoid popping in.
                 float alpha = MathHelper.Clamp((cfg.NameTagMaxDistance - distance) / (cfg.NameTagMaxDistance * 0.25f), 0f, 1f);
                 Vector2 size = text.Measure(p.Name, textScale);
                 text.DrawOutlined(sb, p.Name, screen - new Vector2(size.X / 2f, size.Y), Color.White * alpha, textScale, alpha);

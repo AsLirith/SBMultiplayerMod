@@ -5,8 +5,8 @@ using SE;
 namespace SBMultiplayer.Client;
 
 /// <summary>
-/// Étape 1 : valide qu'un objet ajouté à la scène reçoit bien les ticks et les événements de course,
-/// et qu'on sait lire l'état du joueur (ce qu'on enverra plus tard sur le réseau).
+/// Debug (step 1): checks that an object added to the scene receives ticks and race events,
+/// and that the player's state can be read (what is sent over the network).
 /// </summary>
 internal sealed class DebugProbe : IUpdate, ICheckpointStorage, IGoalReached
 {
@@ -38,7 +38,7 @@ internal sealed class DebugProbe : IUpdate, ICheckpointStorage, IGoalReached
             if (!warnedNoBoard)
             {
                 warnedNoBoard = true;
-                ModLog.Warn($"tick {tick} : aucun Board trouvé dans la scène");
+                ModLog.Warn($"tick {tick}: no Board found in the scene");
             }
             return;
         }
@@ -51,7 +51,7 @@ internal sealed class DebugProbe : IUpdate, ICheckpointStorage, IGoalReached
     public void StoreCheckpoint(ICheckpointInfo checkpointInfo)
     {
         checkpointCount++;
-        ModLog.Info($"Checkpoint pris ({checkpointInfo.GetType().Name}), total {checkpointCount}");
+        ModLog.Info($"Checkpoint reached ({checkpointInfo.GetType().Name}), total {checkpointCount}");
     }
 
     public void LoadCheckpoint(ICheckpointInfo checkpointInfo)
@@ -59,16 +59,16 @@ internal sealed class DebugProbe : IUpdate, ICheckpointStorage, IGoalReached
         if (checkpointInfo is FirstCheckpoint)
         {
             checkpointCount = 0;
-            ModLog.Info("Restart de la run");
+            ModLog.Info("Run restarted");
         }
         else
         {
-            ModLog.Info($"Respawn au checkpoint ({checkpointInfo.GetType().Name})");
+            ModLog.Info($"Respawn at checkpoint ({checkpointInfo.GetType().Name})");
         }
     }
 
     public void GoalReached()
     {
-        ModLog.Info($"ARRIVÉE ! (tick {tick})");
+        ModLog.Info($"FINISH! (tick {tick})");
     }
 }

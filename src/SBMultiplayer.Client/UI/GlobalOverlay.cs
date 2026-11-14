@@ -8,8 +8,8 @@ using SBMultiplayer.Protocol;
 namespace SBMultiplayer.Client.UI;
 
 /// <summary>
-/// Couche d'interface globale (IDrawBatch2 dans la liste d'objets de GlobalGame) : dessinée par-dessus
-/// toutes les scènes, menus compris. Panneau du round en haut à droite, notifications en haut au centre.
+/// Global interface layer (IDrawBatch2 in GlobalGame's object list): drawn over
+/// every scene, menus included. Round panel at the top right, notifications at the top center.
 /// </summary>
 internal sealed class GlobalOverlay : SE.IDrawBatch2
 {
@@ -74,7 +74,7 @@ internal sealed class GlobalOverlay : SE.IDrawBatch2
         catch (Exception e)
         {
             disabled = true;
-            ModLog.Error("Overlay global désactivé suite à une erreur", e);
+            ModLog.Error("Global overlay disabled after an error", e);
         }
     }
 
@@ -394,7 +394,7 @@ internal sealed class GlobalOverlay : SE.IDrawBatch2
             DrawLeaderboard(sb, board, client.LocalId, right, ref y, s);
         }
 
-        // Pendant les résultats : classement du match (points cumulés sur les rounds).
+        // During results: match standings (points accumulated over the rounds).
         IReadOnlyList<StandingEntry> standings = client.Round.Standings;
         if (results && standings.Count > 0)
         {

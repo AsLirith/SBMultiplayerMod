@@ -7,9 +7,9 @@ using SE;
 namespace SBMultiplayer.Client.Patches;
 
 /// <summary>
-/// GlobalGame.GetTopmostScene() (3 lignes) est appelée une fois par tick par le moteur, juste après la
-/// mise à jour du jeu, quelle que soit la scène : c'est notre « tick global » (menus compris).
-/// Elle nous donne aussi l'instance de GlobalGame, nécessaire pour lancer des niveaux.
+/// GlobalGame.GetTopmostScene() (3 lines) is called once per tick by the engine, right after the
+/// game update, whatever the scene: it's our "global tick" (menus included).
+/// It also gives us the GlobalGame instance, needed to start levels.
 /// </summary>
 [HarmonyPatch(typeof(GlobalGame), "GetTopmostScene")]
 internal static class GlobalTickPatch
@@ -29,16 +29,16 @@ internal static class GlobalTickPatch
         }
         catch (Exception e)
         {
-            // Une exception ici tomberait à chaque tick : on la logge une fois et on coupe.
+            // An exception here would fire on every tick: log it once and switch off.
             failed = true;
-            ModLog.Error("GlobalTick désactivé suite à une erreur", e);
+            ModLog.Error("GlobalTick disabled after an error", e);
         }
     }
 }
 
 /// <summary>
-/// En round, l'écran de fin de niveau (sélection de niveau + classement officiel) est remplacé
-/// par un retry immédiat, pour enchaîner les tentatives comme en time attack.
+/// During a round, the level end screen (level selection + official leaderboard) is replaced
+/// by an immediate retry, to chain attempts like in time attack.
 /// </summary>
 [HarmonyPatch(typeof(GlobalGame), "LevelFinished")]
 internal static class LevelFinishedPatch
@@ -50,7 +50,7 @@ internal static class LevelFinishedPatch
             if (MultiplayerClient.Instance.IsOnRoundMap)
             {
                 GameAccess.RetryCurrentLevel();
-                return false; // on saute l'écran de fin
+                return false; // skip the end screen
             }
         }
         catch (Exception e)

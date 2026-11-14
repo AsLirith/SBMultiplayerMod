@@ -5,19 +5,19 @@ using SE;
 
 namespace SBMultiplayer.Client.Ghosts;
 
-/// <summary>Fournit la pose d'un ghost pour la frame en cours de dessin.</summary>
+/// <summary>Provides a ghost's pose for the frame being drawn.</summary>
 internal interface IGhostPoseSource
 {
-    /// <param name="extrapolation">Fraction [0, 1) écoulée depuis le dernier tick, donnée par le moteur.</param>
+    /// <param name="extrapolation">Fraction [0, 1) elapsed since the last tick, given by the engine.</param>
     bool TryGetPose(float extrapolation, out Vector3 position, out Vector3 orientation);
 
-    /// <summary>Skin de planche à afficher (id du jeu), ou null pour garder la texture courante.</summary>
+    /// <summary>Board skin to show (game id), or null to keep the current texture.</summary>
     int? SkinId => null;
 }
 
 /// <summary>
-/// Planche fantôme dessinée comme les ghosts du jeu (<c>SE.GhostBoard</c>), mais alimentée
-/// par une source quelconque (tampon réseau) au lieu d'un fichier de replay.
+/// Ghost board drawn like the game's ghosts (<c>SE.GhostBoard</c>), but fed
+/// by any source (network buffer) instead of a replay file.
 /// </summary>
 internal sealed class NetGhostBoard : BoardVisual, IDrawWorldSkinRender, IBeforeDraw, IDisposable
 {
@@ -36,7 +36,7 @@ internal sealed class NetGhostBoard : BoardVisual, IDrawWorldSkinRender, IBefore
         this.source = source;
         this.transparencyBatch = transparencyBatch;
         this.opacity = opacity;
-        // Même réglage que SE.GhostBoard : évite le z-fighting entre ghosts superposés.
+        // Same setting as SE.GhostBoard: avoids z-fighting between overlapping ghosts.
         rasterizerState = new RasterizerState
         {
             DepthBias = -zFightingIndex * 1E-05f + depthBias,
@@ -63,8 +63,8 @@ internal sealed class NetGhostBoard : BoardVisual, IDrawWorldSkinRender, IBefore
         Matrix transform = Matrix.CreateFromYawPitchRoll(rot.Y, rot.X, rot.Z) * Matrix.CreateTranslation(pos);
         void DrawNow()
         {
-            // Skin du joueur : on remplace la texture du modèle le temps du dessin, comme SE.GhostBoard.
-            // Le modèle est partagé avec notre propre planche : on remet toujours l'ancienne texture.
+            // Player's skin: the model's texture is swapped while drawing, like SE.GhostBoard.
+            // The model is shared with our own board: the old texture is always put back.
             TextureGL? boardTex = Assets.Model.Value.Textures?.Get(0);
             Ref<Texture2D>? skin = source.SkinId is int skinId ? SkinCache.Get(skinId) : null;
             Ref<Texture2D>? previous = boardTex?.Image.Tex2D;
@@ -91,7 +91,7 @@ internal sealed class NetGhostBoard : BoardVisual, IDrawWorldSkinRender, IBefore
 
         if (shaderRender != null && opacity.Value < 1f)
         {
-            // Objets transparents : dessinés plus tard, triés par profondeur (comme SE.GhostBoard).
+            // Transparent objects: drawn later, sorted by depth (like SE.GhostBoard).
             transparencyBatch.DrawLater(new Vector3(0f, -pos.Y, 0f), baked, DrawNow);
         }
         else

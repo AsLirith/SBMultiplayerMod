@@ -7,7 +7,7 @@ using SE;
 
 namespace SBMultiplayer.Client.Ghosts;
 
-/// <summary>Accès aux membres non publics du jeu, résolus une seule fois.</summary>
+/// <summary>Access to the game's non-public members, resolved once.</summary>
 internal static class GameAccess
 {
     public const int TicksPerSecond = 60;
@@ -18,13 +18,13 @@ internal static class GameAccess
     private static readonly Type Scene3DType = AccessTools.TypeByName("SE.Scene3D");
     private static readonly Type Scene3DIngameType = AccessTools.TypeByName("SE.Scene3DIngame");
 
-    // Scene3D est internal : on lit sa propriété TransparencyBatch par réflexion.
+    // Scene3D is internal: its TransparencyBatch property is read through reflection.
     private static readonly MethodInfo TransparencyBatchGetter = AccessTools.PropertyGetter(Scene3DType, "TransparencyBatch");
 
     public static TransparencyBatchSwapper GetTransparencyBatch(Scene scene) =>
         (TransparencyBatchSwapper)TransparencyBatchGetter.Invoke(scene, null)!;
 
-    // ---------- Caméra de la scène (pour projeter les pseudos à l'écran) ----------
+    // ---------- Scene camera (to project names on screen) ----------
 
     private static readonly FieldInfo SceneDeps = AccessTools.Field(Scene3DType, "d");
     private static readonly Type DepsType = AccessTools.TypeByName("SE.Scene3DDependencies");
@@ -38,7 +38,7 @@ internal static class GameAccess
         return deps == null ? null : DepsCamera.Invoke(deps, null) as IngameCameras;
     }
 
-    /// <summary>Matrice vue × projection et position de la caméra de la scène.</summary>
+    /// <summary>View × projection matrix and position of the scene's camera.</summary>
     public static (Matrix ViewProjection, Vector3 CameraPosition) GetCamera(Scene scene)
     {
         object deps = SceneDeps.GetValue(scene)!;
@@ -47,7 +47,7 @@ internal static class GameAccess
         return (camera.View * projection.Transform, camera.Position);
     }
 
-    // ---------- GlobalGame (capturé par GlobalTickPatch) ----------
+    // ---------- GlobalGame (captured by GlobalTickPatch) ----------
 
     public static GlobalGame? Game { get; set; }
 
@@ -85,30 +85,30 @@ internal static class GameAccess
 
     public static SpriteFont? UiFont => Game == null ? null : UiAssetsRef(Game)?.FontSmall?.Value;
 
-    /// <summary>Lance un niveau officiel, comme le menu de sélection. À appeler depuis le thread du jeu.</summary>
+    /// <summary>Starts an official level, like the level selection menu. Call from the game thread.</summary>
     public static bool StartOfficialLevel(uint id, uint? version, bool quickRetry)
     {
         GlobalGame? game = Game;
         Level? level = game?.levelOrder.GetLevelByID(id);
         if (game == null || level == null)
         {
-            ModLog.Warn($"Niveau officiel {id} introuvable");
+            ModLog.Warn($"Official level {id} not found");
             return false;
         }
         if (version.HasValue && level.Version != version.Value)
         {
-            ModLog.Warn($"Niveau {id} : le serveur demande la version {version}, on a la {level.Version} (mise à jour du jeu ?)");
+            ModLog.Warn($"Level {id}: the server asks for version {version}, we have {level.Version} (game update?)");
             return false;
         }
 
         var getMaxMedal = (Func<Medal>)Delegate.CreateDelegate(typeof(Func<Medal>), game, GetMaxNonSpoileryMedalMethod);
         SetCurrentChallengeMethod.Invoke(game, new object[] { Challenge.FromNormalLevel(level, getMaxMedal) });
         StartLevelMethod.Invoke(game, new object?[] { level, false, quickRetry });
-        ModLog.Info($"Chargement du niveau {id} ({level.Name}){(quickRetry ? " — retry" : "")}");
+        ModLog.Info($"Loading level {id} ({level.Name}){(quickRetry ? " — retry" : "")}");
         return true;
     }
 
-    // ---------- Interface du jeu (pour l'écran Multijoueur) ----------
+    // ---------- Game UI (for the Multiplayer screen) ----------
 
     private static readonly AccessTools.FieldRef<GlobalGame, StuffDisposable> StuffRef =
         AccessTools.FieldRefAccess<GlobalGame, StuffDisposable>("stuff");
@@ -123,7 +123,7 @@ internal static class GameAccess
     private static readonly MethodInfo CreateButtonMethod = AccessTools.Method(typeof(GlobalGame), "CreateButton");
     private static readonly MethodInfo CreateMainPanelMethod = AccessTools.Method(typeof(UIAssets), "CreateMainPanel");
 
-    /// <summary>Liste d'objets globale du jeu (dessinée et mise à jour quelle que soit la scène).</summary>
+    /// <summary>The game's global object list (drawn and updated whatever the scene).</summary>
     public static StuffDisposable GlobalStuff => StuffRef(Game!);
 
     public static UIAssets UiAssets => UiAssetsRef(Game!);
@@ -132,7 +132,7 @@ internal static class GameAccess
 
     public static GameSpeed UpdateSpeed => (GameSpeed)UpdateSpeedField.GetValue(Game)!;
 
-    /// <summary>Ouvre une popup par-dessus la scène courante, comme les écrans d'options du jeu.</summary>
+    /// <summary>Opens a popup over the current scene, like the game's options screens.</summary>
     public static void ShowPopup(Func<Action, Scene> create) =>
         ShowPopupMethod.Invoke(Game, new object?[] { create, CurrentScene, true, false });
 
@@ -189,7 +189,7 @@ internal static class GameAccess
 
     private static readonly Dictionary<string, string> MapLabels = new();
 
-    /// <summary>Nom lisible d'une map de round : "o:5" → "A5 Jump", "c:M123" → nom de la map Workshop.</summary>
+    /// <summary>Readable name of a round map: "o:5" → "A5 Jump", "c:M123" → the Workshop map's name.</summary>
     public static string DescribeMap(string mapKey)
     {
         if (MapLabels.TryGetValue(mapKey, out string? label))
@@ -217,7 +217,7 @@ internal static class GameAccess
             }
             catch (Exception e)
             {
-                ModLog.Warn($"Nom de la map {mapKey} indisponible : {e.Message}");
+                ModLog.Warn($"Name of map {mapKey} unavailable: {e.Message}");
             }
         }
         MapLabels[mapKey] = label;
@@ -298,7 +298,7 @@ internal static class GameAccess
         public static void Invoke<T>(T entry) => Handler?.Invoke(entry!);
     }
 
-    /// <summary>Relance le niveau courant sans intro (utilisé à la place de l'écran de fin en round).</summary>
+    /// <summary>Restarts the current level without the intro (used instead of the end screen during a round).</summary>
     public static void RetryCurrentLevel()
     {
         if (Game is { } game && CurrentLevelRef(game) is { } level)

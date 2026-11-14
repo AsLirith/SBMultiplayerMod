@@ -3,9 +3,9 @@ using SBMultiplayer.Client.Net;
 namespace SBMultiplayer.Client.UI;
 
 /// <summary>
-/// Textes de l'interface du mod. La langue suit celle du jeu (français si le jeu est en français,
-/// anglais sinon), sauf si "Language" est forcé à "fr" ou "en" dans SBMultiplayer.json.
-/// NB : la police du jeu n'a ni « — » ni « … » : s'en tenir à l'ASCII et aux accents courants.
+/// Texts of the mod's interface. The language follows the game's (French if the game is in French,
+/// English otherwise), unless "Language" is forced to "fr" or "en" in SBMultiplayer.json.
+/// Note: the game's font has neither an em dash nor an ellipsis character: stick to ASCII and common accents.
 /// </summary>
 internal static class Tr
 {
@@ -80,14 +80,14 @@ internal static class Tr
     public static string Back => T("Back", "Retour");
     public static string MenuOpenFailed => T("Could not open the multiplayer menu (see SBMultiplayer.log)", "Impossible d'ouvrir le menu multijoueur (voir SBMultiplayer.log)");
 
-    // ---------- Statut ----------
+    // ---------- Status ----------
     public static string StatusConnected(string server, string name, int others) =>
         T($"Connected to {server} as {name} ({Players(others)})", $"Connecté à {server} en tant que {name} ({Players(others)})");
     public static string StatusConnecting(string server) => T($"Connecting to {server}...", $"Connexion à {server}...");
     public static string StatusDisconnected => T("Disconnected", "Déconnecté");
     public static string StatusOffline => T("Offline - retrying automatically", "Hors ligne - nouvelle tentative automatique");
 
-    // ---------- Panneau du round ----------
+    // ---------- Round panel ----------
     public static string ResultsHeader(int seconds) => T($"Results - next map in {seconds} s", $"Résultats - map suivante dans {seconds} s");
     public static string NotOnRoundMap(string rejoinKey) =>
         T($"You're not on the round's map ({rejoinKey} to join it)", $"Tu n'es pas sur la map du round ({rejoinKey} pour la rejoindre)");
@@ -142,7 +142,7 @@ internal static class Tr
         _ => $"{code} {arg}",
     };
 
-    // ---------- Mode Rounds (départ synchronisé) ----------
+    // ---------- Rounds mode (synchronized start) ----------
     public static string WaitingForPlayers(int ready, int total) => T($"Waiting for players ({ready}/{total})", $"En attente des joueurs ({ready}/{total})");
     public static string Go => T("GO!", "GO !");
     public static string GaveUp => T("You went back to the start: you gave up this round", "Retour au départ : tu as abandonné cette manche");
@@ -166,7 +166,7 @@ internal static class Tr
         _ => mode.ToString(),
     };
 
-    // ---------- Réglages du serveur (admins) ----------
+    // ---------- Server settings (admins) ----------
     public static string SettingsModeAndMapsTitle => T("Mode and maps", "Mode et maps");
     public static string SettingsTimingsTitle => T("Timings and points", "Délais et points");
     public static string SettingsModeLabel(string mode) => T($"Game mode: {mode}", $"Mode de jeu : {mode}");
@@ -193,7 +193,7 @@ internal static class Tr
     public static string SettingsPointsTable => T("Points by rank", "Points par place");
     public static string SettingsBadPoints => T("Points: whole numbers separated by commas", "Points : des nombres entiers séparés par des virgules");
 
-    // ---------- Menus : sections et sous-écrans ----------
+    // ---------- Menus: sections and sub-screens ----------
     public static string ConnectionSection => T("Connection", "Connexion");
     public static string SettingsSection => T("Settings", "Réglages");
     public static string DisplayTitle => T("Display", "Affichage");
@@ -221,7 +221,7 @@ internal static class Tr
         _ => "",
     };
 
-    // ---------- Spectateur ----------
+    // ---------- Spectator ----------
     public static string SpectateButton => T("Spectate", "Spectateur");
     public static string PlayButton => T("Play again", "Rejouer");
     public static string YouAreSpectating => T("You're spectating: invisible to the others, not counted in rounds", "Tu es spectateur : invisible pour les autres, hors des manches");
@@ -233,7 +233,7 @@ internal static class Tr
     public static string NobodyToFollow => T("nobody to follow on this map", "personne à suivre sur cette map");
     public static string SpectatorKeys => T("Left / Right: change player    F: free camera", "Gauche / Droite : changer de joueur    F : caméra libre");
 
-    // ---------- Écran de fin de partie ----------
+    // ---------- End-of-game screen ----------
     public static string EndTitle(SBMultiplayer.Protocol.GameMode mode) => mode switch
     {
         SBMultiplayer.Protocol.GameMode.TimeAttack => T("End of the round - Time Attack", "Fin du round - Time Attack"),
@@ -252,7 +252,7 @@ internal static class Tr
         T($"SBMultiplayer v{version}: incompatible with this game version, update the mod",
           $"SBMultiplayer v{version} : incompatible avec cette version du jeu, mets le mod à jour");
 
-    // ---------- Héberger une partie ----------
+    // ---------- Host a game ----------
     public static string HostSection => T("Host a game", "Héberger une partie");
     public static string HostManageButton => T("My hosted game", "Ma partie hébergée");
     public static string PlayWithFriendsSection => T("Play with friends", "Jouer entre amis");
@@ -280,7 +280,7 @@ internal static class Tr
     public static string Refresh => T("Refresh", "Actualiser");
     public static string JoiningFriend(string name) => T($"Joining {name}'s game through Steam...", $"Connexion à la partie de {name} via Steam...");
 
-    // ---------- Panneau : pause et match ----------
+    // ---------- Panel: pause and match ----------
     public static string PausedHeader => T("PAUSED", "PAUSE");
     public static string MatchStandings => T("Match", "Match");
     public static string Points(int n) => T($"{n} pts", $"{n} pts");

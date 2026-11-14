@@ -4,7 +4,7 @@ namespace SBMultiplayer.Protocol;
 
 public static class ProtocolInfo
 {
-    /// <summary>À incrémenter à chaque changement incompatible du format des messages.</summary>
+    /// <summary>Increment on every incompatible change to the message format.</summary>
     public const int Version = 10;
 
     public const int DefaultPort = 24800;
@@ -13,10 +13,10 @@ public static class ProtocolInfo
 
     public const int MaxChatLength = 200;
 
-    /// <summary>Clé de connexion LiteNetLib : un client d'une autre version est refusé dès la poignée de main.</summary>
+    /// <summary>LiteNetLib connection key: a client of another version is rejected during the handshake.</summary>
     public static string ConnectionKey => $"SBMultiplayer/{Version}";
 
-    /// <summary>Données de la demande de connexion : clé de version puis mot de passe du serveur ("" si aucun).</summary>
+    /// <summary>Connection request data: version key, then the server password ("" if none).</summary>
     public static NetDataWriter ConnectionData(string password)
     {
         var w = new NetDataWriter();
@@ -26,12 +26,12 @@ public static class ProtocolInfo
     }
 }
 
-/// <summary>Codes de refus de connexion envoyés par le serveur, traduits par le client.</summary>
+/// <summary>Connection rejection codes sent by the server, translated by the client.</summary>
 public static class ServerReasons
 {
     public const string Full = "SERVER_FULL";
 
-    /// <summary>Suivi de ":&lt;version du protocole du serveur&gt;".</summary>
+    /// <summary>Followed by ":&lt;server protocol version&gt;".</summary>
     public const string VersionMismatch = "VERSION_MISMATCH";
 
     public const string BadPassword = "BAD_PASSWORD";
@@ -40,8 +40,8 @@ public static class ServerReasons
 }
 
 /// <summary>
-/// Événements annoncés par le serveur à tous les joueurs, traduits par le client.
-/// Argument : nom de l'admin, du joueur ou nombre de secondes selon l'événement.
+/// Events announced by the server to all players, translated by the client.
+/// Argument: admin name, player name or number of seconds depending on the event.
 /// </summary>
 public static class ServerEvents
 {
@@ -55,15 +55,15 @@ public static class ServerEvents
     public const string MatchReset = "MATCH_RESET";
     public const string AdminLoggedIn = "ADMIN_LOGGED_IN";
     public const string SettingsChanged = "SETTINGS_CHANGED";
-    /// <summary>Argument : nom du vainqueur de la Cup.</summary>
+    /// <summary>Argument: name of the Cup winner.</summary>
     public const string CupWon = "CUP_WON";
-    /// <summary>Argument : nom du vainqueur de l'élimination.</summary>
+    /// <summary>Argument: name of the Elimination winner.</summary>
     public const string EliminationWon = "ELIMINATION_WON";
-    /// <summary>Argument : noms des joueurs éliminés, séparés par des virgules.</summary>
+    /// <summary>Argument: names of the eliminated players, comma-separated.</summary>
     public const string Eliminated = "ELIMINATED";
-    /// <summary>Argument : nom du nouveau finaliste (Cup).</summary>
+    /// <summary>Argument: name of the new finalist (Cup).</summary>
     public const string Finalist = "FINALIST";
-    /// <summary>Argument : nom du vainqueur du match (Rounds : fin de la rotation).</summary>
+    /// <summary>Argument: name of the match winner (Rounds: end of the rotation).</summary>
     public const string MatchWon = "MATCH_WON";
 }
 
@@ -94,134 +94,134 @@ public enum AdminCommand : byte
     NextPhase = 1,
     RestartRound = 2,
     TogglePause = 3,
-    /// <summary>Argument : secondes à ajouter au round.</summary>
+    /// <summary>Argument: seconds to add to the round.</summary>
     Extend = 4,
-    /// <summary>Argument : index de la map dans la rotation.</summary>
+    /// <summary>Argument: index of the map in the rotation.</summary>
     GotoMap = 5,
-    /// <summary>Argument : id du joueur.</summary>
+    /// <summary>Argument: player id.</summary>
     Kick = 6,
     ResetMatch = 7,
 }
 
 public enum MessageType : byte
 {
-    /// <summary>C→S, fiable. Premier message après connexion.</summary>
+    /// <summary>C→S, reliable. First message after connecting.</summary>
     Hello = 1,
 
-    /// <summary>S→C, fiable. Réponse à Hello : notre id et la liste des joueurs déjà présents.</summary>
+    /// <summary>S→C, reliable. Reply to Hello: our id and the players already there.</summary>
     Welcome = 2,
 
-    /// <summary>S→C, fiable.</summary>
+    /// <summary>S→C, reliable.</summary>
     PlayerJoined = 3,
 
-    /// <summary>S→C, fiable.</summary>
+    /// <summary>S→C, reliable.</summary>
     PlayerLeft = 4,
 
-    /// <summary>C→S (sans id) et S→C (avec id), fiable. Map sur laquelle se trouve le joueur ("" = aucune).</summary>
+    /// <summary>C→S (without id) and S→C (with id), reliable. Map the player is on ("" = none).</summary>
     MapChanged = 5,
 
-    /// <summary>C→S (sans id) et S→C (avec id), non fiable. Position de la planche.</summary>
+    /// <summary>C→S (without id) and S→C (with id), unreliable. Board position.</summary>
     State = 6,
 
-    /// <summary>S→C, fiable. Round en cours : map imposée, phase, temps restant.</summary>
+    /// <summary>S→C, reliable. Current round: imposed map, phase, remaining time.</summary>
     RoundInfo = 7,
 
-    /// <summary>C→S, fiable. Arrivée franchie pendant un round.</summary>
+    /// <summary>C→S, reliable. Finish line crossed during a round.</summary>
     Finish = 8,
 
-    /// <summary>S→C, fiable. Classement du round (meilleur temps de chacun).</summary>
+    /// <summary>S→C, reliable. Round standings (everyone's best time).</summary>
     Leaderboard = 9,
 
-    /// <summary>C→S (sans id) et S→C (avec id), fiable. Skin de planche du joueur (id du jeu).</summary>
+    /// <summary>C→S (without id) and S→C (with id), reliable. Player's board skin (game id).</summary>
     SkinChanged = 10,
 
-    /// <summary>C→S, fiable. Mot de passe admin.</summary>
+    /// <summary>C→S, reliable. Admin password.</summary>
     AdminLogin = 11,
 
-    /// <summary>S→C, fiable. Résultat de la connexion admin, et rotation de maps (pour le panneau admin).</summary>
+    /// <summary>S→C, reliable. Admin login result, and the map rotation (for the admin panel).</summary>
     AdminStatus = 12,
 
-    /// <summary>C→S, fiable. Commande admin (<see cref="Protocol.AdminCommand"/> + argument).</summary>
+    /// <summary>C→S, reliable. Admin command (<see cref="Protocol.AdminCommand"/> + argument).</summary>
     AdminCommand = 13,
 
-    /// <summary>S→C, fiable. Événement à annoncer (<see cref="ServerEvents"/> + argument).</summary>
+    /// <summary>S→C, reliable. Event to announce (<see cref="ServerEvents"/> + argument).</summary>
     ServerEvent = 14,
 
-    /// <summary>S→C, fiable. Classement du match (points cumulés sur les rounds).</summary>
+    /// <summary>S→C, reliable. Match standings (points accumulated over the rounds).</summary>
     MatchStandings = 15,
 
-    /// <summary>C→S (texte) et S→C (id, pseudo, texte), fiable. Message de chat ; "/..." = commande.</summary>
+    /// <summary>C→S (text) and S→C (id, name, text), reliable. Chat message; "/..." = command.</summary>
     Chat = 16,
 
-    /// <summary>S→C, fiable. Réponse à une commande (<see cref="CommandResults"/> + argument).</summary>
+    /// <summary>S→C, reliable. Reply to a command (<see cref="CommandResults"/> + argument).</summary>
     CommandReply = 17,
 
-    /// <summary>C→S, fiable. Prêt sur la ligne de départ (modes synchronisés).</summary>
+    /// <summary>C→S, reliable. Ready on the start line (synchronized modes).</summary>
     Ready = 18,
 
-    /// <summary>C→S, fiable. Abandon de la manche (modes synchronisés).</summary>
+    /// <summary>C→S, reliable. Gives up the round (synchronized modes).</summary>
     GiveUp = 19,
 
-    /// <summary>S→C (admins) et C→S (admins), fiable. Réglages du match en JSON.</summary>
+    /// <summary>S→C (admins) and C→S (admins), reliable. Match settings as JSON.</summary>
     Settings = 20,
 
-    /// <summary>C→S (sans id) et S→C (avec id), fiable. Passage en spectateur ou retour dans la partie.</summary>
+    /// <summary>C→S (without id) and S→C (with id), reliable. Switch to spectator or back into the game.</summary>
     Spectate = 21,
 }
 
 public enum RoundPhase : byte
 {
-    /// <summary>Pas de rounds : chacun roule où il veut (serveur sans liste de maps).</summary>
+    /// <summary>No rounds: everyone rides wherever they want (server without a map list).</summary>
     Free = 0,
 
-    /// <summary>Round en cours sur la map imposée.</summary>
+    /// <summary>Round in progress on the imposed map.</summary>
     Playing = 1,
 
-    /// <summary>Round terminé : affichage des résultats avant la map suivante.</summary>
+    /// <summary>Round over: results shown before the next map.</summary>
     Results = 2,
 
-    /// <summary>Modes à départ synchronisé : chargement de la map, en attente que tous les joueurs soient prêts.</summary>
+    /// <summary>Synchronized-start modes: map loading, waiting for every player to be ready.</summary>
     Preparing = 3,
 }
 
 public enum GameMode : byte
 {
-    /// <summary>Retries illimités pendant le temps du round, meilleur temps.</summary>
+    /// <summary>Unlimited retries during the round time, best time counts.</summary>
     TimeAttack = 0,
 
-    /// <summary>Départ synchronisé, une seule tentative par manche, points selon le temps de course.</summary>
+    /// <summary>Synchronized start, a single attempt per round, points by race time.</summary>
     Rounds = 1,
 
-    /// <summary>Comme Rounds ; à la limite de points on devient finaliste, et un finaliste qui gagne une manche remporte la Cup.</summary>
+    /// <summary>Like Rounds; reaching the points limit makes you a finalist, and a finalist who wins a round wins the Cup.</summary>
     Cup = 2,
 
-    /// <summary>Départ synchronisé ; les derniers de chaque manche sont éliminés jusqu'au vainqueur.</summary>
+    /// <summary>Synchronized start; the last players of each round are eliminated until one winner remains.</summary>
     Elimination = 3,
 
-    /// <summary>Pas de rounds : chacun roule où il veut (même avec une liste de maps).</summary>
+    /// <summary>No rounds: everyone rides wherever they want (even with a map list).</summary>
     Free = 4,
 }
 
 public static class GameModes
 {
-    /// <summary>Modes à départ synchronisé (une tentative par manche).</summary>
+    /// <summary>Synchronized-start modes (one attempt per round).</summary>
     public static bool IsSynchronized(this GameMode mode) => mode is GameMode.Rounds or GameMode.Cup or GameMode.Elimination;
 }
 
 public enum StandingStatus : byte
 {
     Normal = 0,
-    /// <summary>Cup : a atteint la limite de points.</summary>
+    /// <summary>Cup: reached the points limit.</summary>
     Finalist = 1,
-    /// <summary>Élimination : éliminé du match.</summary>
+    /// <summary>Elimination: eliminated from the match.</summary>
     Eliminated = 2,
-    /// <summary>Vainqueur du match (Cup ou Élimination).</summary>
+    /// <summary>Match winner (Cup or Elimination).</summary>
     Winner = 3,
 }
 
 /// <summary>
-/// Réglages de match modifiables en jeu par un admin. Échangés en JSON (<see cref="Msg.Settings"/>) :
-/// ajouter un champ ne casse pas le format.
+/// Match settings an admin can change in game. Exchanged as JSON (<see cref="Msg.Settings"/>):
+/// adding a field doesn't break the format.
 /// </summary>
 public sealed class MatchSettings
 {
@@ -248,32 +248,32 @@ internal partial class ProtocolJson : System.Text.Json.Serialization.JsonSeriali
 {
 }
 
-/// <param name="MapKey">Map imposée ("o:&lt;id&gt;" ou "o:&lt;id&gt;:&lt;version&gt;"), "" en phase Free.</param>
-/// <param name="RemainingSeconds">Temps restant dans la phase, au moment de l'envoi.</param>
-/// <param name="StartIn">Modes synchronisés, phase Playing : secondes avant le départ au moment de l'envoi (≤ 0 = déjà parti).</param>
-/// <param name="RoundInMap">Numéro de la manche sur cette map (à partir de 1), et nombre de manches par map.</param>
-/// <param name="PointsLimit">Cup : limite de points pour devenir finaliste.</param>
-/// <param name="MatchEnded">Phase Results : la partie est terminée (fin du round en Time Attack, fin de la rotation en Rounds,
-/// vainqueur en Cup / Élimination) : les clients affichent l'écran de fin de partie.</param>
+/// <param name="MapKey">Imposed map ("o:&lt;id&gt;" or "o:&lt;id&gt;:&lt;version&gt;"), "" in the Free phase.</param>
+/// <param name="RemainingSeconds">Time left in the phase, when sent.</param>
+/// <param name="StartIn">Synchronized modes, Playing phase: seconds before the start when sent (≤ 0 = already started).</param>
+/// <param name="RoundInMap">Round number on this map (from 1), and number of rounds per map.</param>
+/// <param name="PointsLimit">Cup: points limit to become a finalist.</param>
+/// <param name="MatchEnded">Results phase: the game is over (end of the round in Time Attack, end of the rotation in Rounds,
+/// a winner in Cup / Elimination): clients show the end-of-game screen.</param>
 public readonly record struct RoundInfo(int RoundId, string MapKey, RoundPhase Phase, float RemainingSeconds, int MapIndex, int MapCount, bool Paused,
     GameMode Mode = GameMode.TimeAttack, float StartIn = 0, int RoundInMap = 1, int RoundsPerMap = 1, int ReadyCount = 0, int PlayerCount = 0,
     int PointsLimit = 0, bool MatchEnded = false);
 
 public readonly record struct LeaderboardEntry(int PlayerId, string Name, uint BestMs);
 
-/// <param name="RoundsPlayed">Nombre de rounds où le joueur a réalisé un temps.</param>
+/// <param name="RoundsPlayed">Number of rounds in which the player set a time.</param>
 public readonly record struct StandingEntry(string Name, int Points, int RoundsPlayed, StandingStatus Status = StandingStatus.Normal);
 
 public readonly record struct Vec3(float X, float Y, float Z);
 
-/// <param name="Time">Horloge de l'émetteur, en secondes. Seuls les écarts entre deux états comptent.</param>
-/// <param name="Segment">Incrémenté à chaque téléportation (restart, respawn) : pas d'interpolation entre deux segments.</param>
-/// <param name="CamPosition">Caméra du joueur (position et pitch/yaw/roll) : les spectateurs voient ce qu'il voit.</param>
+/// <param name="Time">Sender's clock, in seconds. Only the difference between two states matters.</param>
+/// <param name="Segment">Incremented on every teleport (restart, respawn): no interpolation between two segments.</param>
+/// <param name="CamPosition">Player's camera (position and pitch/yaw/roll): spectators see what they see.</param>
 public readonly record struct PlayerState(double Time, Vec3 Position, Vec3 Orientation, ushort Segment, Vec3 CamPosition = default, Vec3 CamOrientation = default);
 
 public readonly record struct PlayerInfo(int Id, string Name, string MapKey, int Skin, bool IsSpectator = false);
 
-/// <summary>Sérialisation des messages. Chaque message commence par son <see cref="MessageType"/>.</summary>
+/// <summary>Message serialization. Every message starts with its <see cref="MessageType"/>.</summary>
 public static class Msg
 {
     public static NetDataWriter Hello(NetDataWriter w, string name, int skin)
@@ -376,7 +376,7 @@ public static class Msg
         new(r.GetInt(), r.GetString(256), (RoundPhase)r.GetByte(), r.GetFloat(), r.GetInt(), r.GetInt(), r.GetBool(),
             (GameMode)r.GetByte(), r.GetFloat(), r.GetInt(), r.GetInt(), r.GetInt(), r.GetInt(), r.GetInt(), r.GetBool());
 
-    /// <summary>S→C (admins) : réglages actuels. C→S : réglages à appliquer (+ enregistrer dans le fichier de config).</summary>
+    /// <summary>S→C (admins): current settings. C→S: settings to apply (+ save to the config file).</summary>
     public static NetDataWriter Settings(NetDataWriter w, MatchSettings settings, bool saveToFile)
     {
         w.Reset();
@@ -392,7 +392,7 @@ public static class Msg
         return (settings, r.GetBool());
     }
 
-    /// <summary>C→S : le joueur est sur la ligne de départ de la manche (modes synchronisés).</summary>
+    /// <summary>C→S: the player is on the round's start line (synchronized modes).</summary>
     public static NetDataWriter Ready(NetDataWriter w, int roundId)
     {
         w.Reset();
@@ -401,7 +401,7 @@ public static class Msg
         return w;
     }
 
-    /// <summary>C→S : le joueur abandonne la manche (retour au départ après le top).</summary>
+    /// <summary>C→S: the player gives up the round (back to the start after the go).</summary>
     public static NetDataWriter GiveUp(NetDataWriter w, int roundId)
     {
         w.Reset();
@@ -488,7 +488,7 @@ public static class Msg
         return w;
     }
 
-    /// <summary>Nettoie un message de chat : longueur bornée, sans caractères de contrôle ni de format invisibles.</summary>
+    /// <summary>Sanitizes a chat message: bounded length, no control or invisible format characters.</summary>
     public static string SanitizeChat(string? text)
     {
         var sb = new System.Text.StringBuilder();
@@ -578,19 +578,19 @@ public static class Msg
     }
 
     /// <summary>
-    /// Vrai si la map d'un joueur correspond à l'entrée de rotation :
-    /// officielle "o:1:2001" pour "o:1" ou "o:1:2001", Workshop "c:M123.&lt;version&gt;" pour "c:M123" ou la clé complète.
+    /// True if a player's map matches the rotation entry:
+    /// official "o:1:2001" for "o:1" or "o:1:2001", Workshop "c:M123.&lt;version&gt;" for "c:M123" or the full key.
     /// </summary>
     public static bool MapMatches(string playerMapKey, string roundMapKey) =>
         roundMapKey.Length > 0 && (playerMapKey == roundMapKey
             || playerMapKey.StartsWith(roundMapKey + ":", StringComparison.Ordinal)
             || playerMapKey.StartsWith(roundMapKey + ".", StringComparison.Ordinal));
 
-    /// <summary>Clés de map acceptées dans une rotation : niveau officiel ou map du Workshop.</summary>
+    /// <summary>Map keys accepted in a rotation: official level or Workshop map.</summary>
     public static bool IsValidRotationKey(string key) =>
         System.Text.RegularExpressions.Regex.IsMatch(key, @"^(o:\d+(:\d+)?|c:M[1-9]\d*(\.[0-9a-f]{64})?)$");
 
-    /// <summary>Identifiant Workshop d'une clé "c:M123" ou "c:M123.&lt;version&gt;", sinon null.</summary>
+    /// <summary>Workshop id of a "c:M123" or "c:M123.&lt;version&gt;" key, otherwise null.</summary>
     public static ulong? WorkshopId(string key)
     {
         if (!key.StartsWith("c:M", StringComparison.Ordinal))
@@ -617,7 +617,7 @@ public static class Msg
     public static PlayerState GetState(NetDataReader r) =>
         new(r.GetDouble(), GetVec3(r), GetVec3(r), r.GetUShort(), GetVec3(r), GetVec3(r));
 
-    /// <summary>C→S (sans id) et S→C (avec id), fiable : le joueur passe spectateur, ou revient dans la partie.</summary>
+    /// <summary>C→S (without id) and S→C (with id), reliable: the player becomes a spectator, or comes back into the game.</summary>
     public static NetDataWriter Spectate(NetDataWriter w, int? id, bool spectating)
     {
         w.Reset();
@@ -652,9 +652,9 @@ public static class Msg
     private static Vec3 GetVec3(NetDataReader r) => new(r.GetFloat(), r.GetFloat(), r.GetFloat());
 
     /// <summary>
-    /// Nettoie un pseudo reçu : longueur bornée (en caractères visibles), et suppression des caractères
-    /// de contrôle et de format invisibles (contrôles bidi, caractères « tag », espaces de largeur nulle…)
-    /// qui permettent d'usurper un pseudo ou de casser l'affichage.
+    /// Sanitizes a received name: bounded length (in visible characters), and removal of control and
+    /// invisible format characters (bidi controls, "tag" characters, zero-width spaces…)
+    /// that could impersonate a name or break the display.
     /// </summary>
     public static string SanitizeName(string? name)
     {

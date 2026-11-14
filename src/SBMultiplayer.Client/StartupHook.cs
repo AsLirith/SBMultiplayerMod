@@ -2,9 +2,9 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.Loader;
 
-// Point d'entrée imposé par .NET pour DOTNET_STARTUP_HOOKS :
-// une classe nommée exactement "StartupHook", hors namespace, avec "public static void Initialize()".
-// Elle s'exécute avant le Main() du jeu.
+// Entry point required by .NET for DOTNET_STARTUP_HOOKS:
+// a class named exactly "StartupHook", outside any namespace, with "public static void Initialize()".
+// It runs before the game's Main().
 internal class StartupHook
 {
     public static void Initialize()
@@ -13,10 +13,10 @@ internal class StartupHook
         {
             string modDir = Path.GetDirectoryName(typeof(StartupHook).Assembly.Location)!;
             SBMultiplayer.Client.ModLog.Init(Path.Combine(modDir, "SBMultiplayer.log"));
-            SBMultiplayer.Client.ModLog.Info($"Startup hook chargé depuis {modDir}");
+            SBMultiplayer.Client.ModLog.Info($"Startup hook loaded from {modDir}");
 
-            // 0Harmony.dll est à côté de notre DLL, pas dans le dossier du jeu :
-            // on aide le runtime à le trouver. À faire AVANT de toucher au moindre type Harmony.
+            // 0Harmony.dll is next to our DLL, not in the game folder:
+            // help the runtime find it. Must be done BEFORE touching any Harmony type.
             AssemblyLoadContext.Default.Resolving += (ctx, name) =>
             {
                 string candidate = Path.Combine(modDir, name.Name + ".dll");
@@ -27,12 +27,12 @@ internal class StartupHook
         }
         catch (Exception e)
         {
-            // Ne jamais faire planter le jeu à cause du mod.
-            SBMultiplayer.Client.ModLog.Error("Échec de l'initialisation du mod", e);
+            // Never crash the game because of the mod.
+            SBMultiplayer.Client.ModLog.Error("Mod initialization failed", e);
         }
     }
 
-    // Méthode séparée et non inlinée : le JIT ne doit charger Harmony qu'après l'enregistrement du resolver.
+    // Separate, non-inlined method: the JIT must load Harmony only after the resolver is registered.
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static void Boot() => SBMultiplayer.Client.Plugin.Load();
 }

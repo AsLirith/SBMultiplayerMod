@@ -6,8 +6,8 @@ using SBMultiplayer.Client.Ghosts;
 namespace SBMultiplayer.Client.UI;
 
 /// <summary>
-/// Texte 2D avec la police du jeu. Attention : la police n'a pas tous les caractères
-/// (pas de « — » ni de « … », pas d'émojis) : ils sont remplacés automatiquement.
+/// 2D text with the game's font. Careful: the font doesn't have every character
+/// (no em dash, no ellipsis character, no emojis): they are replaced automatically.
 /// </summary>
 internal sealed class TextDrawer
 {
@@ -54,7 +54,7 @@ internal sealed class TextDrawer
         return value[..1] + "...";
     }
 
-    /// <summary>Texte avec un contour sombre, lisible sur n'importe quel décor.</summary>
+    /// <summary>Text with a dark outline, readable over any background.</summary>
     public void DrawOutlined(SpriteBatch sb, string text, Vector2 pos, Color color, float scale, float alpha = 1f)
     {
         string t = Printable(text);
@@ -67,7 +67,7 @@ internal sealed class TextDrawer
         sb.DrawString(font!, t, pos, color, 0f, Vector2.Zero, scale, SpriteEffects.None, 0f);
     }
 
-    /// <summary>Dessine une ligne alignée à droite et fait descendre <paramref name="y"/>.</summary>
+    /// <summary>Draws a right-aligned line and moves down <paramref name="y"/>.</summary>
     public void DrawRightAligned(SpriteBatch sb, string text, float right, ref float y, Color color, float scale, float alpha = 1f)
     {
         Vector2 size = Measure(text, scale);
@@ -75,7 +75,7 @@ internal sealed class TextDrawer
         y += LineHeight(scale);
     }
 
-    /// <summary>Dessine une ligne centrée horizontalement et fait descendre <paramref name="y"/>.</summary>
+    /// <summary>Draws a horizontally centered line and moves down <paramref name="y"/>.</summary>
     public void DrawCentered(SpriteBatch sb, string text, float centerX, ref float y, Color color, float scale, float alpha = 1f)
     {
         Vector2 size = Measure(text, scale);
@@ -96,7 +96,7 @@ internal sealed class TextDrawer
             char c = text[i];
             if (char.IsHighSurrogate(c) && i + 1 < text.Length)
             {
-                i++; // paire de substitution (émoji) : un seul remplaçant
+                i++; // surrogate pair (emoji): a single replacement
                 sb.Append(fallback);
             }
             else

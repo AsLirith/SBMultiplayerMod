@@ -4,19 +4,19 @@ using Microsoft.Xna.Framework;
 namespace SBMultiplayer.Client.Ghosts;
 
 /// <summary>
-/// État d'une planche à un instant donné. C'est ce qui transitera sur le réseau.
+/// State of a board at a given moment. This is what goes over the network.
 /// </summary>
-/// <param name="Time">Horodatage en secondes (temps local pour l'instant, temps serveur plus tard).</param>
-/// <param name="Orientation">(pitch, yaw, roll) comme <c>SE.GhostState.Orientation</c>.</param>
-/// <param name="Segment">Incrémenté à chaque téléportation (restart, respawn) : on n'interpole jamais entre deux segments.
-/// Plus robuste qu'un simple drapeau quand des paquets se perdent ou arrivent dans le désordre.</param>
+/// <param name="Time">Timestamp in seconds (sender's local clock).</param>
+/// <param name="Orientation">(pitch, yaw, roll) like <c>SE.GhostState.Orientation</c>.</param>
+/// <param name="Segment">Incremented on every teleport (restart, respawn): never interpolate between two segments.
+/// More robust than a simple flag when packets are lost or arrive out of order.</param>
 /// <param name="CamPosition">Camera of the player (position, pitch/yaw/roll), for spectators following them.</param>
 internal readonly record struct Snapshot(double Time, Vector3 Position, Vector3 Orientation, ushort Segment,
     Vector3 CamPosition = default, Vector3 CamOrientation = default);
 
 /// <summary>
-/// Tampon d'états horodatés, triés par temps, avec interpolation.
-/// Sert au faux ghost (étape 2), puis tel quel pour les joueurs distants (étape 3).
+/// Buffer of timestamped states, sorted by time, with interpolation.
+/// Used for remote players (and the debug delayed ghost).
 /// </summary>
 internal sealed class SnapshotBuffer
 {
@@ -34,7 +34,7 @@ internal sealed class SnapshotBuffer
 
     public void Add(Snapshot snapshot)
     {
-        // Les paquets réseau peuvent arriver dans le désordre : insertion triée, doublons ignorés.
+        // Network packets may arrive out of order: sorted insertion, duplicates ignored.
         int i = snapshots.Count;
         while (i > 0 && snapshots[i - 1].Time > snapshot.Time)
         {
@@ -46,7 +46,7 @@ internal sealed class SnapshotBuffer
         }
         snapshots.Insert(i, snapshot);
 
-        // On ne garde que les dernières secondes.
+        // Only the last seconds are kept.
         double limit = snapshots[^1].Time - keepSeconds;
         int remove = 0;
         while (remove < snapshots.Count - 2 && snapshots[remove + 1].Time < limit)
@@ -61,11 +61,11 @@ internal sealed class SnapshotBuffer
 
     public void Clear() => snapshots.Clear();
 
-    /// <summary>État interpolé de la planche au temps demandé. Hors des bornes, on garde l'état le plus proche.</summary>
+    /// <summary>Board state interpolated at the requested time. Out of bounds, the closest state is used.</summary>
     public bool TrySample(double time, out Vector3 position, out Vector3 orientation) =>
         TrySample(time, static s => (s.Position, s.Orientation), out position, out orientation);
 
-    /// <summary>Caméra du joueur interpolée au temps demandé (vue des spectateurs).</summary>
+    /// <summary>Player's camera interpolated at the requested time (spectators' view).</summary>
     public bool TrySampleCamera(double time, out Vector3 position, out Vector3 orientation) =>
         TrySample(time, static s => (s.CamPosition, s.CamOrientation), out position, out orientation);
 
@@ -89,7 +89,7 @@ internal sealed class SnapshotBuffer
             return true;
         }
 
-        // Recherche du segment [a, b] qui encadre "time" (tampon petit : recherche linéaire depuis la fin).
+        // Find the [a, b] interval around "time" (small buffer: linear search from the end).
         int bi = snapshots.Count - 1;
         while (snapshots[bi - 1].Time > time)
         {

@@ -4,15 +4,15 @@ using SBMultiplayer.Protocol;
 namespace SBMultiplayer.Client.Net;
 
 /// <summary>
-/// Configuration lue dans SBMultiplayer.json (à côté de la DLL), créée avec les valeurs par défaut si absente.
-/// Variables d'environnement prioritaires (pratique pour lancer deux instances) : SBMULTI_SERVER, SBMULTI_NAME.
+/// Configuration read from SBMultiplayer.json (next to the DLL), created with default values if missing.
+/// Environment variables take precedence (handy to run two instances): SBMULTI_SERVER, SBMULTI_NAME.
 /// </summary>
 internal sealed class ModConfig
 {
-    /// <summary>Adresse du serveur, "hôte:port" ou "hôte".</summary>
+    /// <summary>Server address, "host:port" or "host".</summary>
     public string Server { get; set; } = $"127.0.0.1:{ProtocolInfo.DefaultPort}";
 
-    /// <summary>Pseudo affiché. Vide = pseudo Steam.</summary>
+    /// <summary>Displayed name. Empty = Steam name.</summary>
     public string PlayerName { get; set; } = "";
 
     /// <summary>When hosting, let Steam friends join through Steam P2P (no port to open).</summary>
@@ -21,69 +21,69 @@ internal sealed class ModConfig
     /// <summary>UDP port used when hosting a game from the F8 menu.</summary>
     public int HostPort { get; set; } = ProtocolInfo.DefaultPort;
 
-    /// <summary>Mot de passe du serveur (vide si le serveur est ouvert).</summary>
+    /// <summary>Server password (empty if the server is open).</summary>
     public string ServerPassword { get; set; } = "";
 
-    /// <summary>Mot de passe admin, retenu pour se reconnecter en admin facilement.</summary>
+    /// <summary>Admin password, remembered to log in as admin again easily.</summary>
     public string AdminPassword { get; set; } = "";
 
     public bool AutoConnect { get; set; } = true;
 
-    /// <summary>Distance max (en unités du jeu, 1 unité = 1 cm) pour afficher le pseudo d'un joueur. 0 = jamais.</summary>
+    /// <summary>Max distance (in game units, 1 unit = 1 cm) to show a player's name. 0 = never.</summary>
     public float NameTagMaxDistance { get; set; } = 30f;
 
-    /// <summary>Hauteur du pseudo au-dessus de la planche, en unités du jeu.</summary>
+    /// <summary>Height of the name above the board, in game units.</summary>
     public float NameTagHeight { get; set; } = 0.8f;
 
-    /// <summary>Taille du texte des pseudos (1 = taille de la police du jeu en 1080p).</summary>
+    /// <summary>Name text size (1 = the game's font size at 1080p).</summary>
     public float NameTagScale { get; set; } = 0.4f;
 
-    /// <summary>Panneau du round (temps restant, classement) en haut à droite.</summary>
+    /// <summary>Round panel (time left, standings) at the top right.</summary>
     public bool ShowRoundPanel { get; set; } = true;
 
-    /// <summary>Taille du panneau du round (1 = taille d'origine de la v0.4, jugée trop grosse).</summary>
+    /// <summary>Round panel size (1 = the original v0.4 size, found too big).</summary>
     public float RoundPanelScale { get; set; } = 0.6f;
 
-    /// <summary>Affiche les ghosts des autres joueurs.</summary>
+    /// <summary>Shows the other players' ghosts.</summary>
     public bool ShowOtherPlayers { get; set; } = true;
 
-    /// <summary>Opacité des ghosts des autres joueurs (0 à 1).</summary>
+    /// <summary>Opacity of the other players' ghosts (0 to 1).</summary>
     public float GhostOpacity { get; set; } = 0.5f;
 
-    /// <summary>Affiche les pseudos au-dessus des ghosts proches.</summary>
+    /// <summary>Shows names above nearby ghosts.</summary>
     public bool ShowNameTags { get; set; } = true;
 
-    /// <summary>Temps intermédiaires aux checkpoints (affichage du jeu), comparés à notre meilleure run du round.</summary>
+    /// <summary>Checkpoint splits (the game's display), compared with our best run of the round.</summary>
     public bool ShowSplits { get; set; } = true;
 
-    /// <summary>Langue de l'interface du mod : "auto" (celle du jeu), "en" ou "fr".</summary>
+    /// <summary>Language of the mod's interface: "auto" (the game's), "en" or "fr".</summary>
     public string Language { get; set; } = "auto";
 
-    /// <summary>Touche du menu multijoueur (nom d'une touche MonoGame : F8, F10, Insert…).</summary>
+    /// <summary>Multiplayer menu key (a MonoGame key name: F8, F10, Insert…).</summary>
     public string MenuKey { get; set; } = "F8";
 
-    /// <summary>Touche pour rejoindre la map du round en cours.</summary>
+    /// <summary>Key to join the current round's map.</summary>
     public string RejoinKey { get; set; } = "F7";
 
-    /// <summary>Touche pour écrire dans le chat.</summary>
+    /// <summary>Key to write in the chat.</summary>
     public string ChatKey { get; set; } = "Tab";
 
-    /// <summary>Affiche le chat (messages et événements) en bas à gauche.</summary>
+    /// <summary>Shows the chat (messages and events) at the bottom left.</summary>
     public bool ShowChat { get; set; } = true;
 
     /// <summary>
-    /// Notifications aussi en haut au centre de l'écran. Par défaut, elles ne passent que par le chat
-    /// (elles reviennent en haut si le chat est masqué).
+    /// Notifications also at the top center of the screen. By default they only go to the chat
+    /// (they come back to the top if the chat is hidden).
     /// </summary>
     public bool NotificationsOnTop { get; set; }
 
-    /// <summary>Taille du texte du chat (1 = taille d'origine).</summary>
+    /// <summary>Chat text size (1 = original size).</summary>
     public float ChatScale { get; set; } = 1f;
 
-    /// <summary>Debug : log de la position chaque seconde.</summary>
+    /// <summary>Debug: logs the position every second.</summary>
     public bool DebugProbe { get; set; }
 
-    /// <summary>Debug : ghost local qui suit le joueur avec 1,5 s de retard (étape 2).</summary>
+    /// <summary>Debug: local ghost following the player 1.5 s behind (step 2).</summary>
     public bool DebugDelayedSelfGhost { get; set; }
 
     public static ModConfig Current { get; private set; } = new();
@@ -92,10 +92,10 @@ internal sealed class ModConfig
 
     private static string path = "";
 
-    // Valeurs du fichier, quand une variable d'environnement les surcharge : on ne les écrase pas en sauvegardant.
+    // File values, when an environment variable overrides them: not overwritten when saving.
     private static (string Server, string Name)? fileValuesBeforeEnv;
 
-    /// <summary>Enregistre la configuration (appelé quand un réglage change dans le menu).</summary>
+    /// <summary>Saves the configuration (called when a setting changes in the menu).</summary>
     public static void Save()
     {
         try
@@ -111,11 +111,11 @@ internal sealed class ModConfig
         }
         catch (Exception e)
         {
-            ModLog.Error($"Impossible d'enregistrer la configuration ({path})", e);
+            ModLog.Error($"Could not save the configuration ({path})", e);
         }
     }
 
-    /// <summary>L'adresse ou le pseudo ont été changés dans le menu : ils remplacent la surcharge d'environnement.</summary>
+    /// <summary>The address or name were changed in the menu: they replace the environment override.</summary>
     public static void ForgetEnvironmentOverride() => fileValuesBeforeEnv = null;
 
     public static void Load(string modDir)
@@ -130,12 +130,12 @@ internal sealed class ModConfig
             else
             {
                 File.WriteAllText(path, JsonSerializer.Serialize(Current, JsonOptions));
-                ModLog.Info($"Configuration par défaut créée : {path}");
+                ModLog.Info($"Default configuration created: {path}");
             }
         }
         catch (Exception e)
         {
-            ModLog.Error($"Configuration illisible ({path}), valeurs par défaut utilisées", e);
+            ModLog.Error($"Unreadable configuration ({path}), using default values", e);
             Current = new ModConfig();
         }
 

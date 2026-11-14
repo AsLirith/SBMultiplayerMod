@@ -3,7 +3,7 @@ using SBMultiplayer.Client.Net;
 
 namespace SBMultiplayer.Client.UI;
 
-/// <summary>Messages courts affichés en haut au centre de l'écran (connexion, joueurs, rounds…). Thread-safe.</summary>
+/// <summary>Short messages shown at the top center of the screen (connection, players, rounds…). Thread-safe.</summary>
 internal static class Notifications
 {
     public const double DisplaySeconds = 4.5;
@@ -34,7 +34,7 @@ internal static class Notifications
 
     public static void Warn(string text) => Show(text, new Color(255, 170, 80));
 
-    /// <summary>Notifications encore visibles, avec leur opacité (fondu en sortie).</summary>
+    /// <summary>Notifications still visible, with their opacity (fade-out).</summary>
     public static List<(Item Item, float Alpha)> Visible()
     {
         double now = NetClock.Now;

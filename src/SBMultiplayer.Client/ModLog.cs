@@ -1,6 +1,6 @@
 namespace SBMultiplayer.Client;
 
-/// <summary>Log fichier minimaliste, utilisable avant que le jeu n'initialise Serilog.</summary>
+/// <summary>Minimal file log, usable before the game initializes Serilog.</summary>
 internal static class ModLog
 {
     private static readonly object Gate = new();

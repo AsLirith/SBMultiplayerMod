@@ -12,7 +12,7 @@ internal static class Plugin
     {
         ModLog.Info($"SBMultiplayer v{UI.MultiplayerMenu.Version} - game {Compatibility.GameVersion} - .NET {Environment.Version}, Harmony {typeof(Harmony).Assembly.GetName().Version}");
         Net.ModConfig.Load(Path.GetDirectoryName(typeof(Plugin).Assembly.Location)!);
-        ModLog.Info($"Serveur configuré : {Net.ModConfig.Current.Server}");
+        ModLog.Info($"Configured server: {Net.ModConfig.Current.Server}");
 
         Harmony = new Harmony(HarmonyId);
 
@@ -40,7 +40,7 @@ internal static class Plugin
 
         foreach (var method in Harmony.GetPatchedMethods())
         {
-            ModLog.Info($"Patché : {method.DeclaringType?.FullName}.{method.Name}");
+            ModLog.Info($"Patched: {method.DeclaringType?.FullName}.{method.Name}");
         }
     }
 

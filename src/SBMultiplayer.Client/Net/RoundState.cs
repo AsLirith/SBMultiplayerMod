@@ -3,14 +3,14 @@ using SBMultiplayer.Protocol;
 namespace SBMultiplayer.Client.Net;
 
 /// <summary>
-/// Dernier état de round reçu du serveur. Écrit par le thread réseau, lu par le jeu : on publie des
-/// instantanés immuables (remplacement atomique de référence), donc pas de verrou côté lecture.
+/// Last round state received from the server. Written by the network thread, read by the game: immutable
+/// snapshots are published (atomic reference swap), so no lock on the reading side.
 /// </summary>
 internal sealed class RoundState
 {
     private volatile Snapshot current = new(new RoundInfo(0, "", RoundPhase.Free, 0, 0, 0, false), 0, new List<LeaderboardEntry>());
 
-    /// <summary>Classement du match (points cumulés), remplacé en bloc par le thread réseau.</summary>
+    /// <summary>Match standings (accumulated points), replaced as a whole by the network thread.</summary>
     public volatile IReadOnlyList<StandingEntry> Standings = new List<StandingEntry>();
 
     public sealed record Snapshot(RoundInfo Info, double ReceivedAt, IReadOnlyList<LeaderboardEntry> Leaderboard)
@@ -29,7 +29,7 @@ internal sealed class RoundState
     public void SetInfo(RoundInfo info, double oneWayLatencySeconds)
     {
         Snapshot old = current;
-        // Nouveau round : l'ancien classement n'a plus de sens.
+        // New round: the old standings no longer make sense.
         var board = info.RoundId == old.Info.RoundId ? old.Leaderboard : new List<LeaderboardEntry>();
         double now = NetClock.Now;
         double? goAt = info.Mode.IsSynchronized() && info.Phase == RoundPhase.Playing

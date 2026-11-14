@@ -8,12 +8,12 @@ using PlayerState = SBMultiplayer.Protocol.PlayerState;
 namespace SBMultiplayer.Client.Net;
 
 /// <summary>
-/// Ajouté à chaque scène de niveau. Envoie l'état de notre planche et affiche un ghost
-/// pour chaque joueur distant présent sur la même map.
+/// Added to every level scene. Sends our board's state and shows a ghost
+/// for every remote player on the same map.
 /// </summary>
 internal sealed class MultiplayerSceneHook : IUpdate, ICheckpointStorage, IGoalReached, IDrawBatch, IDisposable
 {
-    /// <summary>Un envoi tous les 2 ticks = 30 états par seconde.</summary>
+    /// <summary>One send every 2 ticks = 30 states per second.</summary>
     private const int SendEveryTicks = 2;
 
     private static readonly AccessTools.FieldRef<Board, PlayerContainer> BoardPlayerContainer =
@@ -39,8 +39,8 @@ internal sealed class MultiplayerSceneHook : IUpdate, ICheckpointStorage, IGoalR
     }
 
     /// <summary>
-    /// Trouve la planche du joueur et déclare la map au serveur. Appelé depuis Update ET DrawBatch :
-    /// pendant l'intro ou l'attente du départ, la scène est dessinée avant sa première mise à jour.
+    /// Finds the player's board and declares the map to the server. Called from Update AND DrawBatch:
+    /// during the intro or while waiting at the start, the scene is drawn before its first update.
     /// </summary>
     [System.Diagnostics.CodeAnalysis.MemberNotNullWhen(true, nameof(board))]
     private bool EnsureBoard()
@@ -87,7 +87,7 @@ internal sealed class MultiplayerSceneHook : IUpdate, ICheckpointStorage, IGoalR
         SyncGhosts();
     }
 
-    /// <summary>Crée ou retire les ghosts pour coller à la liste des joueurs présents sur notre map.</summary>
+    /// <summary>Creates or removes ghosts to match the list of players on our map.</summary>
     private void SyncGhosts()
     {
         foreach (RemotePlayer p in client.Players.Values)
@@ -98,13 +98,13 @@ internal sealed class MultiplayerSceneHook : IUpdate, ICheckpointStorage, IGoalR
             {
                 if (ghosts.ContainsKey(p.Id))
                 {
-                    RemoveGhost(p.Id); // même id, nouvel objet (reconnexion)
+                    RemoveGhost(p.Id); // same id, new object (reconnection)
                 }
                 var ghostBoard = new NetGhostBoard(p, board!.Assets, GameAccess.GetTransparencyBatch(scene), UI.ModSettings.GhostOpacity,
                     zFightingIndex: 200 + (p.Id % 1000));
                 scene.Add(ghostBoard);
                 ghosts[p.Id] = (p, ghostBoard);
-                ModLog.Info($"Ghost affiché pour {p.Name} (#{p.Id})");
+                ModLog.Info($"Ghost shown for {p.Name} (#{p.Id})");
             }
             else if (!shouldShow && shown)
             {
@@ -125,8 +125,8 @@ internal sealed class MultiplayerSceneHook : IUpdate, ICheckpointStorage, IGoalR
     {
         if (ghosts.Remove(id, out var entry))
         {
-            scene.Remove(entry.Board); // la scène appelle Dispose()
-            ModLog.Info($"Ghost retiré pour {entry.Player.Name} (#{id})");
+            scene.Remove(entry.Board); // the scene calls Dispose()
+            ModLog.Info($"Ghost removed for {entry.Player.Name} (#{id})");
         }
     }
 
@@ -137,33 +137,33 @@ internal sealed class MultiplayerSceneHook : IUpdate, ICheckpointStorage, IGoalR
 
     public void GoalReached()
     {
-        // Le jeu ajuste le chrono (fraction de tick) juste APRÈS avoir prévenu les IGoalReached, puis
-        // arrête de mettre la scène à jour : on confie la lecture du temps final au tick global,
-        // qui s'exécute à la fin de ce même tick.
+        // The game adjusts the timer (tick fraction) right AFTER notifying the IGoalReached, then
+        // stops updating the scene: reading the final time is left to the global tick,
+        // which runs at the end of this same tick.
         var round = client.Round.Current;
         LevelTimer? timer = scene.AllThings.OfType<LevelTimer>().FirstOrDefault();
-        ModLog.Info($"Arrivée détectée (round {round.Info.RoundId}, {round.Info.Phase}, sur la map du round : {client.IsOnRoundMap})");
+        ModLog.Info($"Finish detected (round {round.Info.RoundId}, {round.Info.Phase}, on the round's map: {client.IsOnRoundMap})");
         if (timer == null)
         {
-            ModLog.Warn("Arrivée : chrono introuvable dans la scène");
+            ModLog.Warn("Finish: timer not found in the scene");
             return;
         }
-        // Le temps est toujours lu (intermédiaires), mais n'est envoyé au serveur que pendant un round, sur sa map.
+        // The time is always read (splits), but only sent to the server during a round, on its map.
         bool counts = client.IsOnRoundMap && round.Info.Phase == RoundPhase.Playing;
         client.QueueFinish(round.Info.RoundId, timer, scene.AllThings.OfType<TimeDiffOnCheckpoints>().FirstOrDefault(), sendToServer: counts);
     }
 
     public void DrawBatch(Microsoft.Xna.Framework.Graphics.SpriteBatch spriteBatch, float extrapolation)
     {
-        // Pas de condition sur "board" : pendant l'intro ou après un reset, la scène est dessinée
-        // avant sa première mise à jour, et le panneau doit déjà s'afficher.
+        // No condition on "board": during the intro or after a reset, the scene is drawn
+        // before its first update, and the panel must already show.
         if (disposed || !client.IsReady)
         {
             return;
         }
         if (EnsureBoard())
         {
-            // Les autres joueurs sont aussi visibles pendant l'attente du départ.
+            // Other players are also visible while waiting at the start.
             SyncGhosts();
         }
         Spectator.Sync(scene); // spectator camera on top of the scene's cameras (also under the start-line popup)
@@ -179,7 +179,7 @@ internal sealed class MultiplayerSceneHook : IUpdate, ICheckpointStorage, IGoalR
 
     public void LoadCheckpoint(ICheckpointInfo checkpointInfo)
     {
-        // Restart ou respawn : nouveau segment, les autres ne verront pas la planche glisser jusqu'au respawn.
+        // Restart or respawn: new segment, the others won't see the board slide to the respawn point.
         segment++;
     }
 
@@ -190,12 +190,12 @@ internal sealed class MultiplayerSceneHook : IUpdate, ICheckpointStorage, IGoalR
             return;
         }
         disposed = true;
-        // Les ghosts appartiennent à la scène, qui les dispose elle-même.
+        // Ghosts belong to the scene, which disposes of them itself.
         ghosts.Clear();
         client.SetMap(this, "");
     }
 
-    /// <summary>Identifiant stable d'une map, identique pour tous les joueurs qui ont la même version.</summary>
+    /// <summary>Stable map identifier, identical for every player who has the same version.</summary>
     private static string ComputeMapKey(Board board)
     {
         Level level = ContainerLevel(BoardPlayerContainer(board));

@@ -11,9 +11,9 @@ using SBMultiplayer.Protocol;
 namespace SBMultiplayer.Client.Net;
 
 /// <summary>
-/// Connexion au serveur. Singleton global : il survit aux changements de scène.
-/// Les événements LiteNetLib arrivent sur le thread réseau (UnsyncedEvents) ; le jeu n'a rien à « poller ».
-/// Tout ce qui touche au jeu (chargement de map, skin, notifications de round) se fait dans GlobalTick.
+/// Connection to the server. Global singleton: it survives scene changes.
+/// LiteNetLib events arrive on the network thread (UnsyncedEvents); the game has nothing to poll.
+/// Everything that touches the game (map loading, skin, round notifications) happens in GlobalTick.
 /// </summary>
 internal sealed class MultiplayerClient : INetEventListener
 {
@@ -30,10 +30,10 @@ internal sealed class MultiplayerClient : INetEventListener
     private string playerName = "Joueur";
     private string serverAddress = "";
 
-    /// <summary>Déconnexion demandée depuis le menu : pas de reconnexion automatique.</summary>
+    /// <summary>Disconnection requested from the menu: no automatic reconnection.</summary>
     private bool userDisconnected;
 
-    /// <summary>Dernière raison de déconnexion notifiée (pour ne pas répéter la même toutes les 5 s).</summary>
+    /// <summary>Last disconnection reason notified (so the same one isn't repeated every 5 s).</summary>
     private string lastDisconnectReason = "";
 
     private bool wasReady;
@@ -42,13 +42,13 @@ internal sealed class MultiplayerClient : INetEventListener
 
     public RoundState Round { get; } = new();
 
-    /// <summary>Round dont on a déjà chargé la map (pour ne la charger qu'une fois par round).</summary>
+    /// <summary>Round whose map was already loaded (so it's loaded only once per round).</summary>
     private int loadedRoundId;
 
-    /// <summary>Dernier (round, phase) annoncé par une notification.</summary>
+    /// <summary>Last (round, phase) announced by a notification.</summary>
     private (int, RoundPhase) notifiedRound;
 
-    /// <summary>Le jeu a fini de démarrer (menu ou niveau affiché) : on peut lui imposer une map.</summary>
+    /// <summary>The game has finished starting (menu or level shown): a map can be imposed on it.</summary>
     private bool gameReady;
 
     private GlobalOverlay? overlay;
@@ -62,7 +62,7 @@ internal sealed class MultiplayerClient : INetEventListener
 
     public string PlayerName => playerName;
 
-    /// <summary>Vrai si on est sur la map du round en cours (classement, retry automatique…).</summary>
+    /// <summary>True if we're on the current round's map (standings, automatic retry…).</summary>
     public bool IsOnRoundMap
     {
         get
@@ -102,13 +102,13 @@ internal sealed class MultiplayerClient : INetEventListener
         }
     }
 
-    /// <summary>Connecté en admin sur ce serveur.</summary>
+    /// <summary>Logged in as admin on this server.</summary>
     public bool IsAdmin { get; private set; }
 
-    /// <summary>Rotation de maps du serveur (reçue avec le statut admin).</summary>
+    /// <summary>The server's map rotation (received with the admin status).</summary>
     public IReadOnlyList<string> AdminMaps { get; private set; } = Array.Empty<string>();
 
-    /// <summary>Réglages du match du serveur (reçus quand on est admin).</summary>
+    /// <summary>The server's match settings (received when admin).</summary>
     public MatchSettings? ServerSettings { get; private set; }
 
     public void SendSettings(MatchSettings settings, bool saveToFile)
@@ -119,7 +119,7 @@ internal sealed class MultiplayerClient : INetEventListener
         }
     }
 
-    /// <summary>Incrémenté quand le statut admin change (le menu se reconstruit).</summary>
+    /// <summary>Incremented when the admin status changes (the menu rebuilds itself).</summary>
     public int AdminVersion { get; private set; }
 
     public void AdminLogin(string password)
@@ -138,12 +138,12 @@ internal sealed class MultiplayerClient : INetEventListener
         }
     }
 
-    /// <summary>Objet (scène) qui a déclaré la map courante ; seul lui peut la remettre à "" en partant.</summary>
+    /// <summary>Object (scene) that declared the current map; only it can reset it to "" when leaving.</summary>
     public object? MapOwner { get; private set; }
 
-    // ---------- Tick global (thread du jeu) ----------
+    // ---------- Global tick (game thread) ----------
 
-    /// <summary>Appelé à chaque tick du jeu, quelle que soit la scène (voir GlobalTickPatch).</summary>
+    /// <summary>Called on every game tick, whatever the scene (see GlobalTickPatch).</summary>
     public void GlobalTick(BytingLib.Scene? currentScene)
     {
         if (overlay == null && GameAccess.Game != null)
@@ -173,11 +173,11 @@ internal sealed class MultiplayerClient : INetEventListener
             {
                 return;
             }
-            ModLog.Info($"Jeu prêt ({currentScene?.GetType().Name})");
+            ModLog.Info($"Game ready ({currentScene?.GetType().Name})");
         }
 
-        // Nouveau round : on charge la map imposée (une seule fois par round). En mode Rounds, chaque
-        // manche recharge la map (même map) : tout le monde repart de la ligne de départ.
+        // New round: load the imposed map (once per round). In Rounds mode, every round
+        // reloads the map (same map): everyone starts again from the start line.
         if (IsReady && r.Info.Phase is RoundPhase.Playing or RoundPhase.Preparing && r.Info.RoundId != loadedRoundId)
         {
             loadedRoundId = r.Info.RoundId;
@@ -190,7 +190,7 @@ internal sealed class MultiplayerClient : INetEventListener
         KeyboardState keys = Keyboard.GetState();
         if (GameAccess.IsTyping() || ChatInput.IsOpen)
         {
-            previousKeys = keys; // pas de raccourcis pendant la saisie de texte
+            previousKeys = keys; // no hotkeys while typing text
             return;
         }
         if (Pressed(keys, ModConfig.Current.ChatKey))
@@ -222,7 +222,7 @@ internal sealed class MultiplayerClient : INetEventListener
     private bool Pressed(KeyboardState keys, string keyName) =>
         Enum.TryParse(keyName, ignoreCase: true, out Keys key) && keys.IsKeyDown(key) && !previousKeys.IsKeyDown(key);
 
-    /// <summary>Le joueur peut changer de skin dans le menu du jeu : on le signale aux autres.</summary>
+    /// <summary>The player can change skin in the game's menu: tell the others.</summary>
     private void TrackLocalSkin()
     {
         if (++skinCheckTick % 60 != 0 || GameAccess.Game == null)
@@ -358,7 +358,7 @@ internal sealed class MultiplayerClient : INetEventListener
         Notifications.Info(Tr.HostStopped);
     }
 
-    /// <summary>(Re)connexion avec l'adresse et le pseudo de la configuration.</summary>
+    /// <summary>(Re)connects with the configured address and name.</summary>
     public void Connect()
     {
         if (HostedServer.IsRunning)
@@ -379,7 +379,7 @@ internal sealed class MultiplayerClient : INetEventListener
         userDisconnected = false;
         if (server != null)
         {
-            DropConnection("reconnexion");
+            DropConnection("reconnecting");
         }
         lastConnectAttempt = double.NegativeInfinity;
         lastDisconnectReason = "";
@@ -391,7 +391,7 @@ internal sealed class MultiplayerClient : INetEventListener
         userDisconnected = true;
         if (server != null)
         {
-            DropConnection("déconnexion manuelle");
+            DropConnection("manual disconnection");
             Notifications.Info(Tr.DisconnectedByUser);
         }
     }
@@ -399,9 +399,9 @@ internal sealed class MultiplayerClient : INetEventListener
     private void DropConnection(string why)
     {
         NetPeer? peer = server;
-        server = null; // l'événement de déconnexion de ce pair sera ignoré
+        server = null; // this peer's disconnection event will be ignored
         peer?.Disconnect();
-        ModLog.Info($"Connexion fermée ({why})");
+        ModLog.Info($"Connection closed ({why})");
         ResetSessionState();
     }
 
@@ -440,7 +440,7 @@ internal sealed class MultiplayerClient : INetEventListener
 
     private static void LoadRoundMap(string key)
     {
-        // Map du Workshop : "c:M<id>" (dernière version) ou "c:M<id>.<version>" (version exacte).
+        // Workshop map: "c:M<id>" (latest version) or "c:M<id>.<version>" (exact version).
         if (Msg.WorkshopId(key) is ulong workshopId)
         {
             try
@@ -449,12 +449,12 @@ internal sealed class MultiplayerClient : INetEventListener
             }
             catch (Exception e)
             {
-                ModLog.Error($"Impossible de charger la map {key}", e);
+                ModLog.Error($"Could not load map {key}", e);
                 Notifications.Warn(Tr.MapLoadFailed(key));
             }
             return;
         }
-        // Niveau officiel : "o:<id>" ou "o:<id>:<version>".
+        // Official level: "o:<id>" or "o:<id>:<version>".
         string[] parts = key.Split(':');
         if (parts.Length >= 2 && parts[0] == "o" && uint.TryParse(parts[1], out uint id))
         {
@@ -468,22 +468,22 @@ internal sealed class MultiplayerClient : INetEventListener
             }
             catch (Exception e)
             {
-                ModLog.Error($"Impossible de charger la map {key}", e);
+                ModLog.Error($"Could not load map {key}", e);
                 Notifications.Warn(Tr.MapLoadFailed(key));
             }
         }
         else
         {
-            ModLog.Warn($"Map de round non supportée : {key}");
+            ModLog.Warn($"Unsupported round map: {key}");
             Notifications.Warn(Tr.MapNotSupported(key));
         }
     }
 
-    // ---------- Temps ----------
+    // ---------- Times ----------
 
     private (int RoundId, SE.LevelTimer Timer, SE.TimeDiffOnCheckpoints? Display, bool SendToServer)? pendingFinish;
 
-    /// <summary>Arrivée franchie : le temps sera lu (et envoyé si besoin) à la fin du tick, chrono alors définitif.</summary>
+    /// <summary>Finish line crossed: the time is read (and sent if needed) at the end of the tick, once the timer is final.</summary>
     public void QueueFinish(int roundId, SE.LevelTimer timer, SE.TimeDiffOnCheckpoints? display, bool sendToServer) =>
         pendingFinish = (roundId, timer, display, sendToServer);
 
@@ -498,9 +498,9 @@ internal sealed class MultiplayerClient : INetEventListener
         int? delta = SplitTracker.Finished(mapKey, finish.RoundId, finish.Timer, finish.Display);
         if (!finish.SendToServer)
         {
-            return; // hors round : affiché par les intermédiaires uniquement
+            return; // outside a round: only shown by the splits
         }
-        ModLog.Info($"Arrivée en {Msg.FormatTime(ms)} (round {finish.RoundId}) → envoi au serveur");
+        ModLog.Info($"Finished in {Msg.FormatTime(ms)} (round {finish.RoundId}) → sent to the server");
         if (Round.Current.Info.Mode.IsSynchronized())
         {
             StartGate.MarkFinished();
@@ -536,14 +536,14 @@ internal sealed class MultiplayerClient : INetEventListener
         }
     }
 
-    // ---------- Connexion ----------
+    // ---------- Connection ----------
 
-    /// <summary>À appeler régulièrement depuis le thread du jeu : (re)connecte si nécessaire.</summary>
+    /// <summary>Call regularly from the game thread: (re)connects if needed.</summary>
     public void EnsureConnected()
     {
         if (!ModConfig.Current.AutoConnect && lastConnectAttempt == double.NegativeInfinity && !userDisconnected)
         {
-            // AutoConnect = false : on attend que le joueur se connecte depuis le menu.
+            // AutoConnect = false: wait for the player to connect from the menu.
             userDisconnected = true;
         }
         if (userDisconnected || server != null || NetClock.Now - lastConnectAttempt < ReconnectDelaySeconds)
@@ -564,7 +564,7 @@ internal sealed class MultiplayerClient : INetEventListener
                     DisconnectTimeout = 10_000,
                 };
                 net.Start();
-                // Fermeture du jeu : on prévient le serveur au lieu de le laisser attendre le timeout.
+                // Game closing: tell the server instead of letting it wait for the timeout.
                 AppDomain.CurrentDomain.ProcessExit += (_, _) =>
                 {
                     net.Stop(sendDisconnectMessages: true);
@@ -590,12 +590,12 @@ internal sealed class MultiplayerClient : INetEventListener
                 ? (hostAddress[..hostAddress.LastIndexOf(':')], int.Parse(hostAddress[(hostAddress.LastIndexOf(':') + 1)..]))
                 : ModConfig.Current.ParseServer();
             serverAddress = hostAddressLabel ?? $"{host}:{port}";
-            ModLog.Info($"Connexion à {serverAddress} en tant que « {playerName} »…");
+            ModLog.Info($"Connecting to {serverAddress} as \"{playerName}\"…");
             server = net.Connect(host, port, ProtocolInfo.ConnectionData(ModConfig.Current.ServerPassword));
         }
         catch (Exception e)
         {
-            ModLog.Error("Échec de la tentative de connexion", e);
+            ModLog.Error("Connection attempt failed", e);
             NotifyDisconnect(Tr.CannotConnect(ModConfig.Current.Server, e.GetType().Name));
             server = null;
         }
@@ -614,7 +614,7 @@ internal sealed class MultiplayerClient : INetEventListener
     {
         if (key == "" && !ReferenceEquals(owner, MapOwner))
         {
-            return; // une scène plus récente a déjà déclaré sa map
+            return; // a more recent scene already declared its map
         }
         MapOwner = key == "" ? null : owner;
         if (key == mapKey)
@@ -622,7 +622,7 @@ internal sealed class MultiplayerClient : INetEventListener
             return;
         }
         mapKey = key;
-        ModLog.Info($"Map courante : {(key == "" ? "(menu)" : key)}");
+        ModLog.Info($"Current map: {(key == "" ? "(menu)" : key)}");
         if (IsReady)
         {
             Send(w => Msg.MapChanged(w, null, key), DeliveryMethod.ReliableOrdered);
@@ -658,17 +658,17 @@ internal sealed class MultiplayerClient : INetEventListener
         }
         catch (Exception e)
         {
-            ModLog.Warn($"Pseudo Steam indisponible ({e.GetType().Name}), pseudo par défaut utilisé");
+            ModLog.Warn($"Steam name unavailable ({e.GetType().Name}), using the default name");
             return "Player";
         }
     }
 
-    // ---------- Événements LiteNetLib (thread réseau) ----------
+    // ---------- LiteNetLib events (network thread) ----------
 
     public void OnPeerConnected(NetPeer peer)
     {
-        ModLog.Info($"Connecté au serveur {peer}");
-        server = peer; // au cas où l'événement arrive avant le retour de Connect()
+        ModLog.Info($"Connected to server {peer}");
+        server = peer; // in case the event arrives before Connect() returns
         int skin = localSkin;
         Send(w => Msg.Hello(w, playerName, skin), DeliveryMethod.ReliableOrdered);
     }
@@ -677,9 +677,9 @@ internal sealed class MultiplayerClient : INetEventListener
     {
         if (!ReferenceEquals(peer, server))
         {
-            return; // ancienne connexion fermée volontairement (Connect/Disconnect depuis le menu)
+            return; // old connection closed on purpose (Connect/Disconnect from the menu)
         }
-        // Code envoyé par le serveur (refus, kick…) : à lire une seule fois, la lecture consomme les octets.
+        // Code sent by the server (rejection, kick…): read it only once, reading consumes the bytes.
         string code = info.AdditionalData.AvailableBytes > 0 ? info.AdditionalData.GetString() : "";
         string reason = code != "" ? TranslateReasonCode(code) : info.Reason switch
         {
@@ -691,28 +691,28 @@ internal sealed class MultiplayerClient : INetEventListener
         };
         if (code is ServerReasons.BadPassword or ServerReasons.Kicked)
         {
-            // Réessayer ne servirait à rien : on attend une action du joueur (menu F8).
+            // Retrying would be pointless: wait for the player to act (F8 menu).
             userDisconnected = true;
-            ModLog.Warn($"Déconnecté du serveur : {reason}");
+            ModLog.Warn($"Disconnected from the server: {reason}");
             NotifyDisconnect(reason);
         }
         else
         {
-            ModLog.Warn($"Déconnecté du serveur : {reason}. Nouvelle tentative dans {ReconnectDelaySeconds} s.");
+            ModLog.Warn($"Disconnected from the server: {reason}. Retrying in {ReconnectDelaySeconds} s.");
             NotifyDisconnect(Tr.RetryingEvery(reason, (int)ReconnectDelaySeconds));
         }
         server = null;
         ResetSessionState();
     }
 
-    /// <summary>Le serveur envoie des codes (SERVER_FULL, VERSION_MISMATCH:4, KICKED…) que le client traduit.</summary>
+    /// <summary>The server sends codes (SERVER_FULL, VERSION_MISMATCH:4, KICKED…) that the client translates.</summary>
     private static string TranslateReasonCode(string code) => code switch
     {
         ServerReasons.Full => Tr.ServerFull,
         ServerReasons.BadPassword => Tr.BadPassword,
         ServerReasons.Kicked => Tr.Kicked,
         _ when code.StartsWith(ServerReasons.VersionMismatch + ":") => Tr.VersionMismatch(code[(ServerReasons.VersionMismatch.Length + 1)..]),
-        _ => code, // serveur plus ancien : message en clair
+        _ => code, // older server: plain-text message
     };
 
     public void OnNetworkReceive(NetPeer peer, NetPacketReader reader, byte channel, DeliveryMethod method)
@@ -740,8 +740,8 @@ internal sealed class MultiplayerClient : INetEventListener
                     {
                         AddPlayer(Msg.GetPlayerInfo(reader), notify: false);
                     }
-                    ModLog.Info($"Bienvenue ! Notre id : #{LocalId}, {count} autre(s) joueur(s)");
-                    // Le serveur ne connaît pas encore notre map (connexion en cours de partie, ou reconnexion).
+                    ModLog.Info($"Welcome! Our id: #{LocalId}, {count} other player(s)");
+                    // The server doesn't know our map yet (joining mid-game, or reconnecting).
                     if (mapKey != "")
                     {
                         Send(w => Msg.MapChanged(w, null, mapKey), DeliveryMethod.ReliableOrdered);
@@ -760,7 +760,7 @@ internal sealed class MultiplayerClient : INetEventListener
                     int id = reader.GetInt();
                     if (Players.TryRemove(id, out RemotePlayer? p))
                     {
-                        ModLog.Info($"{p.Name} (#{id}) est parti");
+                        ModLog.Info($"{p.Name} (#{id}) left");
                         Notifications.Info(Tr.PlayerLeft(p.Name));
                     }
                     break;
@@ -801,7 +801,7 @@ internal sealed class MultiplayerClient : INetEventListener
                 {
                     RoundInfo info = Msg.GetRound(reader);
                     Round.SetInfo(info, peer.Ping / 1000.0);
-                    ModLog.Info($"Round {info.RoundId} : {info.Phase} sur {(info.MapKey == "" ? "-" : info.MapKey)}, {info.RemainingSeconds:0} s");
+                    ModLog.Info($"Round {info.RoundId}: {info.Phase} on {(info.MapKey == "" ? "-" : info.MapKey)}, {info.RemainingSeconds:0} s");
                     break;
                 }
                 case MessageType.Leaderboard:
@@ -831,7 +831,7 @@ internal sealed class MultiplayerClient : INetEventListener
                 }
                 case MessageType.Chat:
                 {
-                    reader.GetInt(); // id de l'émetteur (réservé : mute, couleurs…)
+                    reader.GetInt(); // sender id (reserved: mute, colors…)
                     string name = reader.GetString(ProtocolInfo.MaxNameLength * 4);
                     string text = reader.GetString(ProtocolInfo.MaxChatLength * 4);
                     ChatLog.AddPlayer(name, text);
@@ -864,14 +864,14 @@ internal sealed class MultiplayerClient : INetEventListener
         }
         catch (Exception e)
         {
-            ModLog.Error("Paquet serveur invalide", e);
+            ModLog.Error("Invalid server packet", e);
         }
     }
 
     private void AddPlayer(PlayerInfo info, bool notify)
     {
         Players[info.Id] = new RemotePlayer(info);
-        ModLog.Info($"{info.Name} (#{info.Id}) a rejoint{(info.MapKey == "" ? "" : $", sur {info.MapKey}")}");
+        ModLog.Info($"{info.Name} (#{info.Id}) joined{(info.MapKey == "" ? "" : $", on {info.MapKey}")}");
         if (notify)
         {
             Notifications.Info(Tr.PlayerJoined(info.Name));
@@ -879,7 +879,7 @@ internal sealed class MultiplayerClient : INetEventListener
     }
 
     public void OnNetworkError(IPEndPoint endPoint, SocketError socketError) =>
-        ModLog.Warn($"Erreur réseau {endPoint} : {socketError}");
+        ModLog.Warn($"Network error {endPoint}: {socketError}");
 
     public void OnNetworkReceiveUnconnected(IPEndPoint remoteEndPoint, NetPacketReader reader, UnconnectedMessageType messageType)
     {

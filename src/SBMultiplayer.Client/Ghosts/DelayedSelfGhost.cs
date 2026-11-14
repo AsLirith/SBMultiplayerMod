@@ -5,9 +5,9 @@ using SE;
 namespace SBMultiplayer.Client.Ghosts;
 
 /// <summary>
-/// Étape 2 : un ghost qui rejoue la planche du joueur avec un retard fixe.
-/// Il valide toute la chaîne d'affichage d'un joueur distant sans réseau :
-/// capture de l'état → tampon horodaté → interpolation → NetGhostBoard.
+/// Debug (step 2): a ghost replaying the player's board with a fixed delay.
+/// It validates the whole remote-player display chain without networking:
+/// state capture → timestamped buffer → interpolation → NetGhostBoard.
 /// </summary>
 internal sealed class DelayedSelfGhost : IUpdate, ICheckpointStorage, IGhostPoseSource
 {
@@ -37,8 +37,8 @@ internal sealed class DelayedSelfGhost : IUpdate, ICheckpointStorage, IGhostPose
         if (ghost == null)
         {
             ghost = new NetGhostBoard(this, board.Assets, GameAccess.GetTransparencyBatch(scene), opacity, zFightingIndex: 100);
-            scene.Add(ghost); // la scène le disposera avec elle
-            ModLog.Info("Ghost retardé créé");
+            scene.Add(ghost); // the scene will dispose of it
+            ModLog.Info("Delayed ghost created");
         }
 
         tick++;
@@ -48,7 +48,7 @@ internal sealed class DelayedSelfGhost : IUpdate, ICheckpointStorage, IGhostPose
 
     public bool TryGetPose(float extrapolation, out Vector3 position, out Vector3 orientation)
     {
-        // Le moteur dessine entre le tick précédent et le tick courant : on fait pareil, avec le retard en plus.
+        // The engine draws between the previous and current tick: do the same, plus the delay.
         double renderTime = (tick - 1 + extrapolation) / GameAccess.TicksPerSecond - DelaySeconds;
         if (renderTime < 0)
         {
@@ -65,7 +65,7 @@ internal sealed class DelayedSelfGhost : IUpdate, ICheckpointStorage, IGhostPose
 
     public void LoadCheckpoint(ICheckpointInfo checkpointInfo)
     {
-        // Restart ou respawn : la planche est téléportée, le ghost ne doit pas « glisser » jusqu'au point de respawn.
+        // Restart or respawn: the board is teleported, the ghost must not slide to the respawn point.
         segment++;
     }
 }
