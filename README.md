@@ -21,7 +21,7 @@ Unofficial multiplayer mod for [STUNTBOOST](https://store.steampowered.com/app/2
 3. Set the Steam launch options:
    - **Linux**: `DOTNET_STARTUP_HOOKS="/path/to/STUNTBOOST/SBMultiplayer/SBMultiplayer.Client.dll" %command%`
    - **Windows**: `cmd /c "set DOTNET_STARTUP_HOOKS=C:\path\to\STUNTBOOST\SBMultiplayer\SBMultiplayer.Client.dll&& %command%"` (no space before `&&`)
-   **Dont forget to replace 'C:\path\to' by the real path to your STUNTBOOST files. F.ex : 'C:\Program Files (x86)\Steam\steamapps\common\'
+   **Dont forget to replace 'C:\path\to' by the real path to your STUNTBOOST files. F.ex : 'C:\Program Files (x86)\Steam\steamapps\common\'**
 4. Start the game, press **F8** and enter the server address.
 
 To uninstall, remove the launch option. The log file is `SBMultiplayer/SBMultiplayer.log`.
