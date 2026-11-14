@@ -27,6 +27,8 @@ internal static class ModSettings
 
     public static ValueEvent<float> ChatScale { get; } = Bind(ModConfig.Current.ChatScale, v => ModConfig.Current.ChatScale = v);
 
+    public static ValueEvent<bool> NotificationsOnTop { get; } = Bind(ModConfig.Current.NotificationsOnTop, v => ModConfig.Current.NotificationsOnTop = v);
+
     private static ValueEvent<T> Bind<T>(T initial, Action<T> apply)
     {
         var value = new ValueEvent<T>(initial);

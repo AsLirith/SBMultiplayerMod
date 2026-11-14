@@ -65,6 +65,12 @@ internal sealed class ModConfig
     /// <summary>Affiche le chat (messages et événements) en bas à gauche.</summary>
     public bool ShowChat { get; set; } = true;
 
+    /// <summary>
+    /// Notifications aussi en haut au centre de l'écran. Par défaut, elles ne passent que par le chat
+    /// (elles reviennent en haut si le chat est masqué).
+    /// </summary>
+    public bool NotificationsOnTop { get; set; }
+
     /// <summary>Taille du texte du chat (1 = taille d'origine).</summary>
     public float ChatScale { get; set; } = 1f;
 

@@ -33,10 +33,14 @@ internal sealed class GlobalOverlay : SE.IDrawBatch2
             sb.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp);
             try
             {
-                DrawNotifications(sb, vp, scale);
-                if (ModConfig.Current.ShowChat && MultiplayerClient.Instance.IsReady)
+                // Notifications go to the chat; at the top only if asked, or if the chat is hidden.
+                if (ModConfig.Current.NotificationsOnTop || !ModConfig.Current.ShowChat)
                 {
-                    DrawChat(sb, vp, scale);
+                    DrawNotifications(sb, vp, scale);
+                }
+                if (ModConfig.Current.ShowChat)
+                {
+                    DrawChat(sb, vp, scale); // also when disconnected: connection errors stay visible
                 }
                 if (ModConfig.Current.ShowRoundPanel && MultiplayerClient.Instance.IsReady)
                 {

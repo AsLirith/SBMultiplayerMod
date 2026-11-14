@@ -54,6 +54,7 @@ internal static class Tr
           $"{menuKey} : ce menu    {rejoinKey} : rejoindre la map du round    {chatKey} : chat");
     public static string ShowChat => T("Show chat", "Afficher le chat");
     public static string ChatSize => T("Chat size", "Taille du chat");
+    public static string NotificationsOnTop => T("Notifications at the top of the screen", "Notifications en haut de l'écran");
     public static string ChatTitle => T("Chat", "Chat");
     public static string ChatHint => T("Enter: send    Escape: cancel    /help: commands", "Entrée : envoyer    Échap : annuler    /help : commandes");
 
