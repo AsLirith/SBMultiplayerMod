@@ -85,12 +85,12 @@ public sealed class GameServer : INetEventListener
     {
         if (!net.Start(options.Port))
         {
-            throw new InvalidOperationException($"Impossible d'écouter sur le port UDP {options.Port}");
+            throw new InvalidOperationException($"Cannot listen on UDP port {options.Port}");
         }
-        Log($"Serveur démarré sur le port UDP {options.Port} (protocole v{ProtocolInfo.Version}, {options.MaxPlayers} joueurs max{(options.Echo ? ", mode écho" : "")})");
+        Log($"Server started on UDP port {options.Port} (protocol v{ProtocolInfo.Version}, {options.MaxPlayers} players max{(options.Echo ? ", echo mode" : "")})");
         Log(HasRotation
-            ? $"Rotation : {string.Join(", ", options.Maps)} — rounds de {options.RoundSeconds:0} s, résultats {options.ResultsSeconds:0} s"
-            : "Aucune map configurée : mode libre (--maps pour activer les rounds)");
+            ? $"Rotation: {string.Join(", ", options.Maps)} - {options.RoundSeconds:0} s rounds, {options.ResultsSeconds:0} s results"
+            : "No maps configured: free mode (use --maps to enable rounds)");
     }
 
     public void Poll()
@@ -106,12 +106,12 @@ public sealed class GameServer : INetEventListener
     public void Stop() => net.Stop(sendDisconnectMessages: true);
 
     public IEnumerable<string> DescribePlayers() =>
-        players.Values.Select(p => $"#{p.Id} {p.Name} — map: {(p.MapKey == "" ? "(menu)" : p.MapKey)} — ping {p.Peer.Ping} ms");
+        players.Values.Select(p => $"#{p.Id} {p.Name} - map: {(p.MapKey == "" ? "(menu)" : p.MapKey)} - ping {p.Peer.Ping} ms");
 
     public string DescribeRound() => phase switch
     {
-        RoundPhase.Free => "Mode libre",
-        _ => $"Round {roundId} — map {mapIndex + 1}/{options.Maps.Count} ({CurrentMap}) — {phase} — {Math.Max(0, phaseEnd - Now):0} s restantes",
+        RoundPhase.Free => "Free mode",
+        _ => $"Round {roundId} - map {mapIndex + 1}/{options.Maps.Count} ({CurrentMap}) - {phase} - {Math.Max(0, phaseEnd - Now):0} s left",
     };
 
     /// <summary>Commande console : termine la phase en cours (round → résultats → map suivante).</summary>
@@ -136,7 +136,7 @@ public sealed class GameServer : INetEventListener
         {
             if (phase != RoundPhase.Free)
             {
-                Log("Plus personne : rotation en pause");
+                Log("Nobody left: rotation paused");
                 phase = RoundPhase.Free;
                 mapIndex = -1;
             }
@@ -172,7 +172,7 @@ public sealed class GameServer : INetEventListener
         phaseStart = Now;
         phaseEnd = Now + options.RoundSeconds;
         best.Clear();
-        Log($"Round {roundId} : {CurrentMap} ({options.RoundSeconds:0} s)");
+        Log($"Round {roundId}: {CurrentMap} ({options.RoundSeconds:0} s)");
         BroadcastRound();
         BroadcastLeaderboard();
     }
@@ -193,26 +193,26 @@ public sealed class GameServer : INetEventListener
         double elapsed = Now - phaseStart;
         if (phase != RoundPhase.Playing || finishRoundId != roundId)
         {
-            reject = "hors round";
+            reject = "outside of a round";
         }
         else if (!Msg.MapMatches(p.MapKey, CurrentMap))
         {
-            reject = $"mauvaise map ({p.MapKey})";
+            reject = $"wrong map ({p.MapKey})";
         }
         else if (timeMs == 0 || timeMs / 1000.0 > elapsed + FinishToleranceSeconds)
         {
             // Une run ne peut pas durer plus longtemps que le round n'a duré.
-            reject = $"temps impossible ({Msg.FormatTime(timeMs)} alors que le round dure depuis {elapsed:0.0} s)";
+            reject = $"impossible time ({Msg.FormatTime(timeMs)} while the round started {elapsed:0.0} s ago)";
         }
 
         if (reject != "")
         {
-            Log($"Temps refusé pour {p.Name} : {reject}");
+            Log($"Time rejected for {p.Name}: {reject}");
             return;
         }
 
         bool improved = !best.TryGetValue(p.Id, out LeaderboardEntry previous) || timeMs < previous.BestMs;
-        Log($"{p.Name} : {Msg.FormatTime(timeMs)}{(improved ? " (meilleur temps)" : "")}");
+        Log($"{p.Name}: {Msg.FormatTime(timeMs)}{(improved ? " (personal best)" : "")}");
         if (improved)
         {
             best[p.Id] = new LeaderboardEntry(p.Id, p.Name, timeMs);
@@ -223,10 +223,10 @@ public sealed class GameServer : INetEventListener
     private void LogResults()
     {
         var board = SortedLeaderboard();
-        Log($"Résultats du round {roundId} ({CurrentMap}) :" + (board.Count == 0 ? " aucun temps" : ""));
+        Log($"Round {roundId} results ({CurrentMap}):" + (board.Count == 0 ? " no times" : ""));
         for (int i = 0; i < board.Count; i++)
         {
-            Log($"  {i + 1}. {board[i].Name} — {Msg.FormatTime(board[i].BestMs)}");
+            Log($"  {i + 1}. {board[i].Name} - {Msg.FormatTime(board[i].BestMs)}");
         }
     }
 
@@ -246,14 +246,14 @@ public sealed class GameServer : INetEventListener
             request.Accept();
             return;
         }
-        Log($"Connexion refusée depuis {request.RemoteEndPoint} : version du mod différente ({key})");
+        Log($"Connection refused from {request.RemoteEndPoint}: different mod version ({key})");
         request.Reject(NetDataWriter.FromString($"{ServerReasons.VersionMismatch}:{ProtocolInfo.Version}"));
     }
 
     public void OnPeerConnected(NetPeer peer)
     {
         players[peer.Id] = new Player { Peer = peer };
-        Log($"Connexion de {peer} (#{peer.Id})");
+        Log($"Connection from {peer} (#{peer.Id})");
     }
 
     public void OnPeerDisconnected(NetPeer peer, DisconnectInfo info)
@@ -262,7 +262,7 @@ public sealed class GameServer : INetEventListener
         {
             return;
         }
-        Log($"Déconnexion de {p.Name} (#{p.Id}) : {info.Reason}");
+        Log($"Disconnection of {p.Name} (#{p.Id}): {info.Reason}");
         if (p.HasSaidHello)
         {
             Broadcast(Msg.PlayerLeft(writer, p.Id), DeliveryMethod.ReliableOrdered, except: null);
@@ -307,18 +307,18 @@ public sealed class GameServer : INetEventListener
                     OnFinish(p, reader.GetInt(), reader.GetUInt());
                     break;
                 default:
-                    Log($"Message inattendu {type} de #{p.Id}");
+                    Log($"Unexpected message {type} from #{p.Id}");
                     break;
             }
         }
         catch (Exception e) when (e is ArgumentException or IndexOutOfRangeException or InvalidOperationException)
         {
-            Log($"Paquet invalide de #{p.Id} : {e.Message}");
+            Log($"Invalid packet from #{p.Id}: {e.Message}");
         }
     }
 
     public void OnNetworkError(System.Net.IPEndPoint endPoint, System.Net.Sockets.SocketError socketError) =>
-        Log($"Erreur réseau {endPoint} : {socketError}");
+        Log($"Network error {endPoint}: {socketError}");
 
     public void OnNetworkReceiveUnconnected(System.Net.IPEndPoint remoteEndPoint, NetPacketReader reader, UnconnectedMessageType messageType)
     {
@@ -348,7 +348,7 @@ public sealed class GameServer : INetEventListener
         {
             p.Peer.Send(Msg.PlayerJoined(writer, new PlayerInfo(EchoIdOffset + p.Id, $"Echo {p.Name}", p.MapKey, p.Skin)), DeliveryMethod.ReliableOrdered);
         }
-        Log($"{p.Name} (#{p.Id}) a rejoint la partie ({players.Count} connecté(s))");
+        Log($"{p.Name} (#{p.Id}) joined the game ({players.Count} connected)");
 
         // Round en cours : le nouveau venu reçoit la map imposée et le classement.
         if (phase != RoundPhase.Free)

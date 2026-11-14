@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <!-- Doit correspondre au runtime embarqué par le jeu (.NET 8.0.30) -->
+    <!-- Must match the runtime shipped with the game (.NET 8.0.30) -->
     <TargetFramework>net8.0</TargetFramework>
     <AssemblyName>SBMultiplayer.Client</AssemblyName>
     <RootNamespace>SBMultiplayer.Client</RootNamespace>
@@ -13,7 +13,7 @@
     <PackageReference Include="Lib.Harmony" Version="2.3.6" />
   </ItemGroup>
 
-  <!-- Assemblies du jeu : référencées pour compiler, jamais copiées ni redistribuées -->
+  <!-- Game assemblies: referenced to compile, never copied or redistributed -->
   <ItemGroup>
     <Reference Include="STUNTBOOST" HintPath="$(GameDir)/STUNTBOOST.dll" Private="false" />
     <Reference Include="BytingLib" HintPath="$(GameLibDir)/BytingLib.dll" Private="false" />
@@ -25,14 +25,14 @@
     <ProjectReference Include="../SBMultiplayer.Protocol/SBMultiplayer.Protocol.csproj" />
   </ItemGroup>
 
-  <!-- Après chaque build : copie du mod dans le dossier du jeu -->
+  <!-- After each build: copy the mod into the game folder -->
   <Target Name="DeployMod" AfterTargets="Build" Condition="Exists('$(GameDir)/STUNTBOOST.dll')">
     <ItemGroup>
       <ModFiles Include="$(OutDir)SBMultiplayer.Client.dll;$(OutDir)SBMultiplayer.Client.pdb;$(OutDir)0Harmony.dll;$(OutDir)LiteNetLib.dll;$(OutDir)SBMultiplayer.Protocol.dll" />
     </ItemGroup>
     <MakeDir Directories="$(ModDeployDir)" />
     <Copy SourceFiles="@(ModFiles)" DestinationFolder="$(ModDeployDir)" SkipUnchangedFiles="true" />
-    <Message Importance="high" Text="SBMultiplayer déployé dans $(ModDeployDir)" />
+    <Message Importance="high" Text="SBMultiplayer deployed to $(ModDeployDir)" />
   </Target>
 
 </Project>

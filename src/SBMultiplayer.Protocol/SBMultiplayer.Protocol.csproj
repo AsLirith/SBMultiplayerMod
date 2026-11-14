@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- Partagé par le client (dans le jeu) et le serveur. Aucune dépendance au jeu ni à MonoGame. -->
+  <!-- Shared by the client (in the game) and the server. No dependency on the game or MonoGame. -->
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
   </PropertyGroup>

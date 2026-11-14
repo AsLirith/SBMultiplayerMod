@@ -46,7 +46,7 @@ dotnet build -p:GameDir=/path/to/steamapps/common/STUNTBOOST   # builds and copi
 
 ## How it works
 
-The mod is loaded through a [.NET startup hook](https://github.com/dotnet/runtime/blob/main/docs/design/features/host-startup-hook.md) and patches the game in memory with [Harmony](https://github.com/pardeike/Harmony), without modifying any game file. Networking uses [LiteNetLib](https://github.com/RevenantX/LiteNetLib) (UDP). Technical notes (in French) are in [docs/00-reverse-engineering.md](docs/00-reverse-engineering.md).
+The mod is loaded through a [.NET startup hook](https://github.com/dotnet/runtime/blob/main/docs/design/features/host-startup-hook.md) and patches the game in memory with [Harmony](https://github.com/pardeike/Harmony), without modifying any game file. Networking uses [LiteNetLib](https://github.com/RevenantX/LiteNetLib) (UDP). Technical notes are in [docs/00-reverse-engineering.md](docs/00-reverse-engineering.md).
 
 ## Legal
 

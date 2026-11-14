@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- Serveur dédié : application console, sans le jeu ni GPU. -->
+  <!-- Dedicated server: console app, no game or GPU needed. -->
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net8.0</TargetFramework>

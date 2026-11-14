@@ -1,104 +1,117 @@
-# Étape 0 — Reverse engineering de STUNTBOOST
+# STUNTBOOST reverse engineering notes
 
-Décompilé le 2026-11-14 avec `ilspycmd` 11.2 (sources dans `_decompiled/`, **ne jamais versionner ni redistribuer**).
-Les numéros de ligne renvoient à `_decompiled/STUNTBOOST/SE/` et changeront à chaque mise à jour du jeu : chercher par nom.
+Notes gathered while building the mod, from a local decompilation of the game (`ilspycmd` 11.2, 2026-11-14).
+The decompiled sources are **never committed or redistributed**; to read them, decompile your own copy of the game into `_decompiled/` (git-ignored).
+Line numbers refer to `_decompiled/STUNTBOOST/SE/` and change with every game update: search by name instead.
 
-## Vue d'ensemble
+## Overview
 
-| Élément | Valeur |
+| Item | Value |
 |---|---|
 | Runtime | .NET 8.0.30 CoreCLR, self-contained (`STUNTBOOST` = apphost) |
-| Moteur | MonoGame + `BytingLib` (lib maison du studio, décompilée aussi) |
-| Taille | `STUNTBOOST.dll` ≈ 121k lignes, `BytingLib.dll` ≈ 48k lignes |
-| Obfuscation | Aucune |
-| Tick | Fixe, **60 Hz** (`Program.cs` : `new TargetGameSpeed(1.0 / 60.0, ...)`) |
-| Steam | `Steamworks.NET` ; aucun usage de `SteamNetworking` / `SteamMatchmaking` |
+| Engine | MonoGame + `BytingLib` (the studio's in-house library) |
+| Size | `STUNTBOOST.dll` ≈ 121k lines, `BytingLib.dll` ≈ 48k lines |
+| Obfuscation | None |
+| Tick | Fixed **60 Hz** (`Program.cs`: `new TargetGameSpeed(1.0 / 60.0, ...)`) |
+| World scale | 1 unit = 1 cm (the game displays speeds in "cm/s" = units per tick × 60; the player is ≈ 1.3 units tall) |
+| Steam | `Steamworks.NET`; no use of `SteamNetworking` / `SteamMatchmaking` |
 
-## Injection du mod
+## Loading the mod
 
-- `STUNTBOOST.runtimeconfig.json` ne désactive **pas** les startup hooks, donc la cible est `DOTNET_STARTUP_HOOKS=<chemin>/SBMultiplayer.dll %command%` dans les options de lancement Steam.
-- `libhostfxr.so` est une build custom (`0.0.0-dev`) et `libhostfxr.so.bak` l'officielle 8.0.30. ✅ Ça ne gêne pas : le startup hook et Harmony 2.3.6 se chargent bien (testé le 2026-11-14, natif Linux).
-- File d'exécution sur le thread principal : `BytingLib.MainThread`. `GlobalGame.DoNextUpdate` (queue) sert à réinjecter les messages réseau dans la boucle de jeu.
+- `STUNTBOOST.runtimeconfig.json` does **not** disable startup hooks, so `DOTNET_STARTUP_HOOKS=<path>/SBMultiplayer.Client.dll %command%` in the Steam launch options works.
+- `libhostfxr.so` is a custom build (`0.0.0-dev`), and `libhostfxr.so.bak` is the official 8.0.30. ✅ Not a problem: the startup hook and Harmony 2.3.6 load fine (tested on native Linux).
+- Main-thread dispatch: `BytingLib.MainThread`, and the `GlobalGame.DoNextUpdate` queue.
 
-## Détection de mods (`RunUploadBlockers.cs`)
+## Mod detection (`RunUploadBlockers.cs`)
 
-- Bloque l'envoi des runs si l'une de ces assemblies est chargée : `0Harmony`, `BepInEx*`, `MelonLoader`, `MonoMod.*`. Même chose si `SaveState.Gameplay.ModdingMode` (option officielle « Modding Mode ») est active, ou si certains réglages de gameplay ne sont pas ceux par défaut.
-- Utilisé par `GlobalGame.SubmitRunIfRecord`. Quand c'est bloqué, la run n'est **ni envoyée, ni enregistrée en local** (« run not stored or uploaded »).
-- Conséquence : avec Harmony chargé, les leaderboards officiels sont protégés automatiquement (c'est ce qu'on veut). En revanche, le joueur ne garde pas ses records perso : le mod devra gérer ses propres temps.
+- Run submission is blocked if any of these assemblies is loaded: `0Harmony`, `BepInEx*`, `MelonLoader`, `MonoMod.*`. Same if `SaveState.Gameplay.ModdingMode` (official "Modding Mode" option) is on, or if some gameplay settings differ from their defaults.
+- Used by `GlobalGame.SubmitRunIfRecord`. When blocked, the run is **neither uploaded nor saved locally** ("run not stored or uploaded").
+- Consequence: with Harmony loaded, the official leaderboards are protected automatically (which is what we want). Players don't keep their personal records though, so the mod tracks its own times.
 
-## Boucle de jeu
+## Game loop
 
 - `Program.Main` → `MyGameWrapper : BytingLib.GameWrapper : MonoGame.Game` → `GlobalGame : GamePrototype`.
-- `GlobalGame.UpdateIteration(GameTime)` → `UpdateIterationInner` : un appel par tick. Elle appelle `stuff.ForEach(IUpdate)`, la scène courante, puis `steam?.Update()`.
-- `GlobalGame.ChangeScene(Func<Scene>)` change de scène. Le champ `currentScene` contient la scène active.
+- `GlobalGame.UpdateIteration(GameTime)` → `UpdateIterationInner`: once per tick. It runs `stuff.ForEach(IUpdate)` (global objects + current scene), then `steam?.Update()`.
+- `GlobalGame.GetTopmostScene()` (3 lines) is called by the engine **once per tick, right after the update**, whatever the scene. ✅ The mod postfixes it as its "global tick" (menus included), which also captures the `GlobalGame` instance.
+- `GlobalGame.ChangeScene(Func<Scene>)` switches scenes; the `currentScene` field holds the active one.
+- `GlobalGame.stuff` (`StuffDisposable`) holds global objects. Its `IDrawBatch2` items are drawn **on top of every scene** (`DrawIteration`), which is where the mod's round panel and notifications live.
+- The game **pauses when its window loses focus**, and the mod pauses with it.
 
-## Architecture des scènes : les interfaces diffusées
+## Scene architecture: broadcast interfaces
 
-Une scène appelle `scene.ForEach((IXxx f) => ...)` sur tous ses objets. **Ajouter à la scène un objet qui implémente ces interfaces suffit pour recevoir les événements, sans patch :**
+A scene calls `scene.ForEach((IXxx f) => ...)` on all its objects. **Adding an object implementing these interfaces to the scene is enough to receive the events, without any patch:**
 
-| Interface | Appelée quand |
+| Interface | Called when |
 |---|---|
-| `IUpdate.Update()` | à chaque tick |
-| `ICheckpointStorage.StoreCheckpoint(info)` | checkpoint pris (`CheckpointManager.ActivateCheckpoint`) |
-| `ICheckpointStorage.LoadCheckpoint(info)` | respawn ; `info is FirstCheckpoint` signifie **restart de la run** |
-| `IGoalReached.GoalReached()` | arrivée franchie |
-| `IDrawWorldSkinRender`, `IBeforeDraw(popup, extrapolation)` | rendu 3D (utilisé par `GhostBoard`) |
+| `IUpdate.Update()` | every tick |
+| `ICheckpointStorage.StoreCheckpoint(info)` | checkpoint taken (`CheckpointManager.ActivateCheckpoint`) |
+| `ICheckpointStorage.LoadCheckpoint(info)` | respawn; `info is FirstCheckpoint` means **the run restarted** |
+| `IGoalReached.GoalReached()` | finish line crossed |
+| `IDrawWorldSkinRender`, `IBeforeDraw(popup, extrapolation)` | 3D rendering (used by `GhostBoard`) |
+| `IDrawBatch.DrawBatch(spriteBatch, extrapolation)` | 2D drawing at the end of the scene's rendering (not inside a `Begin`/`End`) |
 
-### Sémantique observée en jeu (test du 2026-11-14, niveau 1)
+`Scene.ForEach` iterates by index and tolerates objects being added or removed during the iteration. Removed `IDisposable` objects are disposed, and so is everything left when the scene is disposed.
 
-| Événement reçu par notre objet | Signification |
+### Behaviour observed in game
+
+| Event received by our object | Meaning |
 |---|---|
-| `StoreCheckpoint(FirstCheckpoint)` | **départ de la run** (juste après la création de la scène) |
-| `StoreCheckpoint(Checkpoint ou sous-classe)` | checkpoint franchi. Les types varient selon le niveau (ex. `LvlAccelerateAndSteerSilentCheckpoint`), donc tester `!(info is FirstCheckpoint)` |
-| `LoadCheckpoint(FirstCheckpoint)` | restart rapide **dans la même scène** |
-| `LoadCheckpoint(autre)` | respawn au dernier checkpoint (chute, mort...) |
-| `GoalReached()` | arrivée |
+| `StoreCheckpoint(FirstCheckpoint)` | **start of the run** (right after the scene is created) |
+| `StoreCheckpoint(Checkpoint or subclass)` | checkpoint crossed. Types vary per level (e.g. `LvlAccelerateAndSteerSilentCheckpoint`), so test `!(info is FirstCheckpoint)` |
+| `LoadCheckpoint(FirstCheckpoint)` | quick restart **in the same scene** |
+| `LoadCheckpoint(other)` | respawn at the last checkpoint (fall, death…) |
+| `GoalReached()` | finish |
 
-- **Rejouer depuis l'écran de fin recrée une nouvelle `Scene3DIngame`.** L'état réseau doit donc vivre dans un singleton global, et les objets de scène ne servent qu'à l'affichage et à la capture.
-- Il y a un délai de quelques secondes (intro ou chargement) entre la création de la scène et les premiers `Update()`.
+- **Retrying from the end screen creates a new `Scene3DIngame`.** Network state must live in a global singleton; scene objects only display and capture.
+- **The scene is drawn before its first `Update()`** (intro, waiting for the start, after a reset): anything shown during that time must be initialized from the draw path too.
+- **After the finish, the scene stops updating** until the next retry. The timer is also adjusted (fraction of a tick) *after* `IGoalReached` is broadcast: the mod reads the final time at the end of the same tick, from its global tick.
 
-## Construction d'un niveau
+## Building a level
 
-- `GlobalGame.CreateIngameCustom(ReplayFileAndName? viewReplay, bool startMission, bool exhibitionReplay)` (≈ ligne 14544, environ 2000 lignes) construit toute la scène `Scene3DIngame` et la renvoie.
-  ⛔ **Ne pas la patcher** : Harmony échoue à la réécrire (`InvalidOperationException: Incorrect code generation for exception block`, testé le 2026-11-14). Règle générale : éviter de patcher les méthodes géantes de `GlobalGame`.
-  ✅ **Point d'accroche retenu : postfix sur le constructeur de `SE.Scene3DIngame`** (internal, 4 lignes, un seul site de création). On ajoute nos objets à la scène et on lit `IsReplay` pour ignorer les replays.
-- Variables locales utiles dans cette méthode : `scene`, `board` (`Board`), `playerContainer`, `levelTime` (`LevelTimer`), `checkpointManager`, `boardNpcAssets`, `zFightingIndex`.
-  Ce sont des locales, pas des champs : il faudra les retrouver dans la scène (`scene` contient les objets) ou ajouter un patch plus ciblé.
-- Lancer un niveau par code : `GlobalGame.StartLevel(Level level, bool startMission, bool quickRetry)` (privée, ≈ ligne 10873). Elle gère aussi les maps custom via `StartCustomMap`. Retrouver un `Level` officiel : `levelOrder.GetLevelByID(id)`.
-  ⚠️ Dépend de `currentChallenge`, à valider à l'étape 4.
+- `GlobalGame.CreateIngameCustom(ReplayFileAndName? viewReplay, bool startMission, bool exhibitionReplay)` (≈ 2000 lines) builds the whole `Scene3DIngame` and returns it.
+  ⛔ **Don't patch it**: Harmony fails to rewrite it (`InvalidOperationException: Incorrect code generation for exception block`). General rule: avoid patching `GlobalGame`'s giant methods.
+  ✅ **Hook point used: postfix on the `SE.Scene3DIngame` constructor** (internal, 4 lines, single creation site). The mod adds its objects to the scene and reads `IsReplay` to skip replays.
+- Useful locals in that method (not fields: find them in `scene.AllThings`): `board` (`Board`), `playerContainer`, `levelTime` (`LevelTimer`), `checkpointManager`, `boardNpcAssets`.
+- `Board` → private field `playerContainer` → private field `level` gives the current `Level`.
+- Starting a level from code: `GlobalGame.SetCurrentChallenge(Challenge.FromNormalLevel(level, GetMaxNonSpoileryMedal))` then `GlobalGame.StartLevel(Level level, bool startMission, bool quickRetry)` (both private). `StartLevel` also handles custom maps through `StartCustomMap`. Official levels: `levelOrder.GetLevelByID(id)`.
+- End screen: `GlobalGame.LevelFinished(LevelFinishedStats?)` (small). The mod prefixes it to retry immediately on the round's map.
+- Level code shown in menus (A1, A5…): `Challenge.LevelToKey(level)`; display name: `level.DisplayName`.
 
-## Identité des niveaux
+## Level identity
 
-- Officiel : `LevelKey { uint Id; uint Version; }`, construit par `new LevelKey(level)`.
-- Custom/Workshop : `Level.CustomMap`, `Level.CustomMapKey` (= `OnlineKey`), plus `CustomMapCatalogue`.
-- Le protocole réseau identifiera une map par `(Id, Version)` ou `(CustomMapKey, Version)`.
+- Official: `LevelKey { uint Id; uint Version; }`, built with `new LevelKey(level)`. The mod uses `o:<id>:<version>`.
+- Custom/Workshop: `Level.CustomMap`, `Level.CustomMapKey` (= `OnlineKey`), and `CustomMapCatalogue`. The mod uses `c:<OnlineKey>` (loading not supported yet).
 
-## Ghosts (base des joueurs distants)
+## Ghosts (base for remote players)
 
 - `GhostState { Vector3 Position; Vector3 Orientation /* pitch, yaw, roll */; Vector3 CamPosition; Vector3 CamOrientation; }`
-- **`Board.GetGhostState()`** (`internal`) donne l'état du joueur local en un appel. C'est ce que le replay enregistre à chaque frame (`ReplayRecorderSource.cs:33`). **C'est exactement le paquet réseau à envoyer.**
-- `ReplayFrame { InputIngameState Input; GhostState State; uint WasFrozenButTickingInFrames; bool Rewind; }` : les replays stockent les inputs **et** les états.
-- Rendu : `GhostBoard : BoardVisual` dessine uniquement la planche. Transform = `CreateFromYawPitchRoll(o.Y, o.X, o.Z) * CreateTranslation(pos)`, avec une interpolation entre `ReplayFrame` et `ReplayFrameNext` selon l'`extrapolation` reçue dans `BeforeDraw`.
-  `BoardVisual.DrawInternalBase(...)` est `protected`, donc on peut **écrire notre propre `NetGhostBoard : BoardVisual`** alimenté par un buffer réseau au lieu d'un `ReplayInput`.
-- Création des ghosts : dans `CreateIngameCustom`, fonction locale `ShowGhostBoard` (≈ ligne 15393). Arguments à reproduire : `boardNpcAssets`, `settings.Graphics.Player.BoardRealShadow`, `++zFightingIndex`, `scene.TransparencyBatch`, `SaveState.Gameplay.GhostOpacityResult`, `settings.Graphics.GhostDepthBias`.
+- **`Board.GetGhostState()`** (`internal`) returns the local player's state in one call. It's what replays record every frame (`ReplayRecorderSource`). **It's exactly the network packet to send.**
+- `ReplayFrame { InputIngameState Input; GhostState State; uint WasFrozenButTickingInFrames; bool Rewind; }`: replays store inputs **and** states.
+- Rendering: `GhostBoard : BoardVisual` only draws the board. Transform = `CreateFromYawPitchRoll(o.Y, o.X, o.Z) * CreateTranslation(pos)`, interpolated between two frames with the `extrapolation` given to `BeforeDraw`.
+  `BoardVisual.DrawInternalBase(...)` is `protected`, so the mod has its own `NetGhostBoard : BoardVisual` fed by a network buffer.
 
-## Course : chrono, checkpoints, arrivée
+## Skins
 
-- `LevelTimer : RunTimer`, avec `Counter` (`LevelTimeData` : `MS`, `TotalMS`, `RestartCount`, `Checkpoints`).
-- `CheckpointManager` : `ActivateCheckpoint`, `RestartLevel`, `GoalReached`, `IsInFirstCheckpoint`, et l'événement `OnBeforeRewindToFirstCheckpoint`.
-- `LevelGoal.Finish(float)` → fonction locale `GoalReached` dans `CreateIngameCustom` (≈ ligne 15826). Elle diffuse `IGoalReached`, appelle `levelTime.HaltTimerCompletely()`, puis rembobine la fraction de frame.
-- Il faudra probablement **désactiver ou remplacer l'écran de fin** (`LevelFinished` → popup de sélection de niveau) en multi, pour enchaîner directement sur un restart.
+- A skin is just a texture: id > 0 → `Textures/Achievements/Skins/<id>`, id < 0 → `Models/Resources/Board/<-id>`, 0 → default board. The player's choice: `SaveState.Skin.Id`.
+- The game applies the current skin **globally** by replacing the value of the shared `Models/Resources/Board/0` texture `Ref` (`GlobalAssets.UpdateBoardTex`). The real default texture is kept in the private field `GlobalAssets.defaultSkin`.
+- Per-ghost skins: temporarily swap the board model's texture (`Assets.Model.Value.Textures.Get(0).Image.Tex2D`) while drawing, like `GhostBoard` does for replays, then restore it.
 
-## Steam / identité
+## Race: timer, checkpoints, finish
 
-- Le jeu utilise `SteamUser.GetAuthTicketForWebApi(null)` (`Steam.cs`) pour son propre backend (`Server.cs`, client HTTP).
-- La validation côté serveur via l'API Web Steam (`AuthenticateUserTicket`) exige une **clé éditeur**, donc elle n'est pas accessible sans le studio.
-- Pistes pour les tournois : Steam OpenID (connexion web, accessible à tous) ou un token par joueur fourni par l'organisateur.
-- Le jeu a son propre `uint UserID`, distinct du SteamID.
+- `LevelTimer : RunTimer` (present in the scene), with `Counter` (`LevelTimeData`: `MS`, `TotalMS`, `RestartCount`, `Checkpoints`).
+- `CheckpointManager`: `ActivateCheckpoint`, `RestartLevel`, `GoalReached`, `IsInFirstCheckpoint`, and the `OnBeforeRewindToFirstCheckpoint` event.
+- `LevelGoal.Finish(float)` → local function `GoalReached` in `CreateIngameCustom`: broadcasts `IGoalReached`, calls `levelTime.HaltTimerCompletely()`, then rewinds the fraction of a tick.
 
-## Prochaine étape (1)
+## UI
 
-1. Créer `SBMultiplayer.Client` (net8.0, référence `Lib.Harmony`, références aux DLL du jeu en `Private=false`).
-2. Classe `StartupHook.Initialize()` qui logge, attend que `GlobalGame` existe, puis applique les patches Harmony.
-3. Premier patch : postfix sur `GlobalGame.CreateIngameCustom` qui ajoute à la scène un objet `IUpdate` loggant `Board.GetGhostState()` chaque seconde.
-4. Lancer le jeu sous Linux avec `DOTNET_STARTUP_HOOKS` et vérifier les logs, ce qui valide aussi la question du `libhostfxr` custom.
+- Options screens are built from `OptionsUI` helpers (`GetCheckboxRow(text, IValue<bool>)`, `GetSliderRow(text, IValue<float>, …)`), a `CanvasScale` from `GlobalGame.CreateCanvas()`, `UIAssets.CreateMainPanel(…)` and `GlobalGame.CreateButton(…)`, then shown with `GlobalGame.ShowPopup(Func<Action, Scene>, Scene, …)`. The mod's F8 menu is built the same way.
+- `BytingLib.UI.TextInput` for text fields.
+- Fonts: `UIAssets.FontSmall` etc. ⚠️ They lack some characters (no `—`, no `…`, no emoji): drawing an unsupported character throws, so the mod replaces them.
+- Current language: `Loca.L.LanguageKey`.
+
+## Steam / identity
+
+- The game uses `SteamUser.GetAuthTicketForWebApi(null)` (`Steam.cs`) for its own backend (`Server.cs`, HTTP client).
+- Validating such a ticket server-side with the Steam Web API (`AuthenticateUserTicket`) requires a **publisher key**, so it's not available without the studio.
+- Options for tournaments: Steam OpenID (web login, available to anyone) or a per-player token given by the organizer.
+- The game has its own `uint UserID`, distinct from the SteamID.

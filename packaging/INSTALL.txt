@@ -1,23 +1,26 @@
-SBMultiplayer — mod multijoueur non officiel pour STUNTBOOST (version de test)
-==============================================================================
+SBMultiplayer - unofficial multiplayer mod for STUNTBOOST
+==========================================================
 
-⚠ Tant que le mod est actif, le jeu n'enregistre AUCUN temps, ni en ligne ni en local.
-  Pour désinstaller, il suffit de retirer l'option de lancement Steam.
+! While the mod is loaded, the game does NOT save any time, neither online nor locally.
+  To uninstall, just remove the Steam launch option.
 
-1) Copier le dossier "SBMultiplayer" dans le dossier du jeu
-   (Steam > STUNTBOOST > clic droit > Gérer > Parcourir les fichiers locaux).
+1) Copy the "SBMultiplayer" folder into the game folder
+   (Steam > STUNTBOOST > right click > Manage > Browse local files).
+   Updating? Just overwrite the files: your settings are kept.
 
-2) Ouvrir SBMultiplayer/SBMultiplayer.json et remplacer l'adresse du serveur :
-     "Server": "ADRESSE_DU_SERVEUR:24800",
+2) Steam > STUNTBOOST > Properties > Launch options:
 
-3) Steam > STUNTBOOST > Propriétés > Options de lancement :
+   Linux:
+     DOTNET_STARTUP_HOOKS="/path/to/STUNTBOOST/SBMultiplayer/SBMultiplayer.Client.dll" %command%
 
-   Linux :
-     DOTNET_STARTUP_HOOKS="/chemin/vers/STUNTBOOST/SBMultiplayer/SBMultiplayer.Client.dll" %command%
+   Windows (no space before the &&!):
+     cmd /c "set DOTNET_STARTUP_HOOKS=C:\path\to\STUNTBOOST\SBMultiplayer\SBMultiplayer.Client.dll&& %command%"
 
-   Windows (pas d'espace avant le && !) :
-     cmd /c "set DOTNET_STARTUP_HOOKS=C:\chemin\vers\STUNTBOOST\SBMultiplayer\SBMultiplayer.Client.dll&& %command%"
+3) Start the game, press F8 and enter the server address (address:port).
+   F7 takes you to the current round's map.
 
-4) Lancer un niveau. Les joueurs présents sur le même niveau apparaissent en planches translucides.
+Other players riding the same level show up as translucent boards.
+The mod's interface follows the game's language (English or French).
 
-Problème ? Envoyer le fichier SBMultiplayer/SBMultiplayer.log.
+Problem? Send the SBMultiplayer/SBMultiplayer.log file.
+More info: https://github.com/AsLirith/SBMultiplayerMod

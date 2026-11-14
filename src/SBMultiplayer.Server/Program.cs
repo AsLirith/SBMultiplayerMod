@@ -30,21 +30,21 @@ for (int i = 0; i < args.Length; i++)
         case "-h":
         case "--help":
             Console.WriteLine($"""
-                SBMultiplayer.Server — serveur dédié (protocole v{ProtocolInfo.Version})
+                SBMultiplayer.Server - dedicated server (protocol v{ProtocolInfo.Version})
 
-                  --port <n>          port UDP (défaut {ProtocolInfo.DefaultPort})
-                  --max-players <n>   joueurs max (défaut 32)
-                  --echo              renvoie à chaque joueur sa propre planche retardée (test en solo)
-                  --echo-delay <s>    retard de l'écho en secondes (défaut 2)
-                  --maps <liste>      rotation, ex. o:1,o:2,o:57 (id de niveau officiel ; vide = mode libre)
-                  --round <s>         durée d'un round en secondes (défaut 300)
-                  --results <s>       durée de l'écran de résultats (défaut 15)
+                  --port <n>          UDP port (default {ProtocolInfo.DefaultPort})
+                  --max-players <n>   max players (default 32)
+                  --echo              sends each player their own delayed board back (solo testing)
+                  --echo-delay <s>    echo delay in seconds (default 2)
+                  --maps <list>       rotation, e.g. o:1,o:2,o:57 (official level IDs; empty = free mode)
+                  --round <s>         round duration in seconds (default 300)
+                  --results <s>       results screen duration (default 15)
 
-                Commandes console : list, round, next, quit
+                Console commands: list, round, next, quit
                 """);
             return;
         default:
-            Console.Error.WriteLine($"Argument inconnu : {args[i]} (voir --help)");
+            Console.Error.WriteLine($"Unknown argument: {args[i]} (see --help)");
             return;
     }
 }
@@ -80,7 +80,7 @@ while (!cts.IsCancellationRequested)
         switch (cmd)
         {
             case "list":
-                Console.WriteLine($"{server.PlayerCount} joueur(s) connecté(s)");
+                Console.WriteLine($"{server.PlayerCount} player(s) connected");
                 foreach (string line in server.DescribePlayers())
                 {
                     Console.WriteLine("  " + line);
@@ -99,7 +99,7 @@ while (!cts.IsCancellationRequested)
             case "":
                 break;
             default:
-                Console.WriteLine("Commandes : list, round, next, quit");
+                Console.WriteLine("Commands: list, round, next, quit");
                 break;
         }
     }
@@ -107,4 +107,4 @@ while (!cts.IsCancellationRequested)
 }
 
 server.Stop();
-Console.WriteLine("Serveur arrêté.");
+Console.WriteLine("Server stopped.");

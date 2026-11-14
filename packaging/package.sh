@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# Construit le paquet testeurs : dist/SBMultiplayer-<version>.zip (client en Release, sans SBMultiplayer.json
-# pour que chacun garde sa configuration en écrasant les fichiers).
+# Builds the distribution zips in dist/:
+#  - SBMultiplayer-<version>.zip: the mod (Release build, without SBMultiplayer.json so players keep
+#    their settings when overwriting the files)
+#  - SBMultiplayer-Server-<version>.zip: the dedicated server
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -14,12 +16,12 @@ cp "$out"/{SBMultiplayer.Client.dll,0Harmony.dll,LiteNetLib.dll,SBMultiplayer.Pr
 cp packaging/INSTALL.txt dist/pkg/
 
 python3 -c "import shutil, sys; shutil.make_archive(sys.argv[1], 'zip', 'dist/pkg')" "dist/SBMultiplayer-$version"
-echo "Paquet : dist/SBMultiplayer-$version.zip"
+echo "Client package: dist/SBMultiplayer-$version.zip"
 
-# Serveur dédié (multiplateforme, nécessite le runtime .NET 8 ou plus récent)
+# Dedicated server (cross-platform, requires the .NET 8 runtime or newer)
 rm -rf dist/server
 dotnet publish src/SBMultiplayer.Server -c Release -o dist/server/SBMultiplayer.Server -nologo -v quiet
 rm -f dist/server/SBMultiplayer.Server/*.pdb
 cp docs/hosting.md dist/server/
 python3 -c "import shutil, sys; shutil.make_archive(sys.argv[1], 'zip', 'dist/server')" "dist/SBMultiplayer-Server-$version"
-echo "Serveur : dist/SBMultiplayer-Server-$version.zip"
+echo "Server package: dist/SBMultiplayer-Server-$version.zip"

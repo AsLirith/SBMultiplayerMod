@@ -1,30 +1,49 @@
-# Héberger un serveur
+# Hosting a server
 
-## Lancer
+## Running it
+
+Either download `SBMultiplayer-Server-<version>.zip` from the [releases](https://github.com/AsLirith/SBMultiplayerMod/releases/latest) (requires the .NET 8 runtime or newer):
 
 ```sh
-dotnet build src/SBMultiplayer.Server -c Release
-dotnet src/SBMultiplayer.Server/bin/Release/net8.0/SBMultiplayer.Server.dll [--port 24800] [--max-players 32] [--echo]
+dotnet SBMultiplayer.Server.dll --maps o:1,o:2,o:3 --round 300
 ```
 
-Commandes console : `list`, `quit`. L'option `--echo` renvoie à chaque joueur sa propre planche avec 2 s de retard, pour tester seul.
+or build it from source:
 
-## Réseau
+```sh
+dotnet run --project src/SBMultiplayer.Server -c Release -- --maps o:1,o:2,o:3 --round 300
+```
 
-1. **Pare-feu** (Linux avec ufw) : `sudo ufw allow 24800/udp`
-2. **Box** : rediriger le port **UDP** 24800 vers l'IP locale du serveur.
-3. Les joueurs mettent `"Server": "IP_PUBLIQUE:24800"` dans `SBMultiplayer/SBMultiplayer.json`.
+| Option | Default | Description |
+|---|---|---|
+| `--port <n>` | 24800 | UDP port |
+| `--max-players <n>` | 32 | Maximum number of players |
+| `--maps <list>` | (none) | Map rotation, e.g. `o:1,o:2,o:57` (official level IDs). Without it, the server runs in free mode: no rounds, everyone rides wherever they want |
+| `--round <s>` | 300 | Round duration in seconds |
+| `--results <s>` | 15 | Results screen duration in seconds |
+| `--echo` | off | Sends each player their own board back with a delay, as a fake "Echo" player, to test alone |
+| `--echo-delay <s>` | 2 | Echo delay in seconds |
 
-### ⚠️ PC connecté en Ethernet ET en Wi-Fi
+Console commands: `list` (connected players), `round` (current round), `next` (skip to the next phase: round → results → next map), `quit`.
 
-Les réponses du serveur partent par l'interface de la route par défaut (souvent l'Ethernet). Si la redirection de la box pointe vers l'IP **Wi-Fi**, les joueurs atteignent le serveur mais ne reçoivent jamais ses réponses. Dans le log du serveur, on voit alors des `Connexion de …` suivis de `Déconnexion de  (#n) : Reconnect` toutes les ~5 s, sans pseudo.
+A player's current map key (e.g. `o:1:2001`) is shown in the server console when they join a level. Use `o:<id>` in `--maps` to accept any version of that level.
 
-Vérifier l'interface utilisée avec `ip route get <IP du joueur>`, et faire pointer la redirection vers cette adresse `src`. Autre solution : couper le Wi-Fi.
+## Network
 
-### Sans redirection de port
+1. **Firewall** (Linux with ufw): `sudo ufw allow 24800/udp`
+2. **Router**: forward **UDP** port 24800 to the server's local IP.
+3. Players enter `PUBLIC_IP:24800` as the server address in the in-game menu (F8), or in `SBMultiplayer/SBMultiplayer.json`.
 
-En cas de box en CGNAT, ou de redirection impossible : installer [Tailscale](https://tailscale.com/) (ou ZeroTier) sur le serveur et chez les joueurs, puis utiliser l'IP Tailscale du serveur.
+### ⚠️ PC connected through both Ethernet AND Wi-Fi
 
-## Testé
+The server's replies leave through the interface of the default route (usually Ethernet). If the router forwards the port to the **Wi-Fi** IP, players reach the server but never receive its replies. In the server log, this shows as `Connection from …` lines followed by `Disconnection of  (#n): Reconnect` every ~5 s, without a player name.
 
-2026-11-14 : 3 joueurs (Linux et internet), 6 maps officielles. Fluide, avec seulement les 100 ms de retard d'interpolation prévus.
+Check which interface is used with `ip route get <player IP>`, and forward the port to that `src` address. You can also just turn the Wi-Fi off.
+
+### Without port forwarding
+
+If your router is behind CGNAT, or port forwarding isn't possible: install [Tailscale](https://tailscale.com/) (or ZeroTier) on the server and on the players' machines, then use the server's Tailscale IP.
+
+## Tested
+
+2026-11-14: 3 players (Linux, over the internet), 6 official maps. Smooth, with only the intended 100 ms interpolation delay.
