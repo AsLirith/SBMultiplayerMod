@@ -54,6 +54,9 @@ public sealed class ServerOptions
     /// <summary>Elimination mode: players eliminated each round, the slowest ones (players who gave up count as last).</summary>
     public int EliminatedPerRound { get; set; } = 1;
 
+    /// <summary>Duration of the end-of-game screen (end of a Time Attack round, of a Rounds rotation, Cup or Elimination won).</summary>
+    public double MatchEndSeconds { get; set; } = 20;
+
     /// <summary>Folder where round results and match standings are written ("" = no export).</summary>
     public string ResultsDirectory { get; set; } = "results";
 
@@ -83,6 +86,7 @@ public sealed class ServerOptions
         PointsTable = new List<int>(PointsTable),
         CupPointsLimit = CupPointsLimit,
         EliminatedPerRound = EliminatedPerRound,
+        MatchEndSeconds = MatchEndSeconds,
     };
 
     /// <summary>Applies settings received from an admin, clamped to sane ranges. Returns an error, or null.</summary>
@@ -109,6 +113,7 @@ public sealed class ServerOptions
         PointsTable = s.PointsTable.Where(p => p >= 0).Take(64).Select(p => Math.Min(p, 10_000)).ToList();
         CupPointsLimit = Math.Clamp(s.CupPointsLimit, 1, 100_000);
         EliminatedPerRound = Math.Clamp(s.EliminatedPerRound, 1, 16);
+        MatchEndSeconds = Math.Clamp(s.MatchEndSeconds, 3, 300);
         return null;
     }
 
@@ -133,6 +138,7 @@ public sealed class ServerOptions
             .Replace("\"CountdownSeconds\": 3", $"\"CountdownSeconds\": {N(CountdownSeconds)}")
             .Replace("\"CupPointsLimit\": 100", $"\"CupPointsLimit\": {CupPointsLimit}")
             .Replace("\"EliminatedPerRound\": 1", $"\"EliminatedPerRound\": {EliminatedPerRound}")
+            .Replace("\"MatchEndSeconds\": 20", $"\"MatchEndSeconds\": {N(MatchEndSeconds)}")
             .Replace("\"PointsTable\": [ 10, 8, 6, 5, 4, 3, 2, 1 ]", $"\"PointsTable\": [ {string.Join(", ", PointsTable)} ]")
             .Replace("\"ResultsDirectory\": \"results\"", $"\"ResultsDirectory\": {J(ResultsDirectory)}");
         File.WriteAllText(path, text);
@@ -193,6 +199,10 @@ public sealed class ServerOptions
 
           // Elimination mode: players eliminated each round, the slowest ones (players who gave up count as last).
           "EliminatedPerRound": 1,
+
+          // End-of-game screen (final standings and winner), in seconds: shown at the end of each Time Attack
+          // round, at the end of the rotation in Rounds mode, and when a Cup or an Elimination is won.
+          "MatchEndSeconds": 20,
 
           // Folder for round results (JSON) and match standings (CSV). Empty = no export.
           "ResultsDirectory": "results"

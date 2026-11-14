@@ -29,6 +29,7 @@ Every setting can also be given (or overridden) on the command line:
 | | `CountdownSeconds` | 3 | Rounds mode: countdown before the start |
 | | `CupPointsLimit` | 100 | Cup mode: points needed to become a finalist |
 | | `EliminatedPerRound` | 1 | Elimination mode: players eliminated each round |
+| | `MatchEndSeconds` | 20 | Duration of the end-of-game screen |
 | `--results <s>` | `ResultsSeconds` | 15 | Results screen duration in seconds |
 | | `PointsTable` | 10, 8, 6, 5, 4, 3, 2, 1 | Match points by rank at the end of each round |
 | | `ResultsDirectory` | `results` | Where results are exported (empty = no export) |
@@ -62,6 +63,14 @@ A player's current map key (e.g. `o:1:2001`) is shown in the server console when
   Players who arrive after the start wait on the start line until the next round.
 - **Cup**: like Rounds, but reaching `CupPointsLimit` points makes you a **finalist** (your points stop there). A finalist who wins a round **wins the cup**. Then a new match starts.
 - **Elimination**: like Rounds, but each round the last `EliminatedPerRound` players are **eliminated** (players who gave up count as last, and at least one player always survives). Eliminated players watch the others from the start line. The last player standing wins, then a new match starts.
+
+## End-of-game screen
+
+At the end of a game, every player sees a full-screen summary with the winner and the final standings, for `MatchEndSeconds`:
+
+- **Time Attack**: at the end of each round (end of the timer): best times, gaps and match points;
+- **Rounds**: at the end of the rotation (last round of the last map): match points; then a new match starts;
+- **Cup** and **Elimination**: when the winner is decided; then a new match starts.
 
 ## Spectators
 

@@ -138,6 +138,7 @@ internal static class Tr
         SBMultiplayer.Protocol.ServerEvents.EliminationWon => T($"{arg} wins the elimination!", $"{arg} remporte l'élimination !"),
         SBMultiplayer.Protocol.ServerEvents.Eliminated => T($"Eliminated: {arg}", $"Éliminé(s) : {arg}"),
         SBMultiplayer.Protocol.ServerEvents.Finalist => T($"{arg} is now a finalist", $"{arg} est finaliste"),
+        SBMultiplayer.Protocol.ServerEvents.MatchWon => T($"{arg} wins the match!", $"{arg} remporte le match !"),
         _ => $"{code} {arg}",
     };
 
@@ -231,6 +232,20 @@ internal static class Tr
     public static string Following(string name) => T($"following {name}", $"suit {name}");
     public static string NobodyToFollow => T("nobody to follow on this map", "personne à suivre sur cette map");
     public static string SpectatorKeys => T("Left / Right: change player    F: free camera", "Gauche / Droite : changer de joueur    F : caméra libre");
+
+    // ---------- Écran de fin de partie ----------
+    public static string EndTitle(SBMultiplayer.Protocol.GameMode mode) => mode switch
+    {
+        SBMultiplayer.Protocol.GameMode.TimeAttack => T("End of the round - Time Attack", "Fin du round - Time Attack"),
+        SBMultiplayer.Protocol.GameMode.Rounds => T("End of the match - Rounds", "Fin du match - Rounds"),
+        SBMultiplayer.Protocol.GameMode.Cup => T("End of the cup", "Fin de la Cup"),
+        SBMultiplayer.Protocol.GameMode.Elimination => T("End of the elimination", "Fin de l'élimination"),
+        _ => T("End of the game", "Fin de partie"),
+    };
+    public static string WinnerAnnounce(string name) => T($"Winner: {name}", $"Vainqueur : {name}");
+    public static string NoWinner => T("No winner", "Pas de vainqueur");
+    public static string NextGameIn(int seconds) => T($"Next game in {seconds} s", $"Partie suivante dans {seconds} s");
+    public static string SettingsMatchEnd => T("End-of-game screen", "Écran de fin de partie");
 
     // ---------- Panneau : pause et match ----------
     public static string PausedHeader => T("PAUSED", "PAUSE");

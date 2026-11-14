@@ -258,6 +258,7 @@ public sealed class GameServer : INetEventListener
         mapIndex = index;
         roundId++;
         paused = false;
+        matchEnded = false;
         phaseStart = Now;
         best.Clear();
         ready.Clear();
@@ -351,13 +352,30 @@ public sealed class GameServer : INetEventListener
         }
     }
 
+    /// <summary>The results phase in progress ends a game: clients show the end-of-game screen.</summary>
+    private bool matchEnded;
+
     private void EndRound()
     {
         phase = RoundPhase.Results;
         paused = false;
         phaseStart = Now;
-        phaseEnd = Now + options.ResultsSeconds;
-        AwardPoints();
+        AwardPoints(); // Cup / Elimination: may decide a winner (matchOver)
+
+        // End of a game: each Time Attack round (end of the timer), the end of the rotation in Rounds mode,
+        // or a Cup / Elimination winner.
+        if (options.Mode == GameMode.Rounds && mapIndex == options.Maps.Count - 1 && roundInMap >= Math.Max(1, options.RoundsPerMap))
+        {
+            matchOver = true;
+            string? winner = SortedStandings().FirstOrDefault().Name;
+            if (winner != null)
+            {
+                Log($"{winner} wins the match!");
+                BroadcastEvent(ServerEvents.MatchWon, winner);
+            }
+        }
+        matchEnded = options.Mode == GameMode.TimeAttack || matchOver;
+        phaseEnd = Now + (matchEnded ? Math.Max(options.ResultsSeconds, options.MatchEndSeconds) : options.ResultsSeconds);
         BroadcastRound();
         BroadcastStandings();
         LogResults();
@@ -491,7 +509,8 @@ public sealed class GameServer : INetEventListener
             RoundsPerMap: IsRoundsMode ? Math.Max(1, options.RoundsPerMap) : 1,
             ReadyCount: ready.Count,
             PlayerCount: players.Values.Count(p => p.IsPlaying && !eliminated.Contains(p.Name)),
-            PointsLimit: options.Mode == GameMode.Cup ? options.CupPointsLimit : 0);
+            PointsLimit: options.Mode == GameMode.Cup ? options.CupPointsLimit : 0,
+            MatchEnded: phase == RoundPhase.Results && matchEnded);
 
     private void BroadcastRound() => Broadcast(Msg.Round(writer, CurrentRoundInfo()), DeliveryMethod.ReliableOrdered, except: null);
 

@@ -126,6 +126,7 @@ internal static class ServerSettingsMenu
         var countdown = new ValueEvent<float>((float)working.CountdownSeconds);
         var cupLimit = new ValueEvent<float>(working.CupPointsLimit);
         var eliminated = new ValueEvent<float>(working.EliminatedPerRound);
+        var matchEnd = new ValueEvent<float>((float)working.MatchEndSeconds);
         TextInput points = Input(string.Join(", ", working.PointsTable), 1000f, 300);
 
         void Apply()
@@ -149,6 +150,7 @@ internal static class ServerSettingsMenu
             working.CountdownSeconds = MathF.Round(countdown.Value);
             working.CupPointsLimit = (int)MathF.Round(cupLimit.Value);
             working.EliminatedPerRound = (int)MathF.Round(eliminated.Value);
+            working.MatchEndSeconds = MathF.Round(matchEnd.Value);
             MultiplayerClient.Instance.SendSettings(working, save.Value);
             close();
         }
@@ -165,6 +167,7 @@ internal static class ServerSettingsMenu
             Section(Tr.SettingsDurationsSection),
             o.GetSliderRow(synchronized ? Tr.SettingsTimeLimit : Tr.SettingsRoundSeconds, roundSeconds, Seconds, 30f, 900f, 30f),
             o.GetSliderRow(Tr.SettingsResultsSeconds, resultsSeconds, Seconds, 5f, 60f, 5f),
+            o.GetSliderRow(Tr.SettingsMatchEnd, matchEnd, Seconds, 5f, 60f, 5f),
             synchronized ? o.GetSliderRow(Tr.SettingsFinishTimeout, finishTimeout, Seconds, 5f, 60f, 5f) : null,
             synchronized ? o.GetSliderRow(Tr.SettingsPrepareTimeout, prepareTimeout, Seconds, 5f, 60f, 5f) : null,
             synchronized ? o.GetSliderRow(Tr.SettingsCountdown, countdown, Seconds, 1f, 10f, 1f) : null,

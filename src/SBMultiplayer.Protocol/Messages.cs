@@ -5,7 +5,7 @@ namespace SBMultiplayer.Protocol;
 public static class ProtocolInfo
 {
     /// <summary>À incrémenter à chaque changement incompatible du format des messages.</summary>
-    public const int Version = 9;
+    public const int Version = 10;
 
     public const int DefaultPort = 24800;
 
@@ -63,6 +63,8 @@ public static class ServerEvents
     public const string Eliminated = "ELIMINATED";
     /// <summary>Argument : nom du nouveau finaliste (Cup).</summary>
     public const string Finalist = "FINALIST";
+    /// <summary>Argument : nom du vainqueur du match (Rounds : fin de la rotation).</summary>
+    public const string MatchWon = "MATCH_WON";
 }
 
 /// <summary>Replies to chat commands, sent to the issuer only and translated by the client. Argument depends on the code.</summary>
@@ -234,6 +236,7 @@ public sealed class MatchSettings
     public List<int> PointsTable { get; set; } = new() { 10, 8, 6, 5, 4, 3, 2, 1 };
     public int CupPointsLimit { get; set; } = 100;
     public int EliminatedPerRound { get; set; } = 1;
+    public double MatchEndSeconds { get; set; } = 20;
 
     /// <summary>Serialization metadata generated at compile time (no reflection needed).</summary>
     public static System.Text.Json.Serialization.Metadata.JsonTypeInfo<MatchSettings> JsonInfo => ProtocolJson.Default.MatchSettings;
@@ -250,9 +253,11 @@ internal partial class ProtocolJson : System.Text.Json.Serialization.JsonSeriali
 /// <param name="StartIn">Modes synchronisés, phase Playing : secondes avant le départ au moment de l'envoi (≤ 0 = déjà parti).</param>
 /// <param name="RoundInMap">Numéro de la manche sur cette map (à partir de 1), et nombre de manches par map.</param>
 /// <param name="PointsLimit">Cup : limite de points pour devenir finaliste.</param>
+/// <param name="MatchEnded">Phase Results : la partie est terminée (fin du round en Time Attack, fin de la rotation en Rounds,
+/// vainqueur en Cup / Élimination) : les clients affichent l'écran de fin de partie.</param>
 public readonly record struct RoundInfo(int RoundId, string MapKey, RoundPhase Phase, float RemainingSeconds, int MapIndex, int MapCount, bool Paused,
     GameMode Mode = GameMode.TimeAttack, float StartIn = 0, int RoundInMap = 1, int RoundsPerMap = 1, int ReadyCount = 0, int PlayerCount = 0,
-    int PointsLimit = 0);
+    int PointsLimit = 0, bool MatchEnded = false);
 
 public readonly record struct LeaderboardEntry(int PlayerId, string Name, uint BestMs);
 
@@ -363,12 +368,13 @@ public static class Msg
         w.Put(r.ReadyCount);
         w.Put(r.PlayerCount);
         w.Put(r.PointsLimit);
+        w.Put(r.MatchEnded);
         return w;
     }
 
     public static RoundInfo GetRound(NetDataReader r) =>
         new(r.GetInt(), r.GetString(256), (RoundPhase)r.GetByte(), r.GetFloat(), r.GetInt(), r.GetInt(), r.GetBool(),
-            (GameMode)r.GetByte(), r.GetFloat(), r.GetInt(), r.GetInt(), r.GetInt(), r.GetInt(), r.GetInt());
+            (GameMode)r.GetByte(), r.GetFloat(), r.GetInt(), r.GetInt(), r.GetInt(), r.GetInt(), r.GetInt(), r.GetBool());
 
     /// <summary>S→C (admins) : réglages actuels. C→S : réglages à appliquer (+ enregistrer dans le fichier de config).</summary>
     public static NetDataWriter Settings(NetDataWriter w, MatchSettings settings, bool saveToFile)
