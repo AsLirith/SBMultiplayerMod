@@ -93,6 +93,8 @@ internal static class MultiplayerMenu
                 f => MathF.Round(float.Parse(f)) + " cm", 10f, 300f, 10f),
             options.GetCheckboxRow(Tr.ShowSplits, ModSettings.ShowSplits),
             options.GetCheckboxRow(Tr.ShowChat, ModSettings.ShowChat),
+            options.GetSliderRow(Tr.ChatSize, ModSettings.ChatScale,
+                f => MathF.Round(float.Parse(f) * 100f) + "%", 0.5f, 2f, 0.1f),
             options.GetCheckboxRow(Tr.RoundPanel, ModSettings.ShowRoundPanel),
             options.GetSliderRow(Tr.RoundPanelSize, ModSettings.RoundPanelScale,
                 f => MathF.Round(float.Parse(f) * 100f) + "%", 0.3f, 1.2f, 0.1f),

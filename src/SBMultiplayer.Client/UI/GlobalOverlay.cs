@@ -74,7 +74,7 @@ internal sealed class GlobalOverlay : SE.IDrawBatch2
     {
         bool open = ChatInput.IsOpen;
         double now = NetClock.Now;
-        float s = scale * 0.6f;
+        float s = scale * 0.6f * ModConfig.Current.ChatScale;
         float left = 24f * scale;
         float maxWidth = vp.Width * 0.42f;
         float lineHeight = text.LineHeight(s);

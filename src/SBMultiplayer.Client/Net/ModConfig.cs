@@ -65,6 +65,9 @@ internal sealed class ModConfig
     /// <summary>Affiche le chat (messages et événements) en bas à gauche.</summary>
     public bool ShowChat { get; set; } = true;
 
+    /// <summary>Taille du texte du chat (1 = taille d'origine).</summary>
+    public float ChatScale { get; set; } = 1f;
+
     /// <summary>Debug : log de la position chaque seconde.</summary>
     public bool DebugProbe { get; set; }
 

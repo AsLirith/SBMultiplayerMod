@@ -25,6 +25,8 @@ internal static class ModSettings
 
     public static ValueEvent<bool> ShowChat { get; } = Bind(ModConfig.Current.ShowChat, v => ModConfig.Current.ShowChat = v);
 
+    public static ValueEvent<float> ChatScale { get; } = Bind(ModConfig.Current.ChatScale, v => ModConfig.Current.ChatScale = v);
+
     private static ValueEvent<T> Bind<T>(T initial, Action<T> apply)
     {
         var value = new ValueEvent<T>(initial);
