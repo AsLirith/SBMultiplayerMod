@@ -4,7 +4,7 @@
 
 Download `SBMultiplayer-Server-<version>.zip` from the [releases](https://github.com/AsLirith/SBMultiplayerMod/releases/latest) (requires the .NET 8 runtime or newer), or build it from source (`dotnet run --project src/SBMultiplayer.Server -c Release -- <options>`).
 
-The easiest way is a configuration file:
+The easiest way to start is to generate a fresh config file :
 
 ```sh
 dotnet SBMultiplayer.Server.dll --init-config server.json   # writes a commented template
