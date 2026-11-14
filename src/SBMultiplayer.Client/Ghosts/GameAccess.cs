@@ -177,9 +177,11 @@ internal static class GameAccess
         {
             return null;
         }
-        foreach (Level level in Game.levelOrder.GetLevels(normalOrBonus: null))
+        // includingDevLevels: the hidden room F (test levels, trailer levels, easter eggs like F18) too.
+        // Levels without an id (0) can't be told apart, so they can't be put in a rotation.
+        foreach (Level level in Game.levelOrder.GetLevels(normalOrBonus: null, includingDevLevels: true))
         {
-            if (string.Equals(Challenge.LevelToKey(level), s, StringComparison.OrdinalIgnoreCase))
+            if (level.ID != 0 && string.Equals(Challenge.LevelToKey(level), s, StringComparison.OrdinalIgnoreCase))
             {
                 return $"o:{level.ID}";
             }
