@@ -99,6 +99,10 @@ public sealed class ServerOptions
         {
             return $"invalid map key \"{invalid}\"";
         }
+        if (!Enum.IsDefined(s.Mode))
+        {
+            return "unknown game mode (newer mod version?)";
+        }
         if (s.Mode != GameMode.Free && maps.Count == 0)
         {
             return "a map rotation is needed for this mode";

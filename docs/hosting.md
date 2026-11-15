@@ -14,6 +14,8 @@ Its settings are kept in `SBMultiplayer/hosted-server.json` (same format as belo
 
 Download `SBMultiplayer-Server-<version>.zip` from the [releases](https://github.com/AsLirith/SBMultiplayerMod/releases/latest) (requires the .NET 8 runtime or newer), or build it from source (`dotnet run --project src/SBMultiplayer.Server -c Release -- <options>`).
 
+Servers from 0.19.0 on accept players with any later mod version (and players with 0.19.0 can join newer servers), so you don't have to update the server and every player at the same time.
+
 The easiest way to start is to generate a fresh config file and start the server :
 
 ```sh

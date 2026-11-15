@@ -60,7 +60,8 @@ internal static class Tr
     public static string ChatTitle => T("Chat", "Chat");
     public static string ChatHint => T("Enter: send    Escape: cancel    /help: commands", "Entrée : envoyer    Échap : annuler    /help : commandes");
 
-    public static string CommandReply(string code, string arg) => code switch
+    /// <summary>Translated reply, or null for a code this version doesn't know (the server's English fallback is shown instead).</summary>
+    public static string? CommandReply(string code, string arg) => code switch
     {
         SBMultiplayer.Protocol.CommandResults.Help when arg == "admin" => T(
             "Commands: /help, /locate <name|all>, /goto <name>, /ignore [name], /unignore <name>, /login <password>, /next, /restart, /pause, /extend [seconds], /map <number>, /kick <name>, /resetmatch, /hunter [name]",
@@ -77,7 +78,7 @@ internal static class Tr
         SBMultiplayer.Protocol.CommandResults.TooFast => T("You're sending messages too fast", "Tu envoies des messages trop vite"),
         SBMultiplayer.Protocol.CommandResults.InvalidSettings => T($"Settings refused: {arg}", $"Paramètres refusés : {arg}"),
         SBMultiplayer.Protocol.CommandResults.NoConfigFile => T("Settings applied, but not saved: the server wasn't started with a config file (--config)", "Paramètres appliqués, mais pas enregistrés : le serveur n'a pas été lancé avec un fichier de config (--config)"),
-        _ => $"{code} {arg}",
+        _ => null,
     };
     public static string Back => T("Back", "Retour");
     public static string MenuOpenFailed => T("Could not open the multiplayer menu (see SBMultiplayer.log)", "Impossible d'ouvrir le menu multijoueur (voir SBMultiplayer.log)");
@@ -110,6 +111,9 @@ internal static class Tr
     public static string VersionMismatch(string serverProtocol) =>
         T($"Incompatible mod version (server uses protocol v{serverProtocol}). Please update the mod.",
           $"Version du mod incompatible (le serveur utilise le protocole v{serverProtocol}). Mets le mod à jour.");
+    public static string UnknownModeSpectating =>
+        T("This server plays a game mode your mod version doesn't know: you're watching as a spectator. Update the mod to take part.",
+          "Ce serveur joue un mode que ta version du mod ne connaît pas : tu regardes en spectateur. Mets le mod à jour pour participer.");
     public static string PlayerJoined(string name) => T($"{name} joined the game", $"{name} a rejoint la partie");
     public static string PlayerLeft(string name) => T($"{name} left the game", $"{name} a quitté la partie");
     public static string RoundStarted(int id, string map) => T($"Round {id}: {map}", $"Round {id} : {map}");
@@ -124,7 +128,8 @@ internal static class Tr
     public static string Kicked => T("You were kicked from the server", "Tu as été expulsé du serveur");
     public static string AdminLoginFailed => T("Wrong admin password", "Mot de passe admin incorrect");
 
-    public static string ServerEvent(string code, string arg) => code switch
+    /// <summary>Translated event, or null for a code this version doesn't know (the server's English fallback is shown instead).</summary>
+    public static string? ServerEvent(string code, string arg) => code switch
     {
         SBMultiplayer.Protocol.ServerEvents.Paused => T($"Round paused by {arg}", $"Round mis en pause par {arg}"),
         SBMultiplayer.Protocol.ServerEvents.Resumed => T($"Round resumed by {arg}", $"Round repris par {arg}"),
@@ -146,7 +151,7 @@ internal static class Tr
         SBMultiplayer.Protocol.ServerEvents.MouseForfeit => T($"{arg} left their hiding place", $"{arg} a quitté sa cachette"),
         SBMultiplayer.Protocol.ServerEvents.HuntersWin => T($"Every mouse was found: {arg} wins the round!", $"Toutes les souris ont été trouvées : victoire de {arg} !"),
         SBMultiplayer.Protocol.ServerEvents.MiceSurvived => T($"Time's up! Surviving mice: {arg}", $"Temps écoulé ! Souris survivantes : {arg}"),
-        _ => $"{code} {arg}",
+        _ => null,
     };
 
     // ---------- Rounds mode (synchronized start) ----------
@@ -171,7 +176,7 @@ internal static class Tr
         SBMultiplayer.Protocol.GameMode.Cup => "Cup",
         SBMultiplayer.Protocol.GameMode.Elimination => T("Elimination", "Élimination"),
         SBMultiplayer.Protocol.GameMode.HideAndSeek => T("Hide and Seek", "Cache-cache"),
-        _ => mode.ToString(),
+        _ => T("Unknown mode", "Mode inconnu"),
     };
 
     // ---------- Server settings (admins) ----------

@@ -111,13 +111,24 @@ internal sealed class MultiplayerClient : INetEventListener
     /// <summary>The server's match settings (received when admin).</summary>
     public MatchSettings? ServerSettings { get; private set; }
 
-    public void SendSettings(MatchSettings settings, bool saveToFile)
+    /// <summary>Sends what the admin changed (<paramref name="edited"/> compared to the <paramref name="baseline"/> the screen started from).</summary>
+    public void SendSettings(MatchSettings edited, MatchSettings baseline, bool saveToFile)
     {
         if (IsReady && IsAdmin)
         {
-            Send(w => Msg.Settings(w, settings, saveToFile), DeliveryMethod.ReliableOrdered);
+            string patch = SettingsPatch.Diff(edited, baseline);
+            Send(w => Msg.SettingsJson(w, patch, saveToFile), DeliveryMethod.ReliableOrdered);
         }
     }
+
+    /// <summary>What the server supports (mod version, game modes, optional features), received in Welcome.</summary>
+    public Capabilities ServerCapabilities { get; private set; } = Capabilities.Unknown;
+
+    /// <summary>Spectating because the server runs a game mode this version doesn't know.</summary>
+    private bool spectatingUnknownMode;
+
+    /// <summary>The unknown mode is what made us spectate (to undo it afterwards).</summary>
+    private bool autoSpectated;
 
     /// <summary>Incremented when the admin status changes (the menu rebuilds itself).</summary>
     public int AdminVersion { get; private set; }
@@ -482,6 +493,12 @@ internal sealed class MultiplayerClient : INetEventListener
         Round.Reset();
         loadedRoundId = 0;
         notifiedRound = default;
+        ServerCapabilities = Capabilities.Unknown;
+        if (spectatingUnknownMode && autoSpectated)
+        {
+            IsSpectating = false; // spectating was only for that server's unknown mode
+        }
+        spectatingUnknownMode = false;
         if (IsAdmin)
         {
             IsAdmin = false;
@@ -744,7 +761,7 @@ internal sealed class MultiplayerClient : INetEventListener
         ModLog.Info($"Connected to server {peer}");
         server = peer; // in case the event arrives before Connect() returns
         int skin = localSkin;
-        Send(w => Msg.Hello(w, playerName, skin), DeliveryMethod.ReliableOrdered);
+        Send(w => Msg.Hello(w, playerName, skin, ProtocolInfo.OwnCapabilities), DeliveryMethod.ReliableOrdered);
     }
 
     public void OnPeerDisconnected(NetPeer peer, DisconnectInfo info)
@@ -802,19 +819,20 @@ internal sealed class MultiplayerClient : INetEventListener
             {
                 case MessageType.Welcome:
                 {
-                    LocalId = reader.GetInt();
+                    var (yourId, others, serverCapabilities) = Msg.GetWelcome(reader);
+                    LocalId = yourId;
+                    ServerCapabilities = serverCapabilities;
                     if (hostAdminPassword != null)
                     {
                         string pw = hostAdminPassword;
                         Send(w => Msg.AdminLogin(w, pw), DeliveryMethod.ReliableOrdered); // the host is the admin of its game
                     }
-                    int count = reader.GetInt();
                     Players.Clear();
-                    for (int i = 0; i < count; i++)
+                    foreach (PlayerInfo other in others)
                     {
-                        AddPlayer(Msg.GetPlayerInfo(reader), notify: false);
+                        AddPlayer(other, notify: false);
                     }
-                    ModLog.Info($"Welcome! Our id: #{LocalId}, {count} other player(s)");
+                    ModLog.Info($"Welcome! Our id: #{LocalId}, {others.Count} other player(s), server mod {serverCapabilities.Version}");
                     // The server doesn't know our map yet (joining mid-game, or reconnecting).
                     if (mapKey != "")
                     {
@@ -874,6 +892,7 @@ internal sealed class MultiplayerClient : INetEventListener
                 case MessageType.RoundInfo:
                 {
                     RoundInfo info = Msg.GetRound(reader);
+                    WatchUnknownMode(info);
                     Round.SetInfo(info, peer.Ping / 1000.0);
                     ModLog.Info($"Round {info.RoundId}: {info.Phase} on {(info.MapKey == "" ? "-" : info.MapKey)}, {info.RemainingSeconds:0} s");
                     break;
@@ -898,9 +917,15 @@ internal sealed class MultiplayerClient : INetEventListener
                 }
                 case MessageType.ServerEvent:
                 {
-                    string code = reader.GetString(64);
-                    string arg = reader.GetString(128);
-                    Notifications.Show(Tr.ServerEvent(code, arg), new Microsoft.Xna.Framework.Color(255, 210, 90));
+                    var (code, arg, fallback) = Msg.GetCodedText(reader);
+                    if ((Tr.ServerEvent(code, arg) ?? NonEmpty(fallback)) is { } text)
+                    {
+                        Notifications.Show(text, new Microsoft.Xna.Framework.Color(255, 210, 90));
+                    }
+                    else
+                    {
+                        ModLog.Info($"Unknown server event {code} ({arg})");
+                    }
                     break;
                 }
                 case MessageType.Chat:
@@ -913,13 +938,20 @@ internal sealed class MultiplayerClient : INetEventListener
                 }
                 case MessageType.CommandReply:
                 {
-                    string code = reader.GetString(64);
-                    string arg = reader.GetString(256);
-                    Notifications.Show(Tr.CommandReply(code, arg), new Microsoft.Xna.Framework.Color(255, 170, 80));
+                    var (code, arg, fallback) = Msg.GetCodedText(reader);
+                    string text = Tr.CommandReply(code, arg) ?? NonEmpty(fallback) ?? $"{code} {arg}";
+                    Notifications.Show(text, new Microsoft.Xna.Framework.Color(255, 170, 80));
                     break;
                 }
                 case MessageType.Settings:
-                    ServerSettings = Msg.GetSettings(reader).Settings;
+                    try
+                    {
+                        ServerSettings = Msg.GetSettings(reader).Settings;
+                    }
+                    catch (System.Text.Json.JsonException e)
+                    {
+                        ModLog.Error("Unreadable server settings", e);
+                    }
                     break;
                 case MessageType.MatchStandings:
                     Round.Standings = Msg.GetStandings(reader);
@@ -941,6 +973,32 @@ internal sealed class MultiplayerClient : INetEventListener
         catch (Exception e)
         {
             ModLog.Error("Invalid server packet", e);
+        }
+    }
+
+    private static string? NonEmpty(string s) => s.Length > 0 ? s : null;
+
+    /// <summary>
+    /// A newer server can run a game mode this version doesn't know: watch as a spectator (rather than riding
+    /// with rules we can't follow) until it switches back to a known mode.
+    /// </summary>
+    private void WatchUnknownMode(in RoundInfo info)
+    {
+        bool unknown = info.Phase != RoundPhase.Free && !info.Mode.IsKnown();
+        if (unknown && !spectatingUnknownMode)
+        {
+            spectatingUnknownMode = true;
+            Notifications.Warn(Tr.UnknownModeSpectating);
+            autoSpectated = !IsSpectating;
+            SetSpectating(true);
+        }
+        else if (!unknown && spectatingUnknownMode)
+        {
+            spectatingUnknownMode = false;
+            if (autoSpectated)
+            {
+                SetSpectating(false); // a player who was already spectating by choice stays so
+            }
         }
     }
 

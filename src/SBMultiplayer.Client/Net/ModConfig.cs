@@ -9,6 +9,16 @@ namespace SBMultiplayer.Client.Net;
 /// </summary>
 internal sealed class ModConfig
 {
+    /// <summary>Format of this file. Bumped only with a migration in <see cref="Migrate"/>: settings are never lost on update.</summary>
+    public const int CurrentConfigVersion = 1;
+
+    /// <summary>Format of the file that was read (0 = written before 0.19).</summary>
+    public int ConfigVersion { get; set; }
+
+    /// <summary>Settings this version doesn't know (written by a newer version): kept as they are when saving.</summary>
+    [System.Text.Json.Serialization.JsonExtensionData]
+    public Dictionary<string, JsonElement>? UnknownSettings { get; set; }
+
     /// <summary>Server address, "host:port" or "host".</summary>
     public string Server { get; set; } = $"127.0.0.1:{ProtocolInfo.DefaultPort}";
 
@@ -103,7 +113,13 @@ internal sealed class ModConfig
 
     public static ModConfig Current { get; private set; } = new();
 
-    private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
+    // Comments and trailing commas: the file is edited by hand too.
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        WriteIndented = true,
+        ReadCommentHandling = JsonCommentHandling.Skip,
+        AllowTrailingCommas = true,
+    };
 
     private static string path = "";
 
@@ -144,20 +160,31 @@ internal sealed class ModConfig
             }
             else
             {
+                Current = new ModConfig { ConfigVersion = CurrentConfigVersion };
                 File.WriteAllText(path, JsonSerializer.Serialize(Current, JsonOptions));
                 ModLog.Info($"Default configuration created: {path}");
             }
         }
         catch (Exception e)
         {
-            ModLog.Error($"Unreadable configuration ({path}), using default values", e);
-            Current = new ModConfig();
+            // Keep the player's file: the next save would overwrite it with the default values.
+            string backup = path + ".unreadable";
+            try
+            {
+                File.Copy(path, backup, overwrite: true);
+            }
+            catch (Exception)
+            {
+                backup = "(no copy)";
+            }
+            ModLog.Error($"Unreadable configuration ({path}), using default values. The file was copied to {backup}", e);
+            Current = new ModConfig { ConfigVersion = CurrentConfigVersion };
         }
 
-        // Before 0.16, Tab opened the chat: it's the player list now, and the chat moves to Enter.
-        if (Current.ChatKey.Equals("Tab", StringComparison.OrdinalIgnoreCase))
+        if (Current.ConfigVersion < CurrentConfigVersion)
         {
-            Current.ChatKey = "Enter";
+            Migrate(Current);
+            Current.ConfigVersion = CurrentConfigVersion;
             Save();
         }
 
@@ -175,6 +202,20 @@ internal sealed class ModConfig
         {
             Current.PlayerName = name;
         }
+    }
+
+    /// <summary>Upgrades a file written by an older version, one format at a time.</summary>
+    private static void Migrate(ModConfig c)
+    {
+        if (c.ConfigVersion < 1)
+        {
+            // Before 0.16, Tab opened the chat: it's the player list now, and the chat moves to Enter.
+            if (c.ChatKey.Equals("Tab", StringComparison.OrdinalIgnoreCase))
+            {
+                c.ChatKey = "Enter";
+            }
+        }
+        // Next format: if (c.ConfigVersion < 2) { ... }
     }
 
     public (string Host, int Port) ParseServer()

@@ -30,11 +30,14 @@ public sealed class GameServer : INetEventListener
         public int Skin { get; set; }
         public bool IsAdmin { get; set; }
         public bool IsSpectator { get; set; }
+        /// <summary>The client's mod version, game modes and optional features (from Hello).</summary>
+        public Capabilities Capabilities { get; set; } = Capabilities.Unknown;
         public PlayerInfo Info => new(Id, Name, MapKey, Skin, IsSpectator);
 
         /// <summary>Takes part in rounds: connected, not spectating.</summary>
         public bool IsPlaying => HasSaidHello && !IsSpectator;
         public Queue<double> RecentChat { get; } = new();
+        public HashSet<MessageType> UnknownMessages { get; } = new();
     }
 
     private readonly ServerOptions options;
@@ -884,11 +887,22 @@ public sealed class GameServer : INetEventListener
     }
 
     /// <summary>An admin changed the match settings in game.</summary>
-    private void OnSettings(Player p, MatchSettings settings, bool saveToFile)
+    private void OnSettings(Player p, string patchJson, bool saveToFile)
     {
         if (!p.IsAdmin)
         {
             Reply(p, CommandResults.NotAdmin, "");
+            return;
+        }
+        // Only what the admin changed is sent: settings their mod version doesn't know are kept.
+        MatchSettings settings;
+        try
+        {
+            settings = SettingsPatch.Merge(options.ToMatchSettings(), patchJson);
+        }
+        catch (System.Text.Json.JsonException e)
+        {
+            Reply(p, CommandResults.InvalidSettings, e.Message);
             return;
         }
         GameMode oldMode = options.Mode;
@@ -1327,18 +1341,23 @@ public sealed class GameServer : INetEventListener
                     break;
                 case MessageType.Settings:
                 {
-                    var (settings, save) = Msg.GetSettings(reader);
-                    OnSettings(p, settings, save);
+                    var (json, save) = Msg.GetSettingsJson(reader);
+                    OnSettings(p, json, save);
                     break;
                 }
                 default:
-                    Log($"Unexpected message {type} from #{p.Id}");
+                    // Probably a newer client: its extra messages are ignored (logged once per type).
+                    if (p.UnknownMessages.Add(type))
+                    {
+                        Log($"Ignored message type {(byte)type} from {p.Name} (#{p.Id}, mod {p.Capabilities.Version})");
+                    }
                     break;
             }
         }
-        catch (Exception e) when (e is ArgumentException or IndexOutOfRangeException or InvalidOperationException)
+        catch (Exception e)
         {
-            Log($"Invalid packet from #{p.Id}: {e.Message}");
+            // A malformed packet (or a bug) must never stop the server for everyone.
+            Log($"Invalid packet from #{p.Id}: {e.GetType().Name}: {e.Message}");
         }
     }
 
@@ -1361,19 +1380,21 @@ public sealed class GameServer : INetEventListener
         {
             return;
         }
-        p.Name = Msg.SanitizeName(reader.GetString(ProtocolInfo.MaxNameLength * 4));
-        p.Skin = reader.GetInt();
+        var (name, skin, capabilities) = Msg.GetHello(reader);
+        p.Name = Msg.SanitizeName(name);
+        p.Skin = skin;
+        p.Capabilities = capabilities;
         p.HasSaidHello = true;
 
         var others = players.Values.Where(o => o.HasSaidHello && o != p).Select(o => o.Info).ToList();
-        p.Peer.Send(Msg.Welcome(writer, p.Id, others), DeliveryMethod.ReliableOrdered);
+        p.Peer.Send(Msg.Welcome(writer, p.Id, others, ProtocolInfo.OwnCapabilities), DeliveryMethod.ReliableOrdered);
         Broadcast(Msg.PlayerJoined(writer, p.Info), DeliveryMethod.ReliableOrdered, except: p);
 
         if (options.Echo)
         {
             p.Peer.Send(Msg.PlayerJoined(writer, new PlayerInfo(EchoIdOffset + p.Id, $"Echo {p.Name}", p.MapKey, p.Skin)), DeliveryMethod.ReliableOrdered);
         }
-        Log($"{p.Name} (#{p.Id}) joined the game ({players.Count} connected)");
+        Log($"{p.Name} (#{p.Id}) joined the game with mod {Msg.SanitizeName(capabilities.Version)} ({players.Count} connected)");
 
         // Round in progress: the newcomer gets the imposed map, the leaderboard and the match standings.
         if (phase != RoundPhase.Free)

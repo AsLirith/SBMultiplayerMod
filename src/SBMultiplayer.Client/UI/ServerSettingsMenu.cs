@@ -14,7 +14,9 @@ namespace SBMultiplayer.Client.UI;
 /// </summary>
 internal static class ServerSettingsMenu
 {
-    private static readonly GameMode[] Modes = { GameMode.Free, GameMode.TimeAttack, GameMode.Rounds, GameMode.Cup, GameMode.Elimination, GameMode.HideAndSeek };
+    /// <summary>Modes both this mod and the server know (an older server may lack the newest ones).</summary>
+    private static IEnumerable<GameMode> Modes =>
+        GameModes.Known.Where(MultiplayerClient.Instance.ServerCapabilities.Supports);
 
     public static void OpenModeAndMaps()
     {
@@ -45,6 +47,7 @@ internal static class ServerSettingsMenu
     private static Element BuildModeAndMaps(Action close, Scene scene)
     {
         MatchSettings working = WorkingCopy();
+        MatchSettings baseline = WorkingCopy(); // only the differences are sent
         var save = new ValueEvent<bool>(false);
         var modeLabel = new Label(Tr.SettingsModeLabel(Tr.ModeName(working.Mode)), MenuWidth);
         var modeDescription = new Label(Tr.ModeDescription(working.Mode), MenuWidth);
@@ -88,7 +91,7 @@ internal static class ServerSettingsMenu
                 keys.Add(key);
             }
             working.Maps = keys;
-            MultiplayerClient.Instance.SendSettings(working, save.Value);
+            MultiplayerClient.Instance.SendSettings(working, baseline, save.Value);
             close();
         }
 
@@ -112,6 +115,7 @@ internal static class ServerSettingsMenu
     private static Element BuildTimingsAndPoints(Action close, Scene scene)
     {
         MatchSettings working = WorkingCopy();
+        MatchSettings baseline = WorkingCopy(); // only the differences are sent
         GameMode mode = working.Mode;
         bool synchronized = mode.IsSynchronized();
         var save = new ValueEvent<bool>(false);
@@ -154,7 +158,7 @@ internal static class ServerSettingsMenu
             working.MatchEndSeconds = MathF.Round(matchEnd.Value);
             working.HideSeconds = MathF.Round(hideSeconds.Value);
             working.Infection = infection.Value;
-            MultiplayerClient.Instance.SendSettings(working, save.Value);
+            MultiplayerClient.Instance.SendSettings(working, baseline, save.Value);
             close();
         }
 

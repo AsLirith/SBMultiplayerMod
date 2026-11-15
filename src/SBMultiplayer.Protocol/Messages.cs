@@ -4,8 +4,19 @@ namespace SBMultiplayer.Protocol;
 
 public static class ProtocolInfo
 {
-    /// <summary>Increment on every incompatible change to the message format.</summary>
-    public const int Version = 12;
+    /// <summary>
+    /// Changes only on a breaking change of the message format (that would be a 2.0). Compatible additions keep it:
+    /// new fields appended at the end of a message, new message types, new capabilities (see docs/protocol.md).
+    /// </summary>
+    public const int Version = 13;
+
+    /// <summary>This build's mod version ("0.19.0"), exchanged at connection for display and logs.</summary>
+    public static string ModVersion { get; } = FormatVersion(typeof(ProtocolInfo).Assembly.GetName().Version);
+
+    private static string FormatVersion(System.Version? v) => v == null ? "?" : $"{v.Major}.{v.Minor}.{Math.Max(0, v.Build)}";
+
+    /// <summary>What this build supports, sent by the client in Hello and by the server in Welcome.</summary>
+    public static Capabilities OwnCapabilities => new(ModVersion, GameModes.Known, Array.Empty<string>());
 
     public const int DefaultPort = 24800;
 
@@ -24,6 +35,20 @@ public static class ProtocolInfo
         w.Put(password);
         return w;
     }
+}
+
+/// <summary>
+/// What a client or a server supports. A newer peer hides or skips what the other side lacks:
+/// game modes it can't run, and optional features named by a string (none yet in protocol 13).
+/// </summary>
+public sealed record Capabilities(string Version, IReadOnlyList<GameMode> Modes, IReadOnlyList<string> Features)
+{
+    /// <summary>Peer that didn't send its capabilities.</summary>
+    public static Capabilities Unknown { get; } = new("?", GameModes.Known, Array.Empty<string>());
+
+    public bool Has(string feature) => Features.Contains(feature);
+
+    public bool Supports(GameMode mode) => Modes.Contains(mode);
 }
 
 /// <summary>Connection rejection codes sent by the server, translated by the client.</summary>
@@ -228,6 +253,14 @@ public enum GameMode : byte
 
 public static class GameModes
 {
+    /// <summary>Modes this build knows. A newer server can run a mode missing here: <see cref="IsKnown"/>.</summary>
+    public static IReadOnlyList<GameMode> Known { get; } = new[]
+    {
+        GameMode.Free, GameMode.TimeAttack, GameMode.Rounds, GameMode.Cup, GameMode.Elimination, GameMode.HideAndSeek,
+    };
+
+    public static bool IsKnown(this GameMode mode) => Known.Contains(mode);
+
     /// <summary>Synchronized-start modes (one attempt per round).</summary>
     public static bool IsSynchronized(this GameMode mode) => mode is GameMode.Rounds or GameMode.Cup or GameMode.Elimination or GameMode.HideAndSeek;
 }
@@ -249,6 +282,8 @@ public enum StandingStatus : byte
 /// </summary>
 public sealed class MatchSettings
 {
+    /// <summary>A mode this build doesn't know (sent by a newer server) is kept as its number.</summary>
+    [System.Text.Json.Serialization.JsonConverter(typeof(TolerantGameModeConverter))]
     public GameMode Mode { get; set; } = GameMode.TimeAttack;
     public List<string> Maps { get; set; } = new();
     public double RoundSeconds { get; set; } = 300;
@@ -274,6 +309,76 @@ public sealed class MatchSettings
 [System.Text.Json.Serialization.JsonSerializable(typeof(MatchSettings))]
 internal partial class ProtocolJson : System.Text.Json.Serialization.JsonSerializerContext
 {
+}
+
+/// <summary>Game mode as its name; an unknown name or number doesn't fail the whole message.</summary>
+public sealed class TolerantGameModeConverter : System.Text.Json.Serialization.JsonConverter<GameMode>
+{
+    /// <summary>Stands for a mode name this build doesn't know.</summary>
+    public const GameMode UnknownMode = (GameMode)byte.MaxValue;
+
+    public override GameMode Read(ref System.Text.Json.Utf8JsonReader reader, Type typeToConvert, System.Text.Json.JsonSerializerOptions options)
+    {
+        if (reader.TokenType == System.Text.Json.JsonTokenType.Number)
+        {
+            return reader.TryGetByte(out byte b) ? (GameMode)b : UnknownMode;
+        }
+        string? name = reader.GetString();
+        return Enum.TryParse(name, ignoreCase: true, out GameMode mode) && Enum.IsDefined(mode) ? mode : UnknownMode;
+    }
+
+    public override void Write(System.Text.Json.Utf8JsonWriter writer, GameMode value, System.Text.Json.JsonSerializerOptions options)
+    {
+        if (Enum.IsDefined(value))
+        {
+            writer.WriteStringValue(value.ToString());
+        }
+        else
+        {
+            writer.WriteNumberValue((byte)value);
+        }
+    }
+}
+
+/// <summary>
+/// Settings sent by an admin are a partial JSON object: only what they changed. The server merges it into its current
+/// settings, so an older admin client never resets settings it doesn't know, and two admins don't undo each other.
+/// </summary>
+public static class SettingsPatch
+{
+    /// <summary>Properties of <paramref name="edited"/> that differ from <paramref name="baseline"/>, as a JSON object.</summary>
+    public static string Diff(MatchSettings edited, MatchSettings baseline)
+    {
+        var e = (System.Text.Json.Nodes.JsonObject)System.Text.Json.JsonSerializer.SerializeToNode(edited, MatchSettings.JsonInfo)!;
+        var b = (System.Text.Json.Nodes.JsonObject)System.Text.Json.JsonSerializer.SerializeToNode(baseline, MatchSettings.JsonInfo)!;
+        var diff = new System.Text.Json.Nodes.JsonObject();
+        foreach (var (key, value) in e)
+        {
+            if (!System.Text.Json.Nodes.JsonNode.DeepEquals(value, b[key]))
+            {
+                diff[key] = value?.DeepClone();
+            }
+        }
+        return diff.ToJsonString();
+    }
+
+    /// <summary>Applies a (partial) JSON object to <paramref name="current"/>; unknown properties are ignored.</summary>
+    public static MatchSettings Merge(MatchSettings current, string patchJson)
+    {
+        var merged = (System.Text.Json.Nodes.JsonObject)System.Text.Json.JsonSerializer.SerializeToNode(current, MatchSettings.JsonInfo)!;
+        if (System.Text.Json.Nodes.JsonNode.Parse(patchJson) is not System.Text.Json.Nodes.JsonObject patch)
+        {
+            throw new System.Text.Json.JsonException("settings: a JSON object was expected");
+        }
+        foreach (var (key, value) in patch)
+        {
+            if (merged.ContainsKey(key))
+            {
+                merged[key] = value?.DeepClone();
+            }
+        }
+        return System.Text.Json.JsonSerializer.Deserialize(merged, MatchSettings.JsonInfo) ?? current;
+    }
 }
 
 /// <param name="MapKey">Imposed map ("o:&lt;id&gt;" or "o:&lt;id&gt;:&lt;version&gt;"), "" in the Free phase.</param>
@@ -334,14 +439,19 @@ public readonly record struct PlayerInfo(int Id, string Name, string MapKey, int
 /// <summary>Message serialization. Every message starts with its <see cref="MessageType"/>.</summary>
 public static class Msg
 {
-    public static NetDataWriter Hello(NetDataWriter w, string name, int skin)
+    public static NetDataWriter Hello(NetDataWriter w, string name, int skin, Capabilities capabilities)
     {
         w.Reset();
         w.Put((byte)MessageType.Hello);
         w.Put(name);
         w.Put(skin);
+        Put(w, capabilities);
         return w;
     }
+
+    /// <summary>Reads a Hello (after its type byte).</summary>
+    public static (string Name, int Skin, Capabilities Capabilities) GetHello(NetDataReader r) =>
+        (r.GetString(ProtocolInfo.MaxNameLength * 4), r.GetInt(), GetCapabilities(r));
 
     public static NetDataWriter SkinChanged(NetDataWriter w, int? id, int skin)
     {
@@ -355,7 +465,7 @@ public static class Msg
         return w;
     }
 
-    public static NetDataWriter Welcome(NetDataWriter w, int yourId, IReadOnlyCollection<PlayerInfo> players)
+    public static NetDataWriter Welcome(NetDataWriter w, int yourId, IReadOnlyCollection<PlayerInfo> players, Capabilities serverCapabilities)
     {
         w.Reset();
         w.Put((byte)MessageType.Welcome);
@@ -363,9 +473,25 @@ public static class Msg
         w.Put(players.Count);
         foreach (PlayerInfo p in players)
         {
+            int block = BeginBlock(w);
             Put(w, p);
+            EndBlock(w, block);
         }
+        Put(w, serverCapabilities);
         return w;
+    }
+
+    /// <summary>Reads a Welcome (after its type byte).</summary>
+    public static (int YourId, List<PlayerInfo> Players, Capabilities ServerCapabilities) GetWelcome(NetDataReader r)
+    {
+        int yourId = r.GetInt();
+        int count = Math.Clamp(r.GetInt(), 0, 1024);
+        var players = new List<PlayerInfo>(count);
+        for (int i = 0; i < count; i++)
+        {
+            players.Add(GetPlayerInfo(GetBlock(r)));
+        }
+        return (yourId, players, GetCapabilities(r));
     }
 
     public static NetDataWriter PlayerJoined(NetDataWriter w, PlayerInfo player)
@@ -405,8 +531,11 @@ public static class Msg
         return w;
     }
 
-    /// <summary>Most states in one <see cref="MessageType.States"/> packet (each takes 45 bytes: stays under the MTU).</summary>
-    public const int MaxStatesPerPacket = 24;
+    /// <summary>
+    /// Most states in one <see cref="MessageType.States"/> packet: each takes 46 bytes, so 20 stay under 1023 bytes,
+    /// the largest unreliable packet LiteNetLib accepts before its MTU discovery (an oversized one would throw).
+    /// </summary>
+    public const int MaxStatesPerPacket = 20;
 
     /// <summary>S→C: several players' states (entries [start, start + count) of the list).</summary>
     public static NetDataWriter States(NetDataWriter w, IReadOnlyList<(int Id, PlayerState State)> entries, int start, int count)
@@ -417,7 +546,9 @@ public static class Msg
         for (int i = start; i < start + count; i++)
         {
             w.Put(entries[i].Id);
+            int block = BeginShortBlock(w);
             PutCompact(w, entries[i].State);
+            EndShortBlock(w, block);
         }
         return w;
     }
@@ -429,7 +560,8 @@ public static class Msg
         var list = new List<(int, PlayerState)>(count);
         for (int i = 0; i < count; i++)
         {
-            list.Add((r.GetInt(), GetCompact(r)));
+            int id = r.GetInt();
+            list.Add((id, GetCompact(GetShortBlock(r))));
         }
         return list;
     }
@@ -462,21 +594,27 @@ public static class Msg
         new(r.GetInt(), r.GetString(256), (RoundPhase)r.GetByte(), r.GetFloat(), r.GetInt(), r.GetInt(), r.GetBool(),
             (GameMode)r.GetByte(), r.GetFloat(), r.GetInt(), r.GetInt(), r.GetInt(), r.GetInt(), r.GetInt(), r.GetBool(), r.GetFloat(), r.GetBool());
 
-    /// <summary>S→C (admins): current settings. C→S: settings to apply (+ save to the config file).</summary>
-    public static NetDataWriter Settings(NetDataWriter w, MatchSettings settings, bool saveToFile)
+    /// <summary>S→C (admins): the server's current settings, complete.</summary>
+    public static NetDataWriter Settings(NetDataWriter w, MatchSettings settings, bool saveToFile) =>
+        SettingsJson(w, System.Text.Json.JsonSerializer.Serialize(settings, MatchSettings.JsonInfo), saveToFile);
+
+    /// <summary>C→S: settings to change, as a partial JSON object (<see cref="SettingsPatch.Diff"/>), and whether to save them to the config file.</summary>
+    public static NetDataWriter SettingsJson(NetDataWriter w, string json, bool saveToFile)
     {
         w.Reset();
         w.Put((byte)MessageType.Settings);
-        w.Put(System.Text.Json.JsonSerializer.Serialize(settings, MatchSettings.JsonInfo));
+        w.Put(json);
         w.Put(saveToFile);
         return w;
     }
 
     public static (MatchSettings Settings, bool SaveToFile) GetSettings(NetDataReader r)
     {
-        var settings = System.Text.Json.JsonSerializer.Deserialize(r.GetString(16384), MatchSettings.JsonInfo) ?? new MatchSettings();
-        return (settings, r.GetBool());
+        var (json, save) = GetSettingsJson(r);
+        return (System.Text.Json.JsonSerializer.Deserialize(json, MatchSettings.JsonInfo) ?? new MatchSettings(), save);
     }
+
+    public static (string Json, bool SaveToFile) GetSettingsJson(NetDataReader r) => (r.GetString(16384), r.GetBool());
 
     /// <summary>C→S: the player is on the round's start line (synchronized modes).</summary>
     public static NetDataWriter Ready(NetDataWriter w, int roundId)
@@ -538,14 +676,20 @@ public static class Msg
         return w;
     }
 
-    public static NetDataWriter Event(NetDataWriter w, string code, string argument)
+    /// <param name="fallback">English text shown by clients that don't know <paramref name="code"/> (events added after protocol 13).</param>
+    public static NetDataWriter Event(NetDataWriter w, string code, string argument, string fallback = "")
     {
         w.Reset();
         w.Put((byte)MessageType.ServerEvent);
         w.Put(code);
         w.Put(argument);
+        w.Put(fallback);
         return w;
     }
+
+    /// <summary>Reads a ServerEvent or a CommandReply (after its type byte): code, argument, fallback text.</summary>
+    public static (string Code, string Argument, string Fallback) GetCodedText(NetDataReader r) =>
+        (r.GetString(64), r.GetString(256), r.GetStringOr(512, ""));
 
     public static NetDataWriter ChatToServer(NetDataWriter w, string text)
     {
@@ -565,12 +709,14 @@ public static class Msg
         return w;
     }
 
-    public static NetDataWriter Reply(NetDataWriter w, string code, string argument)
+    /// <param name="fallback">English text shown by clients that don't know <paramref name="code"/> (replies added after protocol 13).</param>
+    public static NetDataWriter Reply(NetDataWriter w, string code, string argument, string fallback = "")
     {
         w.Reset();
         w.Put((byte)MessageType.CommandReply);
         w.Put(code);
         w.Put(argument);
+        w.Put(fallback);
         return w;
     }
 
@@ -608,10 +754,12 @@ public static class Msg
         w.Put(entries.Count);
         foreach (StandingEntry e in entries)
         {
+            int block = BeginBlock(w);
             w.Put(e.Name);
             w.Put(e.Points);
             w.Put(e.RoundsPlayed);
             w.Put((byte)e.Status);
+            EndBlock(w, block);
         }
         return w;
     }
@@ -622,7 +770,8 @@ public static class Msg
         var list = new List<StandingEntry>(count);
         for (int i = 0; i < count; i++)
         {
-            list.Add(new StandingEntry(r.GetString(ProtocolInfo.MaxNameLength * 4), r.GetInt(), r.GetInt(), (StandingStatus)r.GetByte()));
+            NetDataReader e = GetBlock(r);
+            list.Add(new StandingEntry(e.GetString(ProtocolInfo.MaxNameLength * 4), e.GetInt(), e.GetInt(), (StandingStatus)e.GetByte()));
         }
         return list;
     }
@@ -644,9 +793,11 @@ public static class Msg
         w.Put(entries.Count);
         foreach (LeaderboardEntry e in entries)
         {
+            int block = BeginBlock(w);
             w.Put(e.PlayerId);
             w.Put(e.Name);
             w.Put(e.BestMs);
+            EndBlock(w, block);
         }
         return w;
     }
@@ -658,7 +809,8 @@ public static class Msg
         var list = new List<LeaderboardEntry>(count);
         for (int i = 0; i < count; i++)
         {
-            list.Add(new LeaderboardEntry(r.GetInt(), r.GetString(ProtocolInfo.MaxNameLength * 4), r.GetUInt()));
+            NetDataReader e = GetBlock(r);
+            list.Add(new LeaderboardEntry(e.GetInt(), e.GetString(ProtocolInfo.MaxNameLength * 4), e.GetUInt()));
         }
         return (roundId, list);
     }
@@ -806,6 +958,100 @@ public static class Msg
     public static PlayerInfo GetPlayerInfo(NetDataReader r) =>
         new(r.GetInt(), r.GetString(ProtocolInfo.MaxNameLength * 4), r.GetString(256), r.GetInt(), r.GetBool());
 
+    public static void Put(NetDataWriter w, Capabilities c)
+    {
+        w.Put(c.Version);
+        w.Put((byte)c.Modes.Count);
+        foreach (GameMode mode in c.Modes)
+        {
+            w.Put((byte)mode);
+        }
+        w.Put((byte)c.Features.Count);
+        foreach (string feature in c.Features)
+        {
+            w.Put(feature);
+        }
+    }
+
+    public static Capabilities GetCapabilities(NetDataReader r)
+    {
+        if (r.AvailableBytes < 2)
+        {
+            return Capabilities.Unknown;
+        }
+        string version = r.GetString(32);
+        int modeCount = r.GetByte();
+        var modes = new GameMode[modeCount];
+        for (int i = 0; i < modeCount; i++)
+        {
+            modes[i] = (GameMode)r.GetByte();
+        }
+        int featureCount = r.GetByte();
+        var features = new string[featureCount];
+        for (int i = 0; i < featureCount; i++)
+        {
+            features[i] = r.GetString(64);
+        }
+        return new Capabilities(version, modes, features);
+    }
+
+    // ---------- Blocks ----------
+    // A list element is written as a block (its length, then its fields), so a newer version can append fields
+    // to it: an older reader reads the fields it knows and skips the rest of the block.
+
+    /// <summary>Starts a block of up to 65535 bytes; returns the position to give to <see cref="EndBlock"/>.</summary>
+    public static int BeginBlock(NetDataWriter w)
+    {
+        int position = w.Length;
+        w.Put((ushort)0);
+        return position;
+    }
+
+    public static void EndBlock(NetDataWriter w, int position)
+    {
+        int length = w.Length - position - 2;
+        if (length > ushort.MaxValue)
+        {
+            throw new InvalidOperationException("block too long");
+        }
+        w.Data[position] = (byte)length;
+        w.Data[position + 1] = (byte)(length >> 8);
+    }
+
+    /// <summary>Starts a block of up to 255 bytes (frequent small elements).</summary>
+    public static int BeginShortBlock(NetDataWriter w)
+    {
+        int position = w.Length;
+        w.Put((byte)0);
+        return position;
+    }
+
+    public static void EndShortBlock(NetDataWriter w, int position)
+    {
+        int length = w.Length - position - 1;
+        if (length > byte.MaxValue)
+        {
+            throw new InvalidOperationException("block too long");
+        }
+        w.Data[position] = (byte)length;
+    }
+
+    /// <summary>Reads a block: returns a reader over its content, <paramref name="r"/> moves past it.</summary>
+    public static NetDataReader GetBlock(NetDataReader r) => SubReader(r, r.GetUShort());
+
+    public static NetDataReader GetShortBlock(NetDataReader r) => SubReader(r, r.GetByte());
+
+    private static NetDataReader SubReader(NetDataReader r, int length)
+    {
+        if (length > r.AvailableBytes)
+        {
+            throw new InvalidDataException("truncated block");
+        }
+        var block = new NetDataReader(r.RawData, r.Position, r.Position + length);
+        r.SkipBytes(length);
+        return block;
+    }
+
     private static void Put(NetDataWriter w, in Vec3 v)
     {
         w.Put(v.X);
@@ -844,4 +1090,23 @@ public static class Msg
         string clean = sb.ToString().Trim();
         return clean.Length == 0 ? "Player" : clean;
     }
+}
+
+/// <summary>
+/// Optional fields: a field appended to a message after protocol 13 is read with these, so a message from an
+/// older peer (without the field) gets the default value. Reading past the end of a packet doesn't fail by itself
+/// in LiteNetLib: it would return garbage, hence the explicit checks.
+/// </summary>
+public static class OptionalFields
+{
+    public static bool GetBoolOr(this NetDataReader r, bool fallback) => r.AvailableBytes >= 1 ? r.GetBool() : fallback;
+
+    public static byte GetByteOr(this NetDataReader r, byte fallback) => r.AvailableBytes >= 1 ? r.GetByte() : fallback;
+
+    public static int GetIntOr(this NetDataReader r, int fallback) => r.AvailableBytes >= 4 ? r.GetInt() : fallback;
+
+    public static float GetFloatOr(this NetDataReader r, float fallback) => r.AvailableBytes >= 4 ? r.GetFloat() : fallback;
+
+    public static string GetStringOr(this NetDataReader r, int maxLength, string fallback) =>
+        r.AvailableBytes >= 2 ? r.GetString(maxLength) : fallback;
 }

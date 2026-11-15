@@ -37,6 +37,8 @@ Unofficial multiplayer mod for [STUNTBOOST](https://store.steampowered.com/app/2
 
 To uninstall, remove the launch option. The log file is `SBMultiplayer/SBMultiplayer.log`.
 
+**Updating**: overwrite the files in the `SBMultiplayer` folder; your settings are kept. Starting with 0.19.0, newer versions stay compatible with older ones: players and servers don't need to update together. A feature the other side doesn't have yet is simply hidden (details for contributors in [docs/protocol.md](docs/protocol.md)).
+
 ## Hosting a server
 
 The simplest: **F8 > Host a game** in the game. For a dedicated server, see [docs/hosting.md](docs/hosting.md) (firewall, port forwarding, Tailscale…), or grab the server zip from the [releases](../../releases/latest).
@@ -59,7 +61,7 @@ dotnet build -p:GameDir=/path/to/steamapps/common/STUNTBOOST   # builds and copi
 
 ## How it works
 
-The mod is loaded through a [.NET startup hook](https://github.com/dotnet/runtime/blob/main/docs/design/features/host-startup-hook.md) and patches the game in memory with [Harmony](https://github.com/pardeike/Harmony), without modifying any game file. Networking uses [LiteNetLib](https://github.com/RevenantX/LiteNetLib) (UDP). Technical notes are in [docs/00-reverse-engineering.md](docs/00-reverse-engineering.md).
+The mod is loaded through a [.NET startup hook](https://github.com/dotnet/runtime/blob/main/docs/design/features/host-startup-hook.md) and patches the game in memory with [Harmony](https://github.com/pardeike/Harmony), without modifying any game file. Networking uses [LiteNetLib](https://github.com/RevenantX/LiteNetLib) (UDP). Technical notes are in [docs/00-reverse-engineering.md](docs/00-reverse-engineering.md), and the compatibility rules of the network protocol in [docs/protocol.md](docs/protocol.md).
 
 ## Legal
 
