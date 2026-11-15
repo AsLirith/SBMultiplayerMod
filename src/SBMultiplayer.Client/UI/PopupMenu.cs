@@ -65,8 +65,7 @@ internal static class PopupMenu
     {
         OpenIds.Add(def.Id);
         var scene = new Scene();
-        // Every screen has the same width: an invisible line of MenuWidth on top of the content.
-        Element content = new PanelStack(0f).Add(new Label("", MenuWidth, 1f, setSizeToText: false), def.Build(close, scene))
+        Element content = def.Build(close, scene)
             .SetStyle(Ui.TextSmallStyle)
             .SetNavigationStartToFirstNavigatable();
         CanvasScale canvas = GameAccess.CreateCanvas();
@@ -108,7 +107,10 @@ internal static class PopupMenu
 
     public const float MenuWidth = 2800f;
     public const float RowLabelWidth = 1400f;
-    public const float FieldWidth = MenuWidth - RowLabelWidth - 90f;
+    public const float FieldWidth = MenuWidth - RowLabelWidth - LabelGap - 40f; // 40: the field's own padding
+
+    /// <summary>Space between a settings label and its checkbox, slider or field.</summary>
+    public const float LabelGap = 70f;
 
     private static float Measure(string text) => Ui.FontSmall.Value.MeasureString(text).X;
 
@@ -134,8 +136,12 @@ internal static class PopupMenu
         }
     }
 
-    /// <summary>Vertical stack of the screen's elements (nulls are skipped).</summary>
-    public static Element Stack(params Element?[] children) => new PanelStack(26f).AddMaybeNull(children);
+    /// <summary>
+    /// Vertical stack of the screen's elements (nulls are skipped). Always MenuWidth wide (an invisible line on top):
+    /// settings rows are aligned on its left edge, so their label column is at the same place on every screen.
+    /// </summary>
+    public static Element Stack(params Element?[] children) =>
+        new PanelStack(26f).Add(new Label("", MenuWidth, 1f, setSizeToText: false)).AddMaybeNull(children);
 
     public static Element Title(string text) => new Label(text).SetStyle(Ui.StrongStyle);
 
@@ -173,11 +179,19 @@ internal static class PopupMenu
 
     /// <summary>Label on the left (right-aligned, like the game's settings rows), field on the right.</summary>
     public static Element Row(string label, Element field) =>
-        new PanelStack(32f, vertical: false).Add(new Label(Fit(label, RowLabelWidth), RowLabelWidth) { Anchor = new Vector2(1f, 0.5f) }, field);
+        new PanelStack(LabelGap, vertical: false) { Anchor = Vector2.Zero }
+            .Add(new Label(Fit(label, RowLabelWidth), RowLabelWidth) { Anchor = new Vector2(1f, 0.5f) }, field);
 
     /// <summary>Checkbox row of the game's options, with the common label width.</summary>
-    public static Element Check(string label, IValue<bool> value) =>
-        GameAccess.OptionsUi.GetCheckboxRow(Fit(label, RowLabelWidth), value, RowLabelWidth);
+    public static Element Check(string label, IValue<bool> value)
+    {
+        Element row = GameAccess.OptionsUi.GetCheckboxRow(Fit(label, RowLabelWidth), value, RowLabelWidth);
+        if (row is PanelStack stack)
+        {
+            stack.Gap = LabelGap;
+        }
+        return row;
+    }
 
     /// <summary>Slider row of the game's options, with the common label width.</summary>
     public static Element Slider(string label, IValue<float> value, Func<string, string> valueText, float min, float max, float step)
@@ -188,6 +202,7 @@ internal static class PopupMenu
             rowLabel.InitialWidth = RowLabelWidth;
             rowLabel.Width = RowLabelWidth;
         }
+        row.Gap = LabelGap;
         return row;
     }
 

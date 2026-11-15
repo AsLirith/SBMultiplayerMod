@@ -71,7 +71,7 @@ internal static class AdminMenu
         string mode = Tr.ModeName(Client.ServerSettings?.Mode ?? info.Mode);
         if (info.Phase == RoundPhase.Free)
         {
-            return mode;
+            return Tr.SettingsModeLabel(mode);
         }
         string round = info.RoundsPerMap > 1 ? $" - {Tr.RoundOf(info.RoundInMap, info.RoundsPerMap)}" : "";
         return $"{mode} - {GameAccess.DescribeMap(info.MapKey)} ({info.MapIndex + 1}/{info.MapCount}){round}";

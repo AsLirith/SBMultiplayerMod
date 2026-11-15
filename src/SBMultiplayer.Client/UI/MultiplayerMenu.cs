@@ -211,7 +211,7 @@ internal static class MultiplayerMenu
             Slider(Tr.ChatSize, ModSettings.ChatScale, Percent, 0.5f, 2f, 0.1f),
             Check(Tr.NotificationsOnTop, ModSettings.NotificationsOnTop),
             Section(Tr.RoundPanel),
-            Check(Tr.RoundPanel, ModSettings.ShowRoundPanel),
+            Check(Tr.ShowRoundPanel, ModSettings.ShowRoundPanel),
             Slider(Tr.RoundPanelSize, ModSettings.RoundPanelScale, Percent, 0.3f, 1.2f, 0.1f),
             Button(Tr.Back, close)
         );

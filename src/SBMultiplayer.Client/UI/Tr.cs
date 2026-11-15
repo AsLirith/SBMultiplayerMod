@@ -49,6 +49,7 @@ internal static class Tr
     public static string ShowNameTagDistance => T("Distance next to names", "Distance à côté des pseudos");
     public static string ShowSplits => T("Checkpoint splits", "Temps intermédiaires");
     public static string RoundPanel => T("Round panel", "Panneau du round");
+    public static string ShowRoundPanel => T("Show the round panel", "Afficher le panneau du round");
     public static string RoundPanelSize => T("Round panel size", "Taille du panneau du round");
     public static string KeysHint(string menuKey, string rejoinKey, string chatKey, string scoreboardKey) =>
         T($"{menuKey}: this menu    {rejoinKey}: join the round's map    {chatKey}: chat    {scoreboardKey} (hold): players",
