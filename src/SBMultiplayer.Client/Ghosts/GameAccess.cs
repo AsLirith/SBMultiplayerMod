@@ -55,20 +55,41 @@ internal static class GameAccess
     private static MethodInfo? toMarkup;
 
     /// <summary>The player's key for the game's free camera ("F" by default), or null if it can't be shown as text (mouse, gamepad glyph).</summary>
-    public static string? FlyKeyName
+    public static string? FlyKeyName => KeyName(b => b.FlyToggle);
+
+    /// <summary>The player's key to restart the level ("Q" by default), or null if it can't be shown as text.</summary>
+    public static string? RestartKeyName => KeyName(b => b.RestartLevel);
+
+    private static string? KeyName(Func<Binds, InputBool> bind)
+    {
+        if (Game == null)
+        {
+            return null;
+        }
+        try
+        {
+            bindsRef ??= AccessTools.FieldRefAccess<GlobalGame, Binds>("binds");
+            toMarkup ??= AccessTools.Method("SE.BindToMarkup:ToMarkup") ?? throw new MissingMethodException("SE.BindToMarkup.ToMarkup");
+            string markup = (string)toMarkup.Invoke(null, new object[] { bind(bindsRef(Game)), false })!;
+            return markup.Length == 0 || markup.Contains('#') || markup.Contains('_') ? null : markup;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    private static AccessTools.FieldRef<GlobalGame, InputOutgame>? inputRef;
+
+    /// <summary>The game's menu-level inputs (restart, free camera...), or null.</summary>
+    public static InputOutgame? Input
     {
         get
         {
-            if (Game == null)
-            {
-                return null;
-            }
             try
             {
-                bindsRef ??= AccessTools.FieldRefAccess<GlobalGame, Binds>("binds");
-                toMarkup ??= AccessTools.Method("SE.BindToMarkup:ToMarkup") ?? throw new MissingMethodException("SE.BindToMarkup.ToMarkup");
-                string markup = (string)toMarkup.Invoke(null, new object[] { bindsRef(Game).FlyToggle, false })!;
-                return markup.Length == 0 || markup.Contains('#') || markup.Contains('_') ? null : markup;
+                inputRef ??= AccessTools.FieldRefAccess<GlobalGame, InputOutgame>("inputOutgame");
+                return Game != null ? inputRef(Game) : null;
             }
             catch (Exception)
             {

@@ -158,6 +158,12 @@ internal static class Tr
     public static string WaitingForPlayers(int ready, int total) => T($"Waiting for players ({ready}/{total})", $"En attente des joueurs ({ready}/{total})");
     public static string Go => T("GO!", "GO !");
     public static string GaveUp => T("You went back to the start: you gave up this round", "Retour au départ : tu as abandonné cette manche");
+    public static string ConfirmGiveUp(string? key) => key == null
+        ? T("One attempt per round: press restart again quickly, or hold it, to give up", "Un seul essai par manche : rappuie vite sur recommencer, ou maintiens-le, pour abandonner")
+        : T($"One attempt per round: press {key} again quickly, or hold it, to give up", $"Un seul essai par manche : rappuie vite sur {key}, ou maintiens-le, pour abandonner");
+    public static string BackToStartPenalty(float seconds) =>
+        T($"Back to the start: the run goes on, +{seconds:0.0} s added to your time", $"Retour au départ : la course continue, +{seconds:0.0} s ajoutées à ton temps");
+    public static string MissedStart => T("You missed the start: wait for the next round", "Tu as raté le départ : attends la prochaine manche");
     public static string WaitNextRound => T("Waiting for the next round", "En attente de la prochaine manche");
     public static string FinishedWaiting => T("Finished - waiting for the other players", "Arrivé - en attente des autres joueurs");
     public static string LateWaiting => T("Round already started - you'll race in the next one", "Manche déjà commencée - tu joueras la suivante");
@@ -407,6 +413,11 @@ internal static class Tr
     public static string HsHidingClock => T("Hiding", "Cache");
     public static string SettingsHideSeconds => T("Hiding time", "Temps pour se cacher");
     public static string SettingsHuntSeconds => T("Hunting time", "Temps de recherche");
+    public static string SettingsDnfFillsQuota => T("Elimination: DNF fill the quota", "Élimination : abandons dans le quota");
+    public static string SettingsDnfFillsQuotaHint => T(
+        "Ticked: players who don't finish fill the quota, first to give up first (quota 2, 3 give-ups: only the first two are out). Unticked: all of them are eliminated.",
+        "Coché : les joueurs qui ne finissent pas remplissent le quota, premier abandon d'abord (quota 2, 3 abandons : seuls les deux premiers sortent). Décoché : ils sont tous éliminés.");
+    public static string HsRespawnedOut => T("You left your hiding place during the hunt: you're out of this round", "Tu as quitté ta cachette pendant la chasse : tu es hors jeu pour cette manche");
     public static string SettingsInfection => T("Infection: found mice hunt too", "Contagion : trouvées = chasseuses");
     public static string AdminNextHunter => T("Next hunter", "Prochain chasseur");
     public static string AdminRandomHunter => T("Random", "Au hasard");

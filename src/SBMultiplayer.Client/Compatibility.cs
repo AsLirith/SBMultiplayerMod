@@ -86,7 +86,14 @@ internal static class Compatibility
         Member(typeof(InputOutgameRaw), "GrindOrStartSkatingRaw");
         Member(typeof(Entities), "GetNearestTriangleRaycastSolid");
         Member(typeof(Goal), "GoalReached");
-        foreach (string m in new[] { "RestartLevel", "RewindToCheckpoint", "RewindToggle", "RewindToStart", "TimeTravelForward" })
+        // One-attempt rounds: confirmed restart key, respawn at the start keeps the run going.
+        Type("SE.Restarter");
+        MemberOf("SE.Restarter", "UpdateMayRestart");
+        MemberOf("SE.Restarter", "input");
+        Member(typeof(InputOutgameRaw), "RestartLevel");
+        Member(typeof(LevelTimer), "Counter");
+        foreach (string m in new[] { "RestartLevel", "RewindToCheckpoint", "RewindToggle", "RewindToStart", "TimeTravelForward",
+                     "LoadFirstCheckpointLater", "LoadCheckpointNow", "levelTimer" })
         {
             Member(typeof(CheckpointManager), m);
         }

@@ -39,7 +39,7 @@ never resets a setting it doesn't know.
 
 **New optional feature**: add a string to the features in `ProtocolInfo.OwnCapabilities`. Clients send theirs in
 `Hello`, the server sends its own in `Welcome`. Use `Capabilities.Has("name")` to decide whether to send a new
-message or to show a button.
+message or to show a button. Known features: `dnf-fills-quota` (0.21.0, the server knows `MatchSettings.DnfFillsQuota`).
 
 ## Breaking changes (to avoid)
 

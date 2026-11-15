@@ -41,6 +41,7 @@ Every setting can also be given (or overridden) on the command line:
 | | `CountdownSeconds` | 3 | Rounds mode: countdown before the start |
 | | `CupPointsLimit` | 100 | Cup mode: points needed to become a finalist |
 | | `EliminatedPerRound` | 1 | Elimination mode: players eliminated each round |
+| | `DnfFillsQuota` | false | Elimination mode: players who don't finish fill the quota, first to give up first (otherwise all of them are eliminated) |
 | | `MatchEndSeconds` | 20 | Duration of the end-of-game screen |
 | `--results <s>` | `ResultsSeconds` | 15 | Results screen duration in seconds |
 | | `PointsTable` | 10, 8, 6, 5, 4, 3, 2, 1 | Match points by rank at the end of each round |
@@ -67,18 +68,18 @@ A player's current map key (e.g. `o:1:2001`) is shown in the server console when
 - **Rounds**: synchronized start, one attempt per round.
   1. Everyone loads the map and waits on the start line ("Waiting for players x/y"). The countdown starts when everyone is ready, or after `PrepareTimeoutSeconds`.
   2. 3, 2, 1, GO: all players are released at the same time.
-  3. Respawning at a checkpoint is allowed. Going back to the start means giving up the round.
-  4. The round ends when everyone has finished or given up, `FinishTimeoutSeconds` after the first finisher, or at the time limit.
+  3. Respawning at a checkpoint is allowed. Dying or respawning before the first checkpoint sends you back to the start, but the run goes on: the time lost is added to your finish time. Restarting the level means giving up the round: press the game's restart key (Q by default) **twice quickly or hold it** (the pause menu's Restart works too).
+  4. The round ends when nobody is racing anymore (everyone finished, gave up or left), `FinishTimeoutSeconds` after the first finisher, or at the time limit. A player whose game sent nothing for 10 seconds (window in the background...) isn't waited for.
   5. Players are ranked by race time (not by arrival order, which depends on latency) and get points from `PointsTable`. Giving up gives no points.
   6. After `RoundsPerMap` rounds, the next map starts.
 
   Players who arrive after the start wait on the start line until the next round.
 - **Cup**: like Rounds, but reaching `CupPointsLimit` points makes you a **finalist** (your points stop there). A finalist who wins a round **wins the cup**. Then a new match starts.
-- **Elimination**: like Rounds, but each round the last `EliminatedPerRound` players are **eliminated** (players who gave up count as last, and at least one player always survives). Eliminated players watch the others from the start line. The last player standing wins, then a new match starts.
+- **Elimination**: like Rounds, but each round the last `EliminatedPerRound` players are **eliminated**, and at least one player always survives. Players who didn't finish count as last: by default all of them are eliminated, even beyond the quota; with `DnfFillsQuota` they fill the quota, first to give up first (quota 2 and 3 players give up: only the first two are out). Players who miss a round's start (arrived late, game in the background) are eliminated too. Eliminated players watch the others from the start line. The last player standing wins, then a new match starts.
 - **Hide and Seek**: one player is the **hunter**, the others are **mice**.
   1. Everyone waits on the start line, like in Rounds. Then the hunter is picked: the player chosen by an admin (F8 > Admin > Next hunter, or `/hunter <name>`), otherwise a random player, never the hunter of the previous round.
   2. The mice leave and have `HideSeconds` to hide. Meanwhile the hunter stays frozen on the start line and can't see them. The board never stops by itself, so a mouse can **lock its hiding place** before the end of the countdown with the game's free camera key (F by default), on a surface.
-  3. When the hiding time is over, each mouse is **frozen where it is**, as soon as it touches a surface (never in mid-air). A frozen mouse can use the free camera (F) or follow a player (Left / Right, Down to stop) to watch the hunt, but can't move its board. Leaving the hiding place (restarting, leaving the map) counts as being found. With `Infection`, mice never see each other.
+  3. When the hiding time is over, each mouse is **frozen where it is**, as soon as it touches a surface (never in mid-air). A frozen mouse can use the free camera (F) or follow a player (Left / Right, Down to stop) to watch the hunt, but can't move its board. Leaving the hiding place (restarting, dying, leaving the map) counts as being found, and so does being away from the map when the hunt starts. With `Infection`, mice never see each other.
   4. The hunter has `RoundSeconds` to find the mice: **aim at a mouse and press the catch key** (right click by default, F8 > Keys). The hunter's board must be within 15 cm of the mouse (the game's cm: 1 cm = one board length), with the mouse near the crosshair (there is some room around it) and not behind a wall. The hunter doesn't see name tags and can't use the free camera.
   5. Found mice watch the rest of the hunt, or become hunters too with `Infection`. The round ends when every mouse is found or at the time limit.
   6. **Points**: each mouse found gives its finder `RoundSeconds / number of players` points; each mouse gets 1 point per second spent hidden during the hunt. The match lasts `RoundsPerMap` rounds per map, over the rotation.

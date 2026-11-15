@@ -60,8 +60,43 @@ internal static class HideSeek
     /// <summary>Called by the scene hook once the player's board is known.</summary>
     public static void Attach(Scene levelScene, Board playerBoard)
     {
+        bool newScene = !ReferenceEquals(scene, levelScene);
         scene = levelScene;
         board = playerBoard;
+        if (!newScene)
+        {
+            return;
+        }
+        // The old freeze went away with the old scene.
+        KeepFrozen = false;
+        FollowRequested = false;
+        frozenRound = -1;
+        // Map reloaded during the hunt: the board is back at the spawn, the hiding place is lost. Out of the round
+        // (found mice watch, or hunt with infection) instead of being frozen at the spawn.
+        ForfeitIfHunting();
+    }
+
+    /// <summary>
+    /// A checkpoint is loaded (died, left the map, respawn or restart key). During the hunt, a mouse not frozen yet
+    /// (it was in the air) lost its hiding place: out of the round, instead of being frozen where it respawns.
+    /// </summary>
+    public static void OnRespawn()
+    {
+        if (!KeepFrozen)
+        {
+            ForfeitIfHunting();
+        }
+    }
+
+    private static void ForfeitIfHunting()
+    {
+        if (IsHunting && LocalRole == Role.Mouse && !IsFound(LocalId))
+        {
+            ModLog.Info("Hide and Seek: left the hiding place during the hunt");
+            frozenRound = Client.Round.Current.Info.RoundId; // never frozen at the respawn place
+            Client.SendTag(frozenRound, LocalId);
+            Notifications.Warn(Tr.HsRespawnedOut);
+        }
     }
 
     private static MultiplayerClient Client => MultiplayerClient.Instance;

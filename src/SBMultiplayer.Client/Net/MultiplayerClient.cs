@@ -587,6 +587,12 @@ internal sealed class MultiplayerClient : INetEventListener
         {
             return; // outside a round: only shown by the splits
         }
+        if (Round.Current.Info.Mode.IsSynchronized() && StartGate.LostMs > 0)
+        {
+            // One-attempt round: the time lost by respawning at the start (the game restarted its timer) counts.
+            ms += StartGate.LostMs;
+            delta += (int)StartGate.LostMs;
+        }
         ModLog.Info($"Finished in {Msg.FormatTime(ms)} (round {finish.RoundId}) → sent to the server");
         if (Round.Current.Info.Mode.IsSynchronized())
         {

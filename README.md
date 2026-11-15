@@ -75,6 +75,7 @@ Press **F8** to open the multiplayer menu, then either:
 | **Left / Right**, **F** | Spectator: switch player, free camera |
 | **Right click** | Hide and Seek hunter: catch the mouse you're aiming at |
 | **F** (the game's free camera key) | Hide and Seek mouse: lock your hiding place before the hunt |
+| **Q** twice or held (the game's restart key) | Rounds, Cup, Elimination: give up the round (one attempt per round) |
 
 Every key of the mod can be changed in **F8 > Keys**.
 

@@ -63,6 +63,9 @@ public sealed class ServerOptions
     /// <summary>Hide and Seek: found mice become hunters (otherwise they watch the hunt).</summary>
     public bool Infection { get; set; }
 
+    /// <summary>Elimination mode: players who didn't finish fill the quota (first to give up first) instead of all being eliminated.</summary>
+    public bool DnfFillsQuota { get; set; }
+
     /// <summary>Folder where round results and match standings are written ("" = no export).</summary>
     public string ResultsDirectory { get; set; } = "results";
 
@@ -88,6 +91,7 @@ public sealed class ServerOptions
         MatchEndSeconds = MatchEndSeconds,
         HideSeconds = HideSeconds,
         Infection = Infection,
+        DnfFillsQuota = DnfFillsQuota,
     };
 
     /// <summary>Applies settings received from an admin, clamped to sane ranges. Returns an error, or null.</summary>
@@ -121,6 +125,7 @@ public sealed class ServerOptions
         MatchEndSeconds = Math.Clamp(s.MatchEndSeconds, 3, 300);
         HideSeconds = Math.Clamp(s.HideSeconds, 5, 600);
         Infection = s.Infection;
+        DnfFillsQuota = s.DnfFillsQuota;
         return null;
     }
 
@@ -148,6 +153,7 @@ public sealed class ServerOptions
             .Replace("\"MatchEndSeconds\": 20", $"\"MatchEndSeconds\": {N(MatchEndSeconds)}")
             .Replace("\"HideSeconds\": 30", $"\"HideSeconds\": {N(HideSeconds)}")
             .Replace("\"Infection\": false", $"\"Infection\": {(Infection ? "true" : "false")}")
+            .Replace("\"DnfFillsQuota\": false", $"\"DnfFillsQuota\": {(DnfFillsQuota ? "true" : "false")}")
             .Replace("\"PointsTable\": [ 10, 8, 6, 5, 4, 3, 2, 1 ]", $"\"PointsTable\": [ {string.Join(", ", PointsTable)} ]")
             .Replace("\"ResultsDirectory\": \"results\"", $"\"ResultsDirectory\": {J(ResultsDirectory)}");
         File.WriteAllText(path, text);
@@ -209,8 +215,12 @@ public sealed class ServerOptions
           // Cup mode: points needed to become a finalist.
           "CupPointsLimit": 100,
 
-          // Elimination mode: players eliminated each round, the slowest ones (players who gave up count as last).
+          // Elimination mode: players eliminated each round, the slowest ones (players who didn't finish count as last).
+          // DnfFillsQuota: false = every player who didn't finish is eliminated, even beyond the quota;
+          // true = they fill the quota, first to give up first (quota 2 and 3 give-ups: only the first two are out).
+          // Players who miss a round's start are always eliminated.
           "EliminatedPerRound": 1,
+          "DnfFillsQuota": false,
 
           // End-of-game screen (final standings and winner), in seconds: shown at the end of each Time Attack
           // round, at the end of the rotation in Rounds mode, and when a Cup or an Elimination is won.

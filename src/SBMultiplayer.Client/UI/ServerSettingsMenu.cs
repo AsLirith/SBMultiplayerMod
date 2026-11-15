@@ -131,6 +131,8 @@ internal static class ServerSettingsMenu
         var matchEnd = new ValueEvent<float>((float)working.MatchEndSeconds);
         var hideSeconds = new ValueEvent<float>((float)working.HideSeconds);
         var infection = new ValueEvent<bool>(working.Infection);
+        var dnfFillsQuota = new ValueEvent<bool>(working.DnfFillsQuota);
+        bool canDnfQuota = MultiplayerClient.Instance.ServerCapabilities.Has(ProtocolInfo.Features.DnfFillsQuota);
         bool hideAndSeek = mode == GameMode.HideAndSeek;
         TextInput points = Input(string.Join(", ", working.PointsTable), 300);
 
@@ -158,6 +160,7 @@ internal static class ServerSettingsMenu
             working.MatchEndSeconds = MathF.Round(matchEnd.Value);
             working.HideSeconds = MathF.Round(hideSeconds.Value);
             working.Infection = infection.Value;
+            working.DnfFillsQuota = dnfFillsQuota.Value;
             MultiplayerClient.Instance.SendSettings(working, baseline, save.Value);
             close();
         }
@@ -183,6 +186,8 @@ internal static class ServerSettingsMenu
             synchronized ? Slider(Tr.SettingsRoundsPerMap, roundsPerMap, Whole, 1f, 10f, 1f) : null,
             mode == GameMode.Cup ? Slider(Tr.SettingsCupLimit, cupLimit, Whole, 10f, 300f, 10f) : null,
             mode == GameMode.Elimination ? Slider(Tr.SettingsEliminatedPerRound, eliminated, Whole, 1f, 5f, 1f) : null,
+            mode == GameMode.Elimination && canDnfQuota ? Check(Tr.SettingsDnfFillsQuota, dnfFillsQuota) : null,
+            mode == GameMode.Elimination && canDnfQuota ? Text(Tr.SettingsDnfFillsQuotaHint) : null,
             hideAndSeek ? Check(Tr.SettingsInfection, infection) : null,
             mode is not (GameMode.Elimination or GameMode.HideAndSeek) ? Row(Tr.SettingsPointsTable, Field(points)) : null,
             Check(Tr.SettingsSaveToFile, save),

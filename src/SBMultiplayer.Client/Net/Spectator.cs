@@ -41,13 +41,13 @@ internal static class Spectator
         }
     }
 
-    /// <summary>Players that can be followed: on our map, not spectating (Hide and Seek: hunters first).</summary>
+    /// <summary>Players that can be followed: on our map, not spectating, not eliminated (Hide and Seek: hunters first).</summary>
     private static List<RemotePlayer> Candidates()
     {
         MultiplayerClient client = MultiplayerClient.Instance;
         string map = client.CurrentMapKey;
         return client.Players.Values
-            .Where(p => !p.IsSpectator && p.MapKey == map && map != "" && !HideSeek.HideFromLocal(p))
+            .Where(p => !p.IsSpectator && p.MapKey == map && map != "" && !HideSeek.HideFromLocal(p) && !StartGate.IsNameEliminated(p.Name))
             .OrderBy(p => HideSeek.RoleOf(p.Id) == HideSeek.Role.Hunter ? 0 : 1)
             .ThenBy(p => p.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();

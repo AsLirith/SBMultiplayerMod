@@ -16,7 +16,14 @@ public static class ProtocolInfo
     private static string FormatVersion(System.Version? v) => v == null ? "?" : $"{v.Major}.{v.Minor}.{Math.Max(0, v.Build)}";
 
     /// <summary>What this build supports, sent by the client in Hello and by the server in Welcome.</summary>
-    public static Capabilities OwnCapabilities => new(ModVersion, GameModes.Known, Array.Empty<string>());
+    public static Capabilities OwnCapabilities => new(ModVersion, GameModes.Known, new[] { Features.DnfFillsQuota });
+
+    /// <summary>Optional features (see docs/protocol.md).</summary>
+    public static class Features
+    {
+        /// <summary>The server knows <see cref="MatchSettings.DnfFillsQuota"/>.</summary>
+        public const string DnfFillsQuota = "dnf-fills-quota";
+    }
 
     public const int DefaultPort = 24800;
 
@@ -300,6 +307,11 @@ public sealed class MatchSettings
     public double HideSeconds { get; set; } = 30;
     /// <summary>Hide and Seek: found mice become hunters (otherwise they watch).</summary>
     public bool Infection { get; set; }
+    /// <summary>
+    /// Elimination: players who didn't finish fill the quota of eliminated players, first to give up first
+    /// (otherwise every one of them is eliminated).
+    /// </summary>
+    public bool DnfFillsQuota { get; set; }
 
     /// <summary>Serialization metadata generated at compile time (no reflection needed).</summary>
     public static System.Text.Json.Serialization.Metadata.JsonTypeInfo<MatchSettings> JsonInfo => ProtocolJson.Default.MatchSettings;

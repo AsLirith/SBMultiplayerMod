@@ -74,6 +74,18 @@ public sealed class GameServer : INetEventListener
     private readonly HashSet<int> participants = new();
     private readonly HashSet<int> gaveUp = new();
 
+    /// <summary>Players who gave up this round, first to give up first.</summary>
+    private readonly List<int> gaveUpOrder = new();
+
+    /// <summary>When each player's last board state arrived (a game in the background sends nothing).</summary>
+    private readonly Dictionary<int, double> lastStateAt = new();
+
+    /// <summary>A participant who sent no board state for this long is no longer waited for (game in the background...).</summary>
+    private const double StalledSeconds = 10;
+
+    /// <summary>Hide and Seek: the mice away from the map at the start of the hunt were put out of the round.</summary>
+    private bool huntStartChecked;
+
     /// <summary>Best time of each player in the current round (the name is kept if the player leaves).</summary>
     private readonly Dictionary<int, LeaderboardEntry> best = new();
 
@@ -145,7 +157,7 @@ public sealed class GameServer : INetEventListener
             ? (IsRoundsMode
                 ? $"{options.Mode} mode - rotation: {string.Join(", ", options.Maps)} - {options.RoundsPerMap} rounds per map, {options.RoundSeconds:0} s limit, {options.ResultsSeconds:0} s results"
                   + (options.Mode == GameMode.Cup ? $", {options.CupPointsLimit} points to become a finalist" : "")
-                  + (options.Mode == GameMode.Elimination ? $", {options.EliminatedPerRound} eliminated per round" : "")
+                  + (options.Mode == GameMode.Elimination ? $", {options.EliminatedPerRound} eliminated per round{(options.DnfFillsQuota ? " (players who don't finish fill the quota)" : "")}" : "")
                   + (IsHideAndSeek ? $", {options.HideSeconds:0} s to hide{(options.Infection ? ", infection" : "")}" : "")
                 : $"Time Attack - rotation: {string.Join(", ", options.Maps)} - {options.RoundSeconds:0} s rounds, {options.ResultsSeconds:0} s results")
             : "Free mode: no rounds, everyone rides wherever they want");
@@ -259,6 +271,11 @@ public sealed class GameServer : INetEventListener
                 BeginCountdown();
             }
         }
+        else if (phase == RoundPhase.Playing && IsHideAndSeek && !huntStartChecked && startAt != null && Now >= SeekStart)
+        {
+            huntStartChecked = true;
+            ForfeitMiceAwayFromMap();
+        }
         else if (phase == RoundPhase.Playing && IsRoundsMode && (IsHideAndSeek ? HuntIsOver() : RoundsRaceIsOver()))
         {
             EndRound();
@@ -312,6 +329,8 @@ public sealed class GameServer : INetEventListener
         ready.Clear();
         participants.Clear();
         gaveUp.Clear();
+        gaveUpOrder.Clear();
+        huntStartChecked = false;
         startAt = null;
         firstFinishAt = null;
         hunters.Clear();
@@ -467,6 +486,24 @@ public sealed class GameServer : INetEventListener
         BroadcastStandings();
     }
 
+    /// <summary>
+    /// Start of the hunt: a mouse that left the round's map while hiding can't be found there anymore, so it's out
+    /// (like leaving the map during the hunt). Otherwise it would come back to the spawn after the hunt started.
+    /// </summary>
+    private void ForfeitMiceAwayFromMap()
+    {
+        foreach (int id in HiddenMice().ToList())
+        {
+            Player p = players[id];
+            if (!Msg.MapMatches(p.MapKey, CurrentMap))
+            {
+                MouseOut(id, p.Name);
+                Log($"{p.Name} wasn't on the map when the hunt started");
+                BroadcastEvent(ServerEvents.MouseForfeit, p.Name);
+            }
+        }
+    }
+
     /// <summary>A mouse disconnects or becomes a spectator during the round: out of the hunt.</summary>
     private void OnLeftHunt(Player p)
     {
@@ -511,7 +548,7 @@ public sealed class GameServer : INetEventListener
     private HideSeekInfo CurrentHideSeek() =>
         new(roundId, hunters.Keys.ToArray(), mice.Keys.ToArray(), found.ToArray());
 
-    /// <summary>Rounds mode: all participants finished or gave up, or the finish timeout expired.</summary>
+    /// <summary>Rounds mode: nobody is racing anymore (all finished, gave up, left or stalled), or the finish timeout expired.</summary>
     private bool RoundsRaceIsOver()
     {
         if (startAt == null || Now < startAt)
@@ -522,8 +559,17 @@ public sealed class GameServer : INetEventListener
         {
             return true;
         }
-        var stillRacing = participants.Where(id => players.ContainsKey(id) && !best.ContainsKey(id) && !gaveUp.Contains(id));
-        return participants.Count > 0 && !stillRacing.Any();
+        return !participants.Any(id => players.ContainsKey(id) && !best.ContainsKey(id) && !gaveUp.Contains(id) && !IsStalled(id));
+    }
+
+    /// <summary>
+    /// No board state from this participant for <see cref="StalledSeconds"/> since the start: their game is in the
+    /// background or frozen. The round doesn't wait for them (a time they send later still counts).
+    /// </summary>
+    private bool IsStalled(int id)
+    {
+        double since = Math.Max(startAt ?? Now, lastStateAt.TryGetValue(id, out double t) ? t : double.NegativeInfinity);
+        return Now - since > StalledSeconds;
     }
 
     private void OnReady(Player p, int readyRoundId)
@@ -566,6 +612,7 @@ public sealed class GameServer : INetEventListener
         if (IsRoundsMode && !IsHideAndSeek && giveUpRoundId == roundId && phase == RoundPhase.Playing && participants.Contains(p.Id)
             && !best.ContainsKey(p.Id) && gaveUp.Add(p.Id))
         {
+            gaveUpOrder.Add(p.Id);
             Log($"{p.Name} gave up");
         }
     }
@@ -666,47 +713,64 @@ public sealed class GameServer : INetEventListener
     }
 
     /// <summary>
-    /// Elimination: the last EliminatedPerRound players are eliminated (players who gave up count as last),
-    /// but at least one player always survives. Points = rounds survived. Last player standing wins.
+    /// Elimination: the last EliminatedPerRound players are eliminated, but at least one player always survives.
+    /// Players who didn't finish count as last: with DnfFillsQuota they fill the quota (first to give up first),
+    /// otherwise all of them are eliminated. Players of the match who missed this round's start are eliminated too.
+    /// Points = rounds survived. Last player standing wins.
     /// </summary>
     private void ApplyElimination()
     {
-        var finishers = SortedLeaderboard().Where(e => participants.Contains(e.PlayerId)).Select(e => e.Name).ToList();
-        var racers = participants.Where(players.ContainsKey).Select(id => players[id].Name).ToList();
-        if (finishers.Count == 0)
+        var racers = participants.Where(players.ContainsKey).Select(id => players[id]).ToList();
+        if (racers.Count == 0)
         {
-            return; // nobody finished: nobody is eliminated this round
+            return; // nobody raced: nothing is decided this round
+        }
+        var finishers = SortedLeaderboard().Where(e => participants.Contains(e.PlayerId)).Select(e => e.Name).ToList();
+
+        // Didn't finish, worst first: stalled (game in the background), then by give-up order, then still racing at the end.
+        int Rank(Player p) => IsStalled(p.Id) ? -1 : gaveUpOrder.IndexOf(p.Id) is int i and >= 0 ? i : int.MaxValue;
+        var dnf = racers.Where(p => !finishers.Contains(p.Name)).OrderBy(Rank).Select(p => p.Name).ToList();
+
+        var out_ = new List<string>();
+        int maxOut = racers.Count - 1; // at least one survivor
+        if (options.DnfFillsQuota)
+        {
+            out_.AddRange(dnf.Concat(Enumerable.Reverse(finishers)).Take(Math.Min(options.EliminatedPerRound, maxOut)));
+        }
+        else if (finishers.Count > 0) // nobody finished: nobody is eliminated this round
+        {
+            out_.AddRange(dnf);
+            int slowest = Math.Min(Math.Max(0, options.EliminatedPerRound - out_.Count), Math.Max(0, maxOut - out_.Count));
+            out_.AddRange(finishers.Skip(finishers.Count - slowest));
         }
 
-        // The last N players are eliminated; players who gave up count as last (all of them are eliminated).
-        // Slowest finishers complete the quota, but at least one player always survives.
-        var out_ = racers.Where(n => !finishers.Contains(n)).ToList();
-        int survivorsIfDnfOut = racers.Count - out_.Count;
-        int slowest = Math.Min(Math.Max(0, options.EliminatedPerRound - out_.Count), Math.Max(0, survivorsIfDnfOut - 1));
-        out_.AddRange(finishers.Skip(finishers.Count - slowest));
+        // In the match but not in the race (missed the start, back from spectating...): eliminated, outside the quota.
+        var absent = players.Values.Where(p => p.IsPlaying && !eliminated.Contains(p.Name) && !participants.Contains(p.Id))
+            .Select(p => p.Name).ToList();
 
-        foreach (string name in racers)
+        foreach (string name in racers.Select(r => r.Name).Concat(absent))
         {
             standings.TryGetValue(name, out StandingEntry previous);
-            bool isOut = out_.Contains(name);
+            bool isOut = out_.Contains(name) || absent.Contains(name);
             if (isOut)
             {
                 eliminated.Add(name);
             }
-            standings[name] = new StandingEntry(name, previous.Points + (isOut ? 0 : 1), previous.RoundsPlayed + 1,
+            standings[name] = new StandingEntry(name, previous.Points + (isOut ? 0 : 1), previous.RoundsPlayed + (absent.Contains(name) ? 0 : 1),
                 isOut ? StandingStatus.Eliminated : StandingStatus.Normal);
         }
-        if (out_.Count > 0)
+        var allOut = out_.Concat(absent).ToList();
+        if (allOut.Count > 0)
         {
-            Log($"Eliminated: {string.Join(", ", out_)}");
-            BroadcastEvent(ServerEvents.Eliminated, string.Join(", ", out_));
+            Log($"Eliminated: {string.Join(", ", out_)}{(absent.Count > 0 ? $" - missed the start: {string.Join(", ", absent)}" : "")}");
+            BroadcastEvent(ServerEvents.Eliminated, string.Join(", ", allOut));
         }
 
         var remaining = players.Values.Where(p => p.IsPlaying && !eliminated.Contains(p.Name)).ToList();
         if (remaining.Count <= 1 && !matchOver)
         {
             matchOver = true;
-            string winner = remaining.FirstOrDefault()?.Name ?? finishers[0];
+            string winner = remaining.FirstOrDefault()?.Name ?? racers.Select(r => r.Name).First(n => !out_.Contains(n));
             standings.TryGetValue(winner, out StandingEntry w);
             standings[winner] = w with { Name = winner, Status = StandingStatus.Winner };
             Log($"{winner} wins the elimination!");
@@ -1274,6 +1338,7 @@ public sealed class GameServer : INetEventListener
         }
         Log($"Disconnection of {p.Name} (#{p.Id}): {info.Reason}");
         lastPosition.Remove(p.Id);
+        lastStateAt.Remove(p.Id);
         OnLeftHunt(p);
         if (p.HasSaidHello)
         {
@@ -1445,6 +1510,7 @@ public sealed class GameServer : INetEventListener
             return; // spectators are invisible
         }
         lastPosition[p.Id] = state.Position;
+        lastStateAt[p.Id] = Now;
         pendingStates.Add((p, state));
         if (options.Echo)
         {
