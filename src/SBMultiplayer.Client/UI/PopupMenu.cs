@@ -112,6 +112,12 @@ internal static class PopupMenu
     /// <summary>Space between a settings label and its checkbox, slider or field.</summary>
     public const float LabelGap = 220f;
 
+    /// <summary>The game's own gap inside a settings row (e.g. between a slider and its value).</summary>
+    private const float RowGap = 32f;
+
+    /// <summary>Invisible element that widens the gap after the label up to LabelGap (the rest of the row keeps RowGap).</summary>
+    private static Element LabelSpacer() => new Label("", LabelGap - 2 * RowGap, 1f, setSizeToText: false);
+
     private static float Measure(string text) => Ui.FontSmall.Value.MeasureString(text).X;
 
     /// <summary>Shortens the text with "..." so that it fits on one line of <paramref name="width"/>.</summary>
@@ -217,17 +223,14 @@ internal static class PopupMenu
 
     /// <summary>Label on the left (right-aligned, like the game's settings rows), field on the right.</summary>
     public static Element Row(string label, Element field) =>
-        new PanelStack(LabelGap, vertical: false) { Anchor = Vector2.Zero }
-            .Add(new Label(Fit(label, RowLabelWidth), RowLabelWidth) { Anchor = new Vector2(1f, 0.5f) }, field);
+        new PanelStack(RowGap, vertical: false) { Anchor = Vector2.Zero }
+            .Add(new Label(Fit(label, RowLabelWidth), RowLabelWidth) { Anchor = new Vector2(1f, 0.5f) }, LabelSpacer(), field);
 
     /// <summary>Checkbox row of the game's options, with the common label width.</summary>
     public static Element Check(string label, IValue<bool> value)
     {
         Element row = GameAccess.OptionsUi.GetCheckboxRow(Fit(label, RowLabelWidth), value, RowLabelWidth);
-        if (row is PanelStack stack)
-        {
-            stack.Gap = LabelGap;
-        }
+        row.Insert(1, LabelSpacer());
         return row;
     }
 
@@ -240,7 +243,7 @@ internal static class PopupMenu
             rowLabel.InitialWidth = RowLabelWidth;
             rowLabel.Width = RowLabelWidth;
         }
-        row.Gap = LabelGap;
+        row.Insert(1, LabelSpacer()); // label | spacer | slider | value
         return row;
     }
 
