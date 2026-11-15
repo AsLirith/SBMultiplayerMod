@@ -178,7 +178,16 @@ internal static class HideSeek
             FollowRequested = false;
             frozenRound = -1;
         }
-        if (IsHiding && LocalRole == Role.Mouse && frozenRound != roundId && LockPressed())
+        if (IsHiding && LocalRole == Role.Mouse && frozenRound == roundId && KeepFrozen && LockPressed())
+        {
+            // Locked too early or in the wrong place: until the hunt starts, the same key unlocks it.
+            KeepFrozen = false;
+            FollowRequested = false;
+            frozenRound = -1;
+            SetFly(false);
+            Notifications.Info(Tr.HsUnlocked);
+        }
+        else if (IsHiding && LocalRole == Role.Mouse && frozenRound != roundId && LockPressed())
         {
             // Lock the hiding place before the hunt (the board never stops by itself): like prop hunt.
             bool ready = board != null && scene != null && ReferenceEquals(scene, GameAccess.CurrentScene);

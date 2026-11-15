@@ -379,7 +379,15 @@ internal static class Tr
     }
     public static string HsYouAreHunter => T("You are the HUNTER", "Tu es le CHASSEUR");
     public static string HsYouAreMouse => T("You are a MOUSE", "Tu es une SOURIS");
-    public static string HsMiceHiding => T("The mice are hiding... you'll be released in", "Les souris se cachent... tu seras libéré dans");
+    public static string HsYouAreMouseHide => T("You are a MOUSE: hide!", "Tu es une SOURIS : cache-toi !");
+    public static string HsHidingPhase => T("Hiding phase", "Phase de cachette");
+    public static string HsSeekingPhase => T("Seeking phase", "Phase de chasse");
+    public static string HsLockedTitle => T("HIDING PLACE LOCKED", "CACHETTE VERROUILLÉE");
+    public static string HsLockedKeys(string fly, string previous, string next, string stop) =>
+        T($"{fly}: unlock and ride again    {previous} / {next}: follow a player    {stop}: stop following",
+          $"{fly} : déverrouiller et repartir    {previous} / {next} : suivre un joueur    {stop} : arrêter de suivre");
+    public static string HsUnlocked => T("Hiding place unlocked: you can ride again", "Cachette déverrouillée : tu peux repartir");
+    public static string HsMiceHiding => T("The mice are hiding... you'll be released at the end of the hiding phase", "Les souris se cachent... tu seras libéré à la fin de la phase de cachette");
     public static string HsHide => T("Hide!", "Cache-toi !");
     public static string HsHuntBegins => T("The hunt begins!", "La chasse commence !");
     public static string HsAimHint(string key) => T($"Aim at a mouse and press {key} to catch it", $"Vise une souris et appuie sur {key} pour la capturer");

@@ -16,6 +16,12 @@ internal static class Spectator
 {
     private static readonly FieldInfo FlyTogglerField = AccessTools.Field(typeof(GlobalGame), "flyCameraToggler");
     private static readonly PropertyInfo CanFlyProperty = AccessTools.Property(AccessTools.TypeByName("SE.FlyCameraToggler"), "CanFly");
+    private static readonly Type? FlyCameraType = AccessTools.TypeByName("SE.FlyCamera");
+    private static readonly MethodInfo? FlyCameraTeleport = FlyCameraType != null ? AccessTools.Method(FlyCameraType, "Teleport") : null;
+
+    /// <summary>Our camera was the one shown last frame; its pose then (world transform).</summary>
+    private static bool followShownLastFrame;
+    private static Matrix lastFollowTransform;
 
     private static readonly FollowCamera Camera = new();
     private static IngameCameras? cameraOwner;
@@ -84,7 +90,9 @@ internal static class Spectator
             }
         }
 
-        bool showCamera = following && TargetId != null && cameras != null;
+        // No camera from that player yet (e.g. never left the start line): keep the current view rather than
+        // looking from the map's origin, under the ground.
+        bool showCamera = following && TargetId != null && cameras != null && Camera.HasPose;
         if (cameraOwner != null && (!showCamera || cameraOwner != cameras))
         {
             cameraOwner.Cameras.Remove(Camera);
@@ -103,7 +111,33 @@ internal static class Spectator
             cameras.Cameras.Add(Camera);
         }
 
+        HandOverToFreeCamera(cameras);
         SyncFreeCamera(watching);
+    }
+
+    /// <summary>
+    /// Leaving a player's view for the free camera: the free camera starts where that player's camera was,
+    /// instead of our own board's place.
+    /// </summary>
+    private static void HandOverToFreeCamera(IngameCameras? cameras)
+    {
+        object? top = cameras != null && cameras.Cameras.Count > 0 ? cameras.Cameras[^1] : null;
+        if (followShownLastFrame && top != null && FlyCameraType?.IsInstanceOfType(top) == true && FlyCameraTeleport != null)
+        {
+            try
+            {
+                FlyCameraTeleport.Invoke(top, new object[] { lastFollowTransform });
+            }
+            catch (Exception e)
+            {
+                ModLog.Warn($"Free camera not moved to the followed player: {e.Message}");
+            }
+        }
+        followShownLastFrame = ReferenceEquals(top, Camera);
+        if (followShownLastFrame)
+        {
+            lastFollowTransform = Matrix.Invert(Camera.View);
+        }
     }
 
     private static void SyncFreeCamera(bool watching)
@@ -127,12 +161,26 @@ internal static class Spectator
         private Vector3 position;
         private Vector3 orientation;
 
+        /// <summary>The player whose pose is in position/orientation.</summary>
+        private int? poseOf;
+
+        /// <summary>A camera pose of the current target is known.</summary>
+        public bool HasPose
+        {
+            get
+            {
+                Refresh();
+                return poseOf != null && poseOf == TargetId;
+            }
+        }
+
         private void Refresh()
         {
             if (Target?.TryGetCamera(out Vector3 p, out Vector3 o) == true)
             {
                 position = p;
                 orientation = o;
+                poseOf = TargetId;
             }
         }
 

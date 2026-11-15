@@ -73,6 +73,7 @@ internal sealed class MultiplayerSceneHook : IUpdate, ICheckpointStorage, IGoalR
         }
 
         tick++;
+        lastUpdateAt = NetClock.Now;
         if (tick % SendEveryTicks == 0)
         {
             SendState();
@@ -82,6 +83,9 @@ internal sealed class MultiplayerSceneHook : IUpdate, ICheckpointStorage, IGoalR
     }
 
     private double nextFrozenStateAt;
+
+    /// <summary>Last time the level scene updated (it doesn't under the start-line popup, the pause menu, a freeze).</summary>
+    private double lastUpdateAt;
 
     private void SendState()
     {
@@ -173,9 +177,10 @@ internal sealed class MultiplayerSceneHook : IUpdate, ICheckpointStorage, IGoalR
         {
             // Other players are also visible while waiting at the start.
             SyncGhosts();
-            if (HideSeek.KeepFrozen && NetClock.Now >= nextFrozenStateAt)
+            if ((HideSeek.KeepFrozen || NetClock.Now - lastUpdateAt > 0.25) && NetClock.Now >= nextFrozenStateAt)
             {
-                // Frozen mouse: the scene no longer updates, but the server and newcomers still need our position.
+                // The scene doesn't update (start line, pause, frozen mouse), but the others still need our position
+                // and camera: spectators following us would otherwise have nothing to show.
                 nextFrozenStateAt = NetClock.Now + 0.5;
                 SendState();
             }
