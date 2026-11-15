@@ -20,6 +20,24 @@ internal sealed class GlobalOverlay : SE.IDrawBatch2
     private readonly TextDrawer text = new();
     private bool disabled;
 
+    /// <summary>Round whose end-of-game screen was closed with Escape (it stays closed for that round).</summary>
+    private static int dismissedEndScreenRound = -1;
+
+    /// <summary>The end-of-game screen is on screen right now.</summary>
+    public static bool EndScreenVisible
+    {
+        get
+        {
+            MultiplayerClient client = MultiplayerClient.Instance;
+            RoundState.Snapshot round = client.Round.Current;
+            return client.IsReady && round.Info.MatchEnded && round.Info.Phase == RoundPhase.Results
+                && round.Info.RoundId != dismissedEndScreenRound;
+        }
+    }
+
+    /// <summary>Closes the end-of-game screen until the next game.</summary>
+    public static void DismissEndScreen() => dismissedEndScreenRound = MultiplayerClient.Instance.Round.Current.Info.RoundId;
+
     public void DrawBatch2(SpriteBatch sb)
     {
         if (disabled || !text.EnsureFont())
@@ -34,7 +52,7 @@ internal sealed class GlobalOverlay : SE.IDrawBatch2
             try
             {
                 RoundState.Snapshot round = MultiplayerClient.Instance.Round.Current;
-                bool endScreen = MultiplayerClient.Instance.IsReady && round.Info.MatchEnded && round.Info.Phase == RoundPhase.Results;
+                bool endScreen = EndScreenVisible;
                 if (endScreen)
                 {
                     DrawEndScreen(sb, vp, scale, round); // under the chat, which stays readable on top
@@ -305,7 +323,7 @@ internal sealed class GlobalOverlay : SE.IDrawBatch2
         }
 
         float footerY = panel.Bottom - text.LineHeight(footerScale) - 22 * scale;
-        text.DrawCentered(sb, Tr.NextGameIn((int)Math.Ceiling(round.RemainingSeconds)), cx, ref footerY, Color.LightGray, footerScale);
+        text.DrawCentered(sb, $"{Tr.NextGameIn((int)Math.Ceiling(round.RemainingSeconds))}    {Tr.EndScreenClose}", cx, ref footerY, Color.LightGray, footerScale);
     }
 
     private static Color RowColor(int rank, bool isMe, StandingStatus status) => status switch

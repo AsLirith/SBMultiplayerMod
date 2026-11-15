@@ -217,6 +217,10 @@ internal sealed class MultiplayerClient : INetEventListener
         {
             MultiplayerMenu.Open();
         }
+        if (Pressed(keys, "Escape") && GlobalOverlay.EndScreenVisible && !PopupMenu.AnyOpen)
+        {
+            GlobalOverlay.DismissEndScreen();
+        }
         if (Pressed(keys, ModConfig.Current.RejoinKey))
         {
             RejoinRound();
