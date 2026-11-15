@@ -242,9 +242,46 @@ internal static class StartGate
     }
 
     /// <summary>Called every global tick: tells the server we're ready on the start line (once per round).</summary>
+    private static readonly Type? ClickToStartSceneType = HarmonyLib.AccessTools.TypeByName("SE.ClickToStartScene");
+
+    /// <summary>The chat is open over the start-line popup (which then doesn't update: no ready, no release).</summary>
+    private static bool StartPopupUnderChat()
+    {
+        if (!UI.ChatInput.IsOpen || CheckpointManager is not { IsInFirstCheckpoint: true } || ClickToStartSceneType == null)
+        {
+            return false;
+        }
+        BytingLib.Scene? level = GameAccess.CurrentScene;
+        return level != null && level.GetPopupsRecusively(includingThis: false).Any(ClickToStartSceneType.IsInstanceOfType);
+    }
+
+    /// <summary>
+    /// The chat doesn't count as a menu on the start line: the player counts as ready, and at their start signal
+    /// the chat closes (keeping what was typed) so the start-line popup releases them on time.
+    /// </summary>
+    private static void HandleChatOnStartLine(MultiplayerClient client)
+    {
+        if (!StartPopupUnderChat())
+        {
+            return;
+        }
+        lastHeldTick = tick;
+        if (!Applies || Spectator.IsWatching || IsEliminated || State != RunState.Waiting)
+        {
+            return;
+        }
+        RoundState.Snapshot round = client.Round.Current;
+        double? releaseAt = round.Info.Mode == GameMode.HideAndSeek ? HideSeek.ReleaseTime(HideSeek.LocalRole) : round.GoAt;
+        if (round.Info.Phase == RoundPhase.Playing && releaseAt is double goAt && NetClock.Now >= goAt - 0.05)
+        {
+            UI.ChatInput.CloseKeepingDraft();
+        }
+    }
+
     public static void Tick(MultiplayerClient client)
     {
         tick++;
+        HandleChatOnStartLine(client);
         if (holdPending)
         {
             // Restart key held long enough: confirmed.

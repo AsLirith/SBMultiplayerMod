@@ -24,6 +24,24 @@ internal static class ChatInput
 
     private static double openedAt;
 
+    private static Action? closeChat;
+
+    /// <summary>Text of a chat closed by the mod (start of a round): put back the next time it opens.</summary>
+    private static string draft = "";
+
+    /// <summary>
+    /// Closes the chat without sending, keeping what was typed: the start-line popup under it must update
+    /// (synchronized start), the chat must never make a player miss it.
+    /// </summary>
+    public static void CloseKeepingDraft()
+    {
+        if (IsOpen && closeChat != null)
+        {
+            ModLog.Info("Chat closed for the start");
+            closeChat();
+        }
+    }
+
     public static void Open()
     {
         if (IsOpen || GameAccess.Game == null || !MultiplayerClient.Instance.IsReady)
@@ -46,7 +64,10 @@ internal static class ChatInput
         IsOpen = true;
         openedAt = NetClock.Now;
         SE.UIAssets ui = GameAccess.UiAssets;
-        var input = new TextInput(GameAccess.UpdateSpeed, "", 1800f, ui.FontSmall.Value.LineSpacing) { MaxTextLength = ProtocolInfo.MaxChatLength };
+        var input = new TextInput(GameAccess.UpdateSpeed, draft, 1800f, ui.FontSmall.Value.LineSpacing) { MaxTextLength = ProtocolInfo.MaxChatLength };
+        draft = "";
+        bool sent = false;
+        closeChat = close;
         input.OnEnter += () =>
         {
             if (NetClock.Now - openedAt < OpenGuardSeconds)
@@ -58,6 +79,7 @@ internal static class ChatInput
             {
                 MultiplayerClient.Instance.SendChat(text);
             }
+            sent = true;
             close();
             return true;
         };
@@ -74,7 +96,15 @@ internal static class ChatInput
         canvas.Add(GameAccess.CreateMainPanel(panel));
         scene.Add(canvas);
         scene.Add(new EscapeCloser(close));
-        scene.OnDispose += () => IsOpen = false;
+        scene.OnDispose += () =>
+        {
+            IsOpen = false;
+            closeChat = null;
+            if (!sent)
+            {
+                draft = input.Text; // cancelled with Escape or closed by the mod: kept for next time
+            }
+        };
         return scene;
     }
 
