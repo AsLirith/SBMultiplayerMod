@@ -29,6 +29,9 @@ internal sealed class WsConnection
     private ClientWebSocket? socket;
     private int finished;
 
+    /// <summary>Messages queued and not sent yet (the channel can't count with a single reader).</summary>
+    private int backlog;
+
     public WsConnection(
         Uri uri,
         IReadOnlyDictionary<string, string> headers,
@@ -58,9 +61,18 @@ internal sealed class WsConnection
     /// </summary>
     public void Send(NetDataWriter writer, DeliveryMethod method = DeliveryMethod.ReliableOrdered)
     {
-        if (Volatile.Read(ref finished) == 0)
+        if (Volatile.Read(ref finished) != 0)
         {
-            outgoing.Writer.TryWrite(writer.CopyData());
+            return;
+        }
+        // Slow link: board states (unreliable over UDP) are dropped rather than queued, a newer one follows anyway.
+        if (Volatile.Read(ref backlog) > 64 && method is DeliveryMethod.Unreliable or DeliveryMethod.Sequenced)
+        {
+            return;
+        }
+        if (outgoing.Writer.TryWrite(writer.CopyData()))
+        {
+            Interlocked.Increment(ref backlog);
         }
     }
 
@@ -133,6 +145,7 @@ internal sealed class WsConnection
         {
             await foreach (byte[] data in outgoing.Reader.ReadAllAsync(cancel.Token))
             {
+                Interlocked.Decrement(ref backlog);
                 await socket!.SendAsync(data, WebSocketMessageType.Binary, endOfMessage: true, cancel.Token);
             }
         }

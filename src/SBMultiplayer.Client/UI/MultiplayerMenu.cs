@@ -28,23 +28,6 @@ internal static class MultiplayerMenu
         TextInput server = Input(cfg.Server, 80);
         TextInput password = Input(cfg.ServerPassword, 64);
         TextInput name = Input(cfg.PlayerName, ProtocolInfo.MaxNameLength);
-        TextInput roomCode = Input("", 16);
-        TextInput roomPassword = Input("", 64);
-
-        void JoinRoom()
-        {
-            string code = roomCode.Text.Trim();
-            if (code == "")
-            {
-                Notifications.Warn(Tr.NoRoomChosen);
-                return;
-            }
-            cfg.PlayerName = name.Text.Trim();
-            ModConfig.ForgetEnvironmentOverride();
-            ModConfig.Save();
-            MultiplayerClient.Instance.JoinRoom(code, roomPassword.Text);
-        }
-        roomCode.OnEnter += () => { JoinRoom(); return true; };
 
         void ApplyAndConnect()
         {
@@ -81,17 +64,12 @@ internal static class MultiplayerMenu
                     close();
                     MultiplayerClient.Instance.SetSpectating(!MultiplayerClient.Instance.IsSpectating);
                 })),
-            Section(Tr.RoomsSection),
-            Row(Tr.RoomCodeField, Field(roomCode)),
-            Row(Tr.RoomPasswordField, Field(roomPassword)),
-            Buttons(
-                Button(Tr.JoinRoomButton, JoinRoom),
-                Button(Tr.CreateRoomButton, OpenCreateRoom)),
             Section(Tr.PlayWithFriendsSection),
             Buttons(
                 Button(HostedServer.IsRunning ? Tr.HostManageButton : Tr.HostSection, OpenHost),
                 SteamP2P.Available ? Button(Tr.JoinFriendSection, OpenFriends) : null,
-                SteamP2P.Available ? Button(Tr.PublicGamesButton, OpenPublicGames) : null),
+                SteamP2P.Available ? Button(Tr.PublicGamesButton, OpenPublicGames) : null,
+                Button(Tr.SblbLobbyButton, OpenSblbLobby)),
             Section(Tr.SettingsSection),
             Buttons(
                 Button(Tr.DisplayTitle, OpenDisplay),
@@ -102,21 +80,45 @@ internal static class MultiplayerMenu
             Button(Tr.Back, close));
     }
 
-    // ---------- Create a room on the website ----------
+    // ---------- SBLB lobbies (rooms on the community website, through its WebSocket) ----------
 
-    private static void OpenCreateRoom() => Show("create-room", (close, _) =>
+    private static void OpenSblbLobby() => Show("sblb", (close, _) =>
     {
-        TextInput password = Input("", 64);
+        TextInput code = Input("", 16);
+        TextInput joinPassword = Input("", 64);
+        TextInput createPassword = Input("", 64);
+
+        void Join()
+        {
+            string c = code.Text.Trim();
+            if (c == "")
+            {
+                Notifications.Warn(Tr.NoRoomChosen);
+                return;
+            }
+            close();
+            MultiplayerClient.Instance.JoinRoom(c, joinPassword.Text);
+        }
+
         void Create()
         {
             close();
-            MultiplayerClient.Instance.CreateRoom(password.Text);
+            MultiplayerClient.Instance.CreateRoom(createPassword.Text);
         }
-        password.OnEnter += () => { Create(); return true; };
+
+        code.OnEnter += () => { Join(); return true; };
+        joinPassword.OnEnter += () => { Join(); return true; };
+        createPassword.OnEnter += () => { Create(); return true; };
         return Stack(
-            Title(Tr.CreateRoomButton),
+            Title(Tr.SblbLobbyTitle),
+            Text(Tr.SblbLobbyHint),
+            Section(Tr.JoinRoomButton),
+            Row(Tr.RoomCodeField, Field(code)),
+            Row(Tr.RoomPasswordField, Field(joinPassword)),
+            Button(Tr.JoinRoomButton, Join),
+            Section(Tr.CreateRoomButton),
             Text(Tr.CreateRoomHint),
-            Row(Tr.RoomPasswordField, Field(password)),
+            Row(Tr.RoomPasswordField, Field(createPassword)),
             Buttons(Button(Tr.CreateRoomButton, Create), Button(Tr.Back, close)));
     });
 

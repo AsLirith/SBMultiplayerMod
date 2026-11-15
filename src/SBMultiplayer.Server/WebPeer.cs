@@ -14,9 +14,18 @@ public sealed class WebPeer : IPeer
 {
     private const int MaxMessageBytes = 64 * 1024;
 
+    /// <summary>Backlog above which board states (sent unreliable over UDP) are dropped: a newer one follows anyway.</summary>
+    private const int DropUnreliableBacklog = 64;
+
+    /// <summary>Backlog at which the player is too slow to keep up: disconnected instead of filling the memory.</summary>
+    private const int MaxBacklog = 4096;
+
     private readonly WebSocket socket;
     private readonly Channel<byte[]> outgoing = Channel.CreateUnbounded<byte[]>(new UnboundedChannelOptions { SingleReader = true });
     private volatile bool closed;
+
+    /// <summary>Messages queued and not sent yet (the channel can't count with a single reader).</summary>
+    private int backlog;
     private string closeReason = "";
 
     public WebPeer(int id, WebSocket socket)
@@ -42,7 +51,20 @@ public sealed class WebPeer : IPeer
         {
             return;
         }
-        outgoing.Writer.TryWrite(writer.CopyData());
+        int queued = Volatile.Read(ref backlog);
+        if (queued >= MaxBacklog)
+        {
+            Close("too slow");
+            return;
+        }
+        if (queued > DropUnreliableBacklog && method is DeliveryMethod.Unreliable or DeliveryMethod.Sequenced)
+        {
+            return;
+        }
+        if (outgoing.Writer.TryWrite(writer.CopyData()))
+        {
+            Interlocked.Increment(ref backlog);
+        }
     }
 
     /// <summary>Closes the connection after the messages already queued have been sent.</summary>
@@ -65,6 +87,7 @@ public sealed class WebPeer : IPeer
         {
             await foreach (byte[] data in outgoing.Reader.ReadAllAsync())
             {
+                Interlocked.Decrement(ref backlog);
                 if (socket.State != WebSocketState.Open)
                 {
                     break;

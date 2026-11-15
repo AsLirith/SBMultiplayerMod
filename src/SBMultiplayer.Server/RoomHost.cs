@@ -22,9 +22,6 @@ public sealed class RoomHost
         public HashSet<WebPeer> Peers { get; } = new();
     }
 
-    private sealed record CreateRoomRequest(int Id, string Name, string? Password, string? AdminPassword, int MaxPlayers);
-
-    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
 
     private readonly HttpListener listener = new();
     private readonly string secret;
@@ -182,7 +179,7 @@ public sealed class RoomHost
         try
         {
             using var reader = new StreamReader(context.Request.InputStream, Encoding.UTF8);
-            body = JsonSerializer.Deserialize<CreateRoomRequest>(await reader.ReadToEndAsync(), JsonOptions);
+            body = JsonSerializer.Deserialize(await reader.ReadToEndAsync(), ServerJson.Default.CreateRoomRequest);
         }
         catch (JsonException)
         {
@@ -281,6 +278,12 @@ public sealed class RoomHost
                 peer.Disconnect("room closed");
                 return;
             }
+            // Checked again here: several players may have passed the first check while the room had one seat left.
+            if (room.Game.RefuseReason(version, password, checkPassword: false) is string refusal)
+            {
+                peer.Disconnect(refusal);
+                return;
+            }
             room.Peers.Add(peer);
             room.Game.OnWebPeerConnected(peer);
         });
@@ -315,3 +318,6 @@ public sealed class RoomHost
         context.Response.Close();
     }
 }
+
+/// <summary>The website's request to open a room (JSON, property names case-insensitive).</summary>
+internal sealed record CreateRoomRequest(int Id, string Name, string? Password, string? AdminPassword, int MaxPlayers);

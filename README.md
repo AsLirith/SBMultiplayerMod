@@ -26,6 +26,7 @@ Works on Linux (native version of the game) and Windows.
 **Hosting**
 - **Host from the game** in one click: you're the admin of your game, no extra program needed.
 - **Steam friends join in one click**, without opening any port (Steam P2P). Tick "Public game (anyone on Steam)" and **anyone can find and join it**.
+- **SBLB lobbies**: create a lobby on the community website [sblb.thefanclub.cc](https://sblb.thefanclub.cc) right from the game and share its code, or join one with a code. Nobody opens a port.
 - **Dedicated server** (console app, no game needed) for servers that run all the time or for tournaments: map rotation, password, results export (JSON/CSV).
 - **Admin panel in game**: change the mode, maps, timings and points; skip, restart, pause or extend a round; kick players.
 
@@ -62,6 +63,7 @@ Works on Linux (native version of the game) and Windows.
 Press **F8** to open the multiplayer menu, then either:
 - **Join a Steam friend** who's hosting: one click, nothing to set up;
 - **Public games**: games anyone can join;
+- **Join / Create SBLB Lobby**: a lobby of the community website, with its code;
 - **Host a game**: your own game, you're its admin (choose the mode and maps in F8 > Admin);
 - or enter a **server address** (`address:port`) and click **Connect**.
 
@@ -112,6 +114,8 @@ dotnet build -p:GameDir=/path/to/steamapps/common/STUNTBOOST   # builds and copi
 The mod is loaded through a [.NET startup hook](https://github.com/dotnet/runtime/blob/main/docs/design/features/host-startup-hook.md) and patches the game in memory with [Harmony](https://github.com/pardeike/Harmony), without modifying any game file. Networking uses [LiteNetLib](https://github.com/RevenantX/LiteNetLib) (UDP), tunneled through Steam networking for Steam P2P games. Technical notes are in [docs/00-reverse-engineering.md](docs/00-reverse-engineering.md), and the compatibility rules of the network protocol in [docs/protocol.md](docs/protocol.md).
 
 ## Legal
+
+SBLB lobbies (WebSocket rooms through the community website) were contributed by TheFanMan, who runs [sblb.thefanclub.cc](https://sblb.thefanclub.cc).
 
 Code released under the [MIT license](LICENSE). This repository contains no code or assets from the game, and must never contain any (no decompiled code).
 STUNTBOOST is the property of Byting Games. This project is not affiliated with or endorsed by the studio.

@@ -245,6 +245,7 @@ public sealed class ServerOptions
     PropertyNameCaseInsensitive = true)]
 [System.Text.Json.Serialization.JsonSerializable(typeof(ServerOptions))]
 [System.Text.Json.Serialization.JsonSerializable(typeof(string))]
+[System.Text.Json.Serialization.JsonSerializable(typeof(CreateRoomRequest))]
 internal partial class ServerJson : System.Text.Json.Serialization.JsonSerializerContext
 {
 }

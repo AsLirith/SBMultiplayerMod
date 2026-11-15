@@ -155,10 +155,13 @@ If your router is behind CGNAT, or port forwarding isn't possible: install [Tail
 
 2026-11-14: 3 players (Linux, over the internet), 6 official maps. Smooth, with only the intended 100 ms interpolation delay.
 
-## Web rooms (website, no open port)
+## Web rooms (SBLB lobbies, no open port)
 
-Players can also create a room on the website, with a code to share and an optional password. Their game goes through the
-website's WebSocket, so the host doesn't open a port. The room host runs the rooms behind one HTTP port:
+Players can also create a lobby on the community website [sblb.thefanclub.cc](https://sblb.thefanclub.cc) from the game
+(F8 > Join / Create SBLB Lobby), with a code to share and an optional password. Their game goes through the website's
+WebSocket, so nobody opens a port. The website's room host, contributed by TheFanMan, runs the rooms behind one HTTP
+port, on the same machine as the website (the HTTP link between them isn't encrypted, and every request needs the
+gateway secret):
 
 ```sh
 export SBM_GATEWAY_SECRET="<at least 32 characters, the same value the website uses>"
