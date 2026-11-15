@@ -112,11 +112,9 @@ internal static class MultiplayerMenu
         return Stack(
             Title(Tr.SblbLobbyTitle),
             Text(Tr.SblbLobbyHint),
-            Section(Tr.JoinRoomButton),
             Row(Tr.RoomCodeField, Field(code)),
             Row(Tr.RoomPasswordField, Field(joinPassword)),
             Button(Tr.JoinRoomButton, Join),
-            Section(Tr.CreateRoomButton),
             Text(Tr.CreateRoomHint),
             Row(Tr.RoomPasswordField, Field(createPassword)),
             Buttons(Button(Tr.CreateRoomButton, Create), Button(Tr.Back, close)));
