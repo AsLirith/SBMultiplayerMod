@@ -105,12 +105,12 @@ internal static class PopupMenu
     //   the game's options, always on a single line (the game's rows have a fixed height): too long = shortened;
     // - text fields are FieldWidth wide, buttons never wider than the screen.
 
-    public const float MenuWidth = 2800f;
-    public const float RowLabelWidth = 1400f;
+    public const float MenuWidth = 3300f;
+    public const float RowLabelWidth = 1450f;
     public const float FieldWidth = MenuWidth - RowLabelWidth - LabelGap - 40f; // 40: the field's own padding
 
     /// <summary>Space between a settings label and its checkbox, slider or field.</summary>
-    public const float LabelGap = 70f;
+    public const float LabelGap = 220f;
 
     private static float Measure(string text) => Ui.FontSmall.Value.MeasureString(text).X;
 
@@ -155,16 +155,54 @@ internal static class PopupMenu
     /// <summary>Plain text, wrapped at the screen's width.</summary>
     public static Element Text(string text) => new Label(text, MenuWidth);
 
-    public static Element Button(string text, Action onClick) =>
-        GameAccess.CreateButton(onClick)
+    /// <summary>Estimated width of each button (text + padding), so button groups can be split into lines that fit.</summary>
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Element, object> ButtonWidths = new();
+
+    public static Element Button(string text, Action onClick)
+    {
+        string label = Fit(text, MenuWidth - 100f);
+        Element button = GameAccess.CreateButton(onClick)
             .SetStyle(new Style { ButtonAnimation = Ui.ButtonAnimation, ButtonPadding = new Padding(32f, 14f) })
-            .Add(new Label(Fit(text, MenuWidth - 100f)));
+            .Add(new Label(label));
+        try
+        {
+            ButtonWidths.AddOrUpdate(button, Measure(label) + 64f);
+        }
+        catch (Exception)
+        {
+            // unknown width: counted as a wide button
+        }
+        return button;
+    }
 
     /// <summary>Horizontal line of elements (buttons…).</summary>
     public static Element Line(params Element?[] items) => new PanelStack(22f, vertical: false).AddMaybeNull(items);
 
-    /// <summary>A group of buttons: at most three per line, so it never gets wider than the screen (nulls are skipped).</summary>
-    public static Element Buttons(params Element?[] buttons) => Grid(buttons.Where(b => b != null).Cast<Element>().ToList(), 3);
+    /// <summary>A group of buttons on one line; split into several lines only if it would be wider than the screen (nulls are skipped).</summary>
+    public static Element Buttons(params Element?[] buttons)
+    {
+        const float Gap = 22f;
+        var lines = new List<Element>();
+        var current = new List<Element>();
+        float width = 0f;
+        foreach (Element b in buttons.Where(b => b != null).Cast<Element>())
+        {
+            float w = ButtonWidths.TryGetValue(b, out object? known) ? (float)known : MenuWidth / 3f;
+            if (current.Count > 0 && width + Gap + w > MenuWidth)
+            {
+                lines.Add(Line(current.ToArray()));
+                current.Clear();
+                width = 0f;
+            }
+            width += (current.Count > 0 ? Gap : 0f) + w;
+            current.Add(b);
+        }
+        if (current.Count > 0)
+        {
+            lines.Add(Line(current.ToArray()));
+        }
+        return lines.Count == 1 ? lines[0] : new PanelStack(18f).Add(lines);
+    }
 
     /// <summary>Grid of elements, <paramref name="perRow"/> per line.</summary>
     public static Element Grid(IReadOnlyList<Element> items, int perRow)

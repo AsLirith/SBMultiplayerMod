@@ -95,7 +95,7 @@ internal static class ServerSettingsMenu
         return Stack(
             Title(Tr.SettingsModeAndMapsTitle),
             Section(Tr.SettingsModeSection),
-            Grid(modeButtons, 3),
+            Buttons(modeButtons),
             modeLabel,
             modeDescription,
             Section(Tr.SettingsMapsSection),
