@@ -42,6 +42,7 @@ internal sealed class MultiplayerOverlay
         var (viewProjection, cameraPosition) = GameAccess.GetCamera(scene);
         // Spectating: our board stays on the start line, so distances are measured from the camera.
         Vector3 reference = Spectator.IsWatching ? cameraPosition : local;
+        bool mirrored = GameAccess.IsMirrored;
 
         sb.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp);
         try
@@ -71,6 +72,10 @@ internal sealed class MultiplayerOverlay
                 if (Math.Abs(ndc.X) > 1.2f || Math.Abs(ndc.Y) > 1.2f)
                 {
                     continue;
+                }
+                if (mirrored)
+                {
+                    ndc.X = -ndc.X; // the game flipped the 3D image: the board is on the other side of the screen
                 }
                 var screen = new Vector2((ndc.X * 0.5f + 0.5f) * vp.Width, (0.5f - ndc.Y * 0.5f) * vp.Height);
 

@@ -36,7 +36,7 @@ internal sealed class DelayedSelfGhost : IUpdate, ICheckpointStorage, IGhostPose
 
         if (ghost == null)
         {
-            ghost = new NetGhostBoard(this, board.Assets, GameAccess.GetTransparencyBatch(scene), opacity, zFightingIndex: 100);
+            ghost = new NetGhostBoard(this, board.Assets, GameAccess.GetTransparencyBatch(scene), opacity, zFightingIndex: 1);
             scene.Add(ghost); // the scene will dispose of it
             ModLog.Info("Delayed ghost created");
         }

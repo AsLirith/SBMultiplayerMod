@@ -90,6 +90,18 @@ internal sealed class ModConfig
     /// <summary>Key to hold to show the player list (name, map, role, points).</summary>
     public string ScoreboardKey { get; set; } = "Tab";
 
+    /// <summary>Closes the end-of-game screen until the next game.</summary>
+    public string CloseEndScreenKey { get; set; } = "Escape";
+
+    /// <summary>Spectator (and frozen mouse): follow the previous player.</summary>
+    public string SpectatePreviousKey { get; set; } = "Left";
+
+    /// <summary>Spectator (and frozen mouse): follow the next player.</summary>
+    public string SpectateNextKey { get; set; } = "Right";
+
+    /// <summary>Frozen mouse: stop following a player, back to the free camera.</summary>
+    public string StopFollowingKey { get; set; } = "Down";
+
     /// <summary>Players whose chat messages are hidden (/ignore).</summary>
     public List<string> IgnoredPlayers { get; set; } = new();
 

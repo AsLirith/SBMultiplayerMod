@@ -28,7 +28,7 @@ internal static class PopupMenu
     public static void Show(string id, Func<Action, Scene, Element> build, Func<int>? signature = null) =>
         Show(new Definition(id, build, signature));
 
-    public static bool IsOpen(string id) => OpenIds.Contains(id);
+    public static bool IsOpen(string id) => OpenIds.Contains(id) || pendingReopen?.Id == id;
 
     /// <summary>One of the mod's menus is open.</summary>
     public static bool AnyOpen => OpenIds.Count > 0;
@@ -90,7 +90,7 @@ internal static class PopupMenu
                 return;
             }
             bool escapeDown = Keyboard.GetState().IsKeyDown(Keys.Escape);
-            if (escapeDown && !escapeWasDown)
+            if (escapeDown && !escapeWasDown && !KeyBindings.BlocksEscape)
             {
                 close();
             }

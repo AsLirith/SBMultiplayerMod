@@ -173,6 +173,7 @@ internal sealed class MultiplayerClient : INetEventListener
         // Menus, chat and connection work as soon as the game runs (main menu included).
         HandleHotkeys();
         PopupMenu.Tick();
+        KeyBindings.Tick();
         StartGate.Tick(this);
         HideSeek.Tick();
         if (SteamP2P.Available)
@@ -213,6 +214,13 @@ internal sealed class MultiplayerClient : INetEventListener
     private void HandleHotkeys()
     {
         KeyboardState keys = Keyboard.GetState();
+        if (KeyBindings.IsCapturing)
+        {
+            KeyBindings.TickCapture(keys); // F8 > Keys: the next key pressed is the new binding
+            previousKeys = keys;
+            ScoreboardHeld = false;
+            return;
+        }
         if (GameAccess.IsTyping() || ChatInput.IsOpen)
         {
             previousKeys = keys; // no hotkeys while typing text
@@ -228,7 +236,8 @@ internal sealed class MultiplayerClient : INetEventListener
         {
             MultiplayerMenu.Open();
         }
-        if (Pressed(keys, "Escape") && GlobalOverlay.EndScreenVisible && !PopupMenu.AnyOpen)
+        ModConfig cfg = ModConfig.Current;
+        if (Pressed(keys, cfg.CloseEndScreenKey) && GlobalOverlay.EndScreenVisible && !PopupMenu.AnyOpen && !KeyBindings.BlocksEscape)
         {
             GlobalOverlay.DismissEndScreen();
         }
@@ -236,13 +245,15 @@ internal sealed class MultiplayerClient : INetEventListener
         {
             RejoinRound();
         }
+        bool next = Pressed(keys, cfg.SpectateNextKey);
+        bool previous = Pressed(keys, cfg.SpectatePreviousKey);
         if (Spectator.IsWatching)
         {
-            if (Pressed(keys, "Right"))
+            if (next)
             {
                 Spectator.Cycle(+1);
             }
-            if (Pressed(keys, "Left"))
+            if (previous)
             {
                 Spectator.Cycle(-1);
             }
@@ -250,15 +261,15 @@ internal sealed class MultiplayerClient : INetEventListener
         else if (HideSeek.KeepFrozen)
         {
             // Frozen mouse: follow a player (the hunter first) or go back to the free camera.
-            if (Pressed(keys, "Right") || Pressed(keys, "Left"))
+            if (next || previous)
             {
                 if (HideSeek.FollowRequested)
                 {
-                    Spectator.Cycle(Pressed(keys, "Right") ? +1 : -1);
+                    Spectator.Cycle(next ? +1 : -1);
                 }
                 HideSeek.FollowRequested = true;
             }
-            if (Pressed(keys, "Down"))
+            if (Pressed(keys, cfg.StopFollowingKey))
             {
                 HideSeek.FollowRequested = false;
             }
@@ -335,7 +346,7 @@ internal sealed class MultiplayerClient : INetEventListener
         if (ready && !wasReady)
         {
             int others = Players.Count;
-            Notifications.Good(Tr.Connected(serverAddress, others, ModConfig.Current.MenuKey));
+            Notifications.Good(Tr.Connected(serverAddress, others, Tr.KeyName(ModConfig.Current.MenuKey)));
             lastDisconnectReason = "";
         }
         wasReady = ready;

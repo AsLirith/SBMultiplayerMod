@@ -25,6 +25,9 @@ internal sealed class NetGhostBoard : BoardVisual, IDrawWorldSkinRender, IBefore
     private readonly TransparencyBatchSwapper transparencyBatch;
     private readonly ValueEvent<float> opacity;
     private readonly RasterizerState rasterizerState;
+
+    /// <summary>Without any depth offset: a board behind a wall is never visible (Hide and Seek).</summary>
+    private readonly RasterizerState exactRasterizerState = new() { CullMode = CullMode.CullClockwiseFace };
     private float extrapolation;
 
     public bool Visible { get; set; } = true;
@@ -36,7 +39,8 @@ internal sealed class NetGhostBoard : BoardVisual, IDrawWorldSkinRender, IBefore
         this.source = source;
         this.transparencyBatch = transparencyBatch;
         this.opacity = opacity;
-        // Same setting as SE.GhostBoard: avoids z-fighting between overlapping ghosts.
+        // Like SE.GhostBoard: a tiny depth offset per ghost avoids z-fighting between overlapping ghosts.
+        // Keep the index small: the offset grows with it, and ghosts would show through thin walls.
         rasterizerState = new RasterizerState
         {
             DepthBias = -zFightingIndex * 1E-05f + depthBias,
@@ -74,10 +78,12 @@ internal sealed class NetGhostBoard : BoardVisual, IDrawWorldSkinRender, IBefore
             }
             try
             {
-                using (shader.UseRasterizer(rasterizerState))
+                // Unlike SE.GhostBoard, without the board's own depth bias (-0.01, applyDepthBias): it pulls the board
+                // so far towards the camera that it shows through walls and decor.
+                using (shader.UseRasterizer(Net.HideSeek.IsActive ? exactRasterizerState : rasterizerState))
                 using (shaderRender?.Color.Use(new Vector4(1f, 1f, 1f, opacity.Value)))
                 {
-                    DrawInternalBase(shader, shaderSkin, shaderRender, transform, null, null, applyDepthBias: true);
+                    DrawInternalBase(shader, shaderSkin, shaderRender, transform, null, null, applyDepthBias: false);
                 }
             }
             finally
@@ -103,5 +109,6 @@ internal sealed class NetGhostBoard : BoardVisual, IDrawWorldSkinRender, IBefore
     public void Dispose()
     {
         rasterizerState.Dispose();
+        exactRasterizerState.Dispose();
     }
 }

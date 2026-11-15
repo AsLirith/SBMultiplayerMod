@@ -75,7 +75,7 @@ Press **F8** to open the multiplayer menu, then either:
 | **Left / Right**, **F** | Spectator: switch player, free camera |
 | **Left click** (grind key) | Hide and Seek hunter: catch the mouse you're aiming at |
 
-The menu, F7, chat and player list keys can be changed in `SBMultiplayer/SBMultiplayer.json`.
+Every key of the mod can be changed in **F8 > Keys**.
 
 ## Troubleshooting
 

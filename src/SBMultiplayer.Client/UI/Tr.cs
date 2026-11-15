@@ -209,6 +209,59 @@ internal static class Tr
     // ---------- Menus: sections and sub-screens ----------
     public static string ConnectionSection => T("Connection", "Connexion");
     public static string SettingsSection => T("Settings", "Réglages");
+
+    // ---------- Keys ----------
+    public static string KeysTitle => T("Keys", "Touches");
+    public static string KeysHelp => T("Click an action, then press its new key (Escape: cancel). A key already used by another action is swapped with it.",
+        "Clique sur une action, puis appuie sur sa nouvelle touche (Échap : annuler). Une touche déjà utilisée par une autre action est échangée avec elle.");
+    public static string PressAKey => T("Press a key...", "Appuie sur une touche...");
+    public static string KeysReset => T("Default keys", "Touches par défaut");
+    public static string KeyMenu => T("Multiplayer menu", "Menu multijoueur");
+    public static string KeyRejoin => T("Join the round's map", "Rejoindre la map du round");
+    public static string KeyChat => T("Chat", "Chat");
+    public static string KeyScoreboard => T("Player list (hold)", "Liste des joueurs (maintenir)");
+    public static string KeyCloseEndScreen => T("Close the end screen", "Fermer l'écran de fin");
+    public static string KeySpectatePrevious => T("Spectator: previous player", "Spectateur : joueur précédent");
+    public static string KeySpectateNext => T("Spectator: next player", "Spectateur : joueur suivant");
+    public static string KeyStopFollowing => T("Frozen mouse: stop following", "Souris gelée : arrêter de suivre");
+    public static string KeySwapped(string action, string key) => T($"\"{action}\" now uses {key}", $"\"{action}\" utilise maintenant {key}");
+
+    /// <summary>Readable name of a MonoGame key ("OemComma" → ",", "Left" → "Gauche" in French).</summary>
+    public static string KeyName(string key) => key switch
+    {
+        "Escape" => T("Escape", "Échap"),
+        "Enter" => T("Enter", "Entrée"),
+        "Left" => T("Left", "Gauche"),
+        "Right" => T("Right", "Droite"),
+        "Up" => T("Up", "Haut"),
+        "Down" => T("Down", "Bas"),
+        "Space" => T("Space", "Espace"),
+        "Back" => T("Backspace", "Retour arrière"),
+        "Delete" => T("Delete", "Suppr"),
+        "Insert" => T("Insert", "Inser"),
+        "PageUp" => T("Page Up", "Page préc."),
+        "PageDown" => T("Page Down", "Page suiv."),
+        "LeftShift" => T("Left Shift", "Maj gauche"),
+        "RightShift" => T("Right Shift", "Maj droite"),
+        "LeftControl" => T("Left Ctrl", "Ctrl gauche"),
+        "RightControl" => T("Right Ctrl", "Ctrl droit"),
+        "LeftAlt" => T("Left Alt", "Alt gauche"),
+        "RightAlt" => T("Right Alt", "Alt Gr"),
+        "OemComma" => ",",
+        "OemPeriod" => ".",
+        "OemMinus" => "-",
+        "OemPlus" => "+",
+        "OemQuestion" => "/",
+        "OemSemicolon" => ";",
+        "OemQuotes" => "'",
+        "OemTilde" => "`",
+        "OemOpenBrackets" => "[",
+        "OemCloseBrackets" => "]",
+        "OemPipe" => "\\",
+        _ when key.Length == 2 && key[0] == 'D' && char.IsDigit(key[1]) => key[1..],
+        _ when key.StartsWith("NumPad", StringComparison.Ordinal) => T($"Num {key[6..]}", $"Pavé {key[6..]}"),
+        _ => key,
+    };
     public static string DisplayTitle => T("Display", "Affichage");
     public static string InterfaceTitle => T("Interface", "Interface");
     public static string AdminRoundSection => T("Round", "Round");
@@ -246,7 +299,8 @@ internal static class Tr
     public static string SpectatorTitle => T("SPECTATOR", "SPECTATEUR");
     public static string Following(string name) => T($"following {name}", $"suit {name}");
     public static string NobodyToFollow => T("nobody to follow on this map", "personne à suivre sur cette map");
-    public static string SpectatorKeys => T("Left / Right: change player    F: free camera", "Gauche / Droite : changer de joueur    F : caméra libre");
+    public static string SpectatorKeys(string previous, string next) =>
+        T($"{previous} / {next}: change player    F: free camera", $"{previous} / {next} : changer de joueur    F : caméra libre");
 
     // ---------- End-of-game screen ----------
     public static string EndTitle(SBMultiplayer.Protocol.GameMode mode) => mode switch
@@ -261,7 +315,7 @@ internal static class Tr
     public static string WinnerAnnounce(string name) => T($"Winner: {name}", $"Vainqueur : {name}");
     public static string NoWinner => T("No winner", "Pas de vainqueur");
     public static string AndMore(int n) => T($"... and {n} more", $"... et {n} autre{(n > 1 ? "s" : "")}");
-    public static string EndScreenClose => T("Escape: close", "Échap : fermer");
+    public static string EndScreenClose(string key) => T($"{key}: close", $"{key} : fermer");
     public static string NextGameIn(int seconds) => T($"Next game in {seconds} s", $"Partie suivante dans {seconds} s");
     public static string SettingsMatchEnd => T("End-of-game screen", "Écran de fin de partie");
 
@@ -323,8 +377,9 @@ internal static class Tr
     public static string HsFrozen => T("Frozen in your hiding place", "Gelé dans ta cachette");
     public static string HsFrozenTitle => T("FROZEN", "GELÉ");
     public static string HsFoundTitle => T("FOUND", "TROUVÉ");
-    public static string HsFrozenKeys => T("F: free camera / your view    Left / Right: follow a player    Down: stop following",
-        "F : caméra libre / ta vue    Gauche / Droite : suivre un joueur    Bas : arrêter de suivre");
+    public static string HsFrozenKeys(string previous, string next, string stop) =>
+        T($"F: free camera / your view    {previous} / {next}: follow a player    {stop}: stop following",
+          $"F : caméra libre / ta vue    {previous} / {next} : suivre un joueur    {stop} : arrêter de suivre");
     public static string HsLandToFreeze => T("Hunt started: you'll be frozen as soon as you touch a surface", "La chasse a commencé : tu seras gelé dès que tu touches une surface");
     public static string HsYouAreHunterNow => T("You were found: you're a hunter now!", "Tu as été trouvé : tu es chasseur maintenant !");
     public static string HsHunters(string names) => T($"Hunter: {names}", $"Chasseur : {names}");

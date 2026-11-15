@@ -323,7 +323,7 @@ internal sealed class GlobalOverlay : SE.IDrawBatch2
         }
 
         float footerY = panel.Bottom - text.LineHeight(footerScale) - 22 * scale;
-        text.DrawCentered(sb, $"{Tr.NextGameIn((int)Math.Ceiling(round.RemainingSeconds))}    {Tr.EndScreenClose}", cx, ref footerY, Color.LightGray, footerScale);
+        text.DrawCentered(sb, $"{Tr.NextGameIn((int)Math.Ceiling(round.RemainingSeconds))}    {Tr.EndScreenClose(Tr.KeyName(ModConfig.Current.CloseEndScreenKey))}", cx, ref footerY, Color.LightGray, footerScale);
     }
 
     private static Color RowColor(int rank, bool isMe, StandingStatus status) => status switch
@@ -345,7 +345,7 @@ internal sealed class GlobalOverlay : SE.IDrawBatch2
         string title = StartGate.IsEliminated ? Tr.EliminatedTag.ToUpperInvariant() : Tr.SpectatorTitle;
         string? name = Spectator.Target?.Name;
         text.DrawCentered(sb, name != null ? $"{title} - {Tr.Following(name)}" : $"{title} - {Tr.NobodyToFollow}", vp.Width / 2f, ref y, Color.White, s);
-        text.DrawCentered(sb, Tr.SpectatorKeys, vp.Width / 2f, ref y, Color.LightGray, s * 0.8f);
+        text.DrawCentered(sb, Tr.SpectatorKeys(Tr.KeyName(ModConfig.Current.SpectatePreviousKey), Tr.KeyName(ModConfig.Current.SpectateNextKey)), vp.Width / 2f, ref y, Color.LightGray, s * 0.8f);
     }
 
     /// <summary>
@@ -407,7 +407,7 @@ internal sealed class GlobalOverlay : SE.IDrawBatch2
             string title = found ? Tr.HsFoundTitle : Tr.HsFrozenTitle;
             string? name = HideSeek.FollowRequested ? Spectator.Target?.Name : null;
             text.DrawCentered(sb, name != null ? $"{title} - {Tr.Following(name)}" : title, cx, ref y, found ? new Color(255, 120, 120) : new Color(140, 220, 255), scale * 0.75f);
-            text.DrawCentered(sb, Tr.HsFrozenKeys, cx, ref y, Color.LightGray, scale * 0.6f);
+            text.DrawCentered(sb, Tr.HsFrozenKeys(Tr.KeyName(ModConfig.Current.SpectatePreviousKey), Tr.KeyName(ModConfig.Current.SpectateNextKey), Tr.KeyName(ModConfig.Current.StopFollowingKey)), cx, ref y, Color.LightGray, scale * 0.6f);
         }
         else if (role == HideSeek.Role.Mouse && !found)
         {
@@ -595,7 +595,7 @@ internal sealed class GlobalOverlay : SE.IDrawBatch2
         text.DrawRightAligned(sb, header, right, ref y, results || round.Info.Paused ? Gold : Color.White, s * 1.15f);
         if (!client.IsOnRoundMap && !results)
         {
-            text.DrawRightAligned(sb, Tr.NotOnRoundMap(ModConfig.Current.RejoinKey), right, ref y, Color.Orange, s * 0.85f);
+            text.DrawRightAligned(sb, Tr.NotOnRoundMap(Tr.KeyName(ModConfig.Current.RejoinKey)), right, ref y, Color.Orange, s * 0.85f);
         }
         y += text.LineHeight(s) * 0.3f;
 

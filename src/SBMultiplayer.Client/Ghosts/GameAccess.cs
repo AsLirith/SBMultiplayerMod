@@ -51,6 +51,35 @@ internal static class GameAccess
 
     public static GlobalGame? Game { get; set; }
 
+    private static AccessTools.FieldRef<GlobalGame, SettingsManager<Settings>>? settingsManagerRef;
+    private static bool mirrorUnavailable;
+
+    /// <summary>
+    /// The game's mirror easter egg (or Ctrl+M) flips the final 3D image horizontally: whatever the mod draws
+    /// over it at a 3D position (name tags) must be flipped too.
+    /// </summary>
+    public static bool IsMirrored
+    {
+        get
+        {
+            if (Game == null || mirrorUnavailable)
+            {
+                return false;
+            }
+            try
+            {
+                settingsManagerRef ??= AccessTools.FieldRefAccess<GlobalGame, SettingsManager<Settings>>("settingsManager");
+                return settingsManagerRef(Game).Settings.Graphics.MirrorX;
+            }
+            catch (Exception e)
+            {
+                mirrorUnavailable = true; // optional: name tags just won't follow the mirror
+                ModLog.Warn($"Mirror mode not detected: {e.Message}");
+                return false;
+            }
+        }
+    }
+
     private static readonly AccessTools.FieldRef<GlobalGame, Scene> CurrentSceneRef =
         AccessTools.FieldRefAccess<GlobalGame, Scene>("currentScene");
 

@@ -142,6 +142,11 @@ internal static class HideSeek
         {
             return true; // the hunter doesn't see where the mice go
         }
+        if (them == Role.Mouse && me == Role.Mouse && Client.Round.Current.Info.Infection && !IsFound(LocalId) && !IsFound(p.Id))
+        {
+            // Infection: a mouse can become a hunter, so it must not know where the others hid.
+            return true;
+        }
         // Found mice leave the game (unless they became hunters).
         return them == Role.Mouse && IsFound(p.Id);
     }
@@ -182,8 +187,9 @@ internal static class HideSeek
         bool sceneOk = board != null && scene != null && ReferenceEquals(scene, GameAccess.CurrentScene);
         if (role == Role.Mouse && frozenRound != roundId && sceneOk)
         {
-            // Frozen only on a surface, never in mid-air (unless they never land).
-            if (IsOnGround(board!) || NetClock.Now - seekStart > HideSeekRules.MaxAirSecondsBeforeFreeze)
+            // Frozen only on a surface, never in mid-air (unless they never land). Not while a menu is open (pause...):
+            // the freeze view would open on top of it and lock it. The game is paused meanwhile, the board doesn't move.
+            if (NoMenuOnTop(scene!) && (IsOnGround(board!) || NetClock.Now - seekStart > HideSeekRules.MaxAirSecondsBeforeFreeze))
             {
                 Freeze(roundId);
             }
@@ -217,6 +223,19 @@ internal static class HideSeek
                 ModLog.Error("Hide and Seek: tag failed", e);
             }
         }
+    }
+
+    private static readonly Type? ClickToStartSceneType = AccessTools.TypeByName("SE.ClickToStartScene");
+
+    /// <summary>Nothing over the level but, at most, the start-line popup (no pause menu, no mod menu).</summary>
+    private static bool NoMenuOnTop(BytingLib.Scene level)
+    {
+        if (UI.PopupMenu.AnyOpen)
+        {
+            return false;
+        }
+        BytingLib.Scene top = level.GetTopmostScene();
+        return ReferenceEquals(top, level) || (ClickToStartSceneType?.IsInstanceOfType(top) ?? false);
     }
 
     private static bool IsOnGround(Board b)

@@ -73,8 +73,9 @@ internal static class MultiplayerMenu
             Buttons(
                 Button(Tr.DisplayTitle, OpenDisplay),
                 Button(Tr.InterfaceTitle, OpenInterface),
+                Button(Tr.KeysTitle, KeyBindings.Open),
                 Button(Tr.AdminTitle, AdminMenu.Open)),
-            Text(Tr.KeysHint(cfg.MenuKey, cfg.RejoinKey, cfg.ChatKey, cfg.ScoreboardKey)),
+            Text(Tr.KeysHint(Tr.KeyName(cfg.MenuKey), Tr.KeyName(cfg.RejoinKey), Tr.KeyName(cfg.ChatKey), Tr.KeyName(cfg.ScoreboardKey))),
             Button(Tr.Back, close));
     }
 

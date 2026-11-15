@@ -109,7 +109,7 @@ internal sealed class MultiplayerSceneHook : IUpdate, ICheckpointStorage, IGoalR
                     RemoveGhost(p.Id); // same id, new object (reconnection)
                 }
                 var ghostBoard = new NetGhostBoard(p, board!.Assets, GameAccess.GetTransparencyBatch(scene), UI.ModSettings.GhostOpacity,
-                    zFightingIndex: 200 + (p.Id % 1000));
+                    zFightingIndex: 1 + (p.Id % 16));
                 scene.Add(ghostBoard);
                 ghosts[p.Id] = (p, ghostBoard);
                 ModLog.Info($"Ghost shown for {p.Name} (#{p.Id})");
