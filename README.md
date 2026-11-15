@@ -2,7 +2,7 @@
 
 Unofficial multiplayer mod for [STUNTBOOST](https://store.steampowered.com/app/2999500/STUNTBOOST/). Ride the same map at the same time as other players, see them as ghosts (no collisions), and race for the best time, play rounds, cups and eliminations, or a game of hide and seek.
 
-Works on Linux (native version of the game) and Windows. Published with Byting Games' permission; not affiliated with the studio.
+Works on Linux (native version of the game) and Windows.
 
 ⚠️ **While the mod is loaded, the game does not save any time**: not on the official leaderboards (the game blocks submissions by itself when a mod is detected), and not locally either. Remove the launch option to play normally again.
 
