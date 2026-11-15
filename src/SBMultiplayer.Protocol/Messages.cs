@@ -5,7 +5,7 @@ namespace SBMultiplayer.Protocol;
 public static class ProtocolInfo
 {
     /// <summary>Increment on every incompatible change to the message format.</summary>
-    public const int Version = 11;
+    public const int Version = 12;
 
     public const int DefaultPort = 24800;
 
@@ -132,7 +132,7 @@ public enum MessageType : byte
     /// <summary>C→S (without id) and S→C (with id), reliable. Map the player is on ("" = none).</summary>
     MapChanged = 5,
 
-    /// <summary>C→S (without id) and S→C (with id), unreliable. Board position.</summary>
+    /// <summary>C→S, unreliable. Board position (compact, see <see cref="Msg.PutCompact"/>).</summary>
     State = 6,
 
     /// <summary>S→C, reliable. Current round: imposed map, phase, remaining time.</summary>
@@ -185,6 +185,9 @@ public enum MessageType : byte
 
     /// <summary>S→C, reliable. Hide and Seek: hunters, mice and found mice of the current round.</summary>
     HideSeek = 23,
+
+    /// <summary>S→C, unreliable. Board positions of the players on the recipient's map, grouped in one packet.</summary>
+    States = 24,
 }
 
 public enum RoundPhase : byte
@@ -393,16 +396,42 @@ public static class Msg
         return w;
     }
 
-    public static NetDataWriter State(NetDataWriter w, int? id, in PlayerState s)
+    /// <summary>C→S: our board state.</summary>
+    public static NetDataWriter State(NetDataWriter w, in PlayerState s)
     {
         w.Reset();
         w.Put((byte)MessageType.State);
-        if (id.HasValue)
-        {
-            w.Put(id.Value);
-        }
-        Put(w, s);
+        PutCompact(w, s);
         return w;
+    }
+
+    /// <summary>Most states in one <see cref="MessageType.States"/> packet (each takes 45 bytes: stays under the MTU).</summary>
+    public const int MaxStatesPerPacket = 24;
+
+    /// <summary>S→C: several players' states (entries [start, start + count) of the list).</summary>
+    public static NetDataWriter States(NetDataWriter w, IReadOnlyList<(int Id, PlayerState State)> entries, int start, int count)
+    {
+        w.Reset();
+        w.Put((byte)MessageType.States);
+        w.Put((byte)count);
+        for (int i = start; i < start + count; i++)
+        {
+            w.Put(entries[i].Id);
+            PutCompact(w, entries[i].State);
+        }
+        return w;
+    }
+
+    /// <summary>Reads a <see cref="MessageType.States"/> packet (after its type byte).</summary>
+    public static List<(int Id, PlayerState State)> GetStates(NetDataReader r)
+    {
+        int count = r.GetByte();
+        var list = new List<(int, PlayerState)>(count);
+        for (int i = 0; i < count; i++)
+        {
+            list.Add((r.GetInt(), GetCompact(r)));
+        }
+        return list;
     }
 
     public static NetDataWriter Round(NetDataWriter w, in RoundInfo r)
@@ -661,18 +690,52 @@ public static class Msg
 
     public static string FormatTime(uint ms) => $"{ms / 60000}:{ms / 1000 % 60:00}.{ms % 1000:000}";
 
-    public static void Put(NetDataWriter w, in PlayerState s)
+    // Compact board state, 41 bytes instead of 63:
+    // - time in milliseconds of the sender's clock (only differences matter; wraps after 49 days);
+    // - position as floats (1 unit = 1 board length, maps are big: full precision kept);
+    // - angles on 16 bits each (0.0055° steps; interpolation already goes the short way around);
+    // - segment on 8 bits (only compared for equality);
+    // - camera position relative to the board, in hundredths of a unit (the camera stays within a few units).
+    private const double AngleScale = 65536 / (2 * Math.PI);
+    private const float CameraOffsetScale = 100f;
+
+    public static void PutCompact(NetDataWriter w, in PlayerState s)
     {
-        w.Put(s.Time);
+        w.Put((uint)((long)Math.Round(s.Time * 1000) & 0xFFFFFFFF));
         Put(w, s.Position);
-        Put(w, s.Orientation);
-        w.Put(s.Segment);
-        Put(w, s.CamPosition);
-        Put(w, s.CamOrientation);
+        PutAngles(w, s.Orientation);
+        w.Put((byte)s.Segment);
+        PutOffset(w, s.CamPosition.X - s.Position.X);
+        PutOffset(w, s.CamPosition.Y - s.Position.Y);
+        PutOffset(w, s.CamPosition.Z - s.Position.Z);
+        PutAngles(w, s.CamOrientation);
     }
 
-    public static PlayerState GetState(NetDataReader r) =>
-        new(r.GetDouble(), GetVec3(r), GetVec3(r), r.GetUShort(), GetVec3(r), GetVec3(r));
+    public static PlayerState GetCompact(NetDataReader r)
+    {
+        double time = r.GetUInt() / 1000.0;
+        Vec3 position = GetVec3(r);
+        Vec3 orientation = GetAngles(r);
+        ushort segment = r.GetByte();
+        var camera = new Vec3(position.X + r.GetShort() / CameraOffsetScale, position.Y + r.GetShort() / CameraOffsetScale,
+            position.Z + r.GetShort() / CameraOffsetScale);
+        return new PlayerState(time, position, orientation, segment, camera, GetAngles(r));
+    }
+
+    private static void PutAngles(NetDataWriter w, in Vec3 v)
+    {
+        w.Put(Angle(v.X));
+        w.Put(Angle(v.Y));
+        w.Put(Angle(v.Z));
+    }
+
+    private static ushort Angle(float radians) => (ushort)((long)Math.Round(radians * AngleScale) & 0xFFFF);
+
+    private static Vec3 GetAngles(NetDataReader r) =>
+        new((float)(r.GetUShort() / AngleScale), (float)(r.GetUShort() / AngleScale), (float)(r.GetUShort() / AngleScale));
+
+    private static void PutOffset(NetDataWriter w, float offset) =>
+        w.Put((short)Math.Clamp(Math.Round(offset * CameraOffsetScale), short.MinValue, short.MaxValue));
 
     /// <summary>C→S (without id) and S→C (with id), reliable: the player becomes a spectator, or comes back into the game.</summary>
     public static NetDataWriter Spectate(NetDataWriter w, int? id, bool spectating)

@@ -159,6 +159,10 @@ public sealed class GameServer : INetEventListener
     public void Poll()
     {
         net.PollEvents();
+        if (Now - lastStatesFlush >= StatesFlushSeconds)
+        {
+            FlushStates();
+        }
         if (Now >= nextSummaryAt)
         {
             nextSummaryAt = Now + 1;
@@ -1287,7 +1291,7 @@ public sealed class GameServer : INetEventListener
                     OnMapChanged(p, reader.GetString(256));
                     break;
                 case MessageType.State:
-                    OnState(p, Msg.GetState(reader));
+                    OnState(p, Msg.GetCompact(reader));
                     break;
                 case MessageType.SkinChanged:
                     p.Skin = reader.GetInt();
@@ -1406,19 +1410,54 @@ public sealed class GameServer : INetEventListener
         }
     }
 
+    // Board states are not relayed one by one: they are grouped every StatesFlushSeconds into one packet per
+    // recipient, which only contains the players on the recipient's map (the others wouldn't be shown anyway).
+    private const double StatesFlushSeconds = 0.01;
+    private readonly List<(Player Sender, PlayerState State)> pendingStates = new();
+    private readonly List<(int Id, PlayerState State)> batch = new();
+    private double lastStatesFlush;
+
     private void OnState(Player p, PlayerState state)
     {
-        // Everyone receives every state; clients only show players on their own map.
         if (p.IsSpectator)
         {
             return; // spectators are invisible
         }
         lastPosition[p.Id] = state.Position;
-        Broadcast(Msg.State(writer, p.Id, state), DeliveryMethod.Unreliable, except: p);
+        pendingStates.Add((p, state));
         if (options.Echo)
         {
             echoQueue.Enqueue((Now + options.EchoDelaySeconds, p.Id, state));
         }
+    }
+
+    private void FlushStates()
+    {
+        lastStatesFlush = Now;
+        if (pendingStates.Count == 0)
+        {
+            return;
+        }
+        foreach (Player recipient in players.Values)
+        {
+            if (!recipient.HasSaidHello || recipient.MapKey == "")
+            {
+                continue;
+            }
+            batch.Clear();
+            foreach (var (sender, state) in pendingStates)
+            {
+                if (sender != recipient && sender.MapKey == recipient.MapKey && players.ContainsKey(sender.Id))
+                {
+                    batch.Add((sender.Id, state));
+                }
+            }
+            for (int start = 0; start < batch.Count; start += Msg.MaxStatesPerPacket)
+            {
+                recipient.Peer.Send(Msg.States(writer, batch, start, Math.Min(Msg.MaxStatesPerPacket, batch.Count - start)), DeliveryMethod.Unreliable);
+            }
+        }
+        pendingStates.Clear();
     }
 
     private void FlushEcho()
@@ -1428,7 +1467,9 @@ public sealed class GameServer : INetEventListener
             var (_, peerId, state) = echoQueue.Dequeue();
             if (players.TryGetValue(peerId, out Player? p))
             {
-                p.Peer.Send(Msg.State(writer, EchoIdOffset + peerId, state), DeliveryMethod.Unreliable);
+                batch.Clear();
+                batch.Add((EchoIdOffset + peerId, state));
+                p.Peer.Send(Msg.States(writer, batch, 0, 1), DeliveryMethod.Unreliable);
             }
         }
     }

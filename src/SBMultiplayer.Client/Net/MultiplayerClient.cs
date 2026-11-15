@@ -704,7 +704,7 @@ internal sealed class MultiplayerClient : INetEventListener
         if (IsReady && !IsSpectating)
         {
             PlayerState s = state;
-            Send(w => Msg.State(w, null, s), DeliveryMethod.Unreliable);
+            Send(w => Msg.State(w, s), DeliveryMethod.Unreliable);
         }
     }
 
@@ -923,16 +923,15 @@ internal sealed class MultiplayerClient : INetEventListener
                 case MessageType.HideSeek:
                     Round.SetHideSeek(Msg.GetHideSeek(reader));
                     break;
-                case MessageType.State:
-                {
-                    int id = reader.GetInt();
-                    PlayerState s = Msg.GetState(reader);
-                    if (Players.TryGetValue(id, out RemotePlayer? p))
+                case MessageType.States:
+                    foreach (var (id, s) in Msg.GetStates(reader))
                     {
-                        p.AddState(s);
+                        if (Players.TryGetValue(id, out RemotePlayer? p))
+                        {
+                            p.AddState(s);
+                        }
                     }
                     break;
-                }
             }
         }
         catch (Exception e)
