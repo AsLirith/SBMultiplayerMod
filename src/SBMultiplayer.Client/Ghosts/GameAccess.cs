@@ -51,6 +51,32 @@ internal static class GameAccess
 
     public static GlobalGame? Game { get; set; }
 
+    private static AccessTools.FieldRef<GlobalGame, Binds>? bindsRef;
+    private static MethodInfo? toMarkup;
+
+    /// <summary>The player's key for the game's free camera ("F" by default), or null if it can't be shown as text (mouse, gamepad glyph).</summary>
+    public static string? FlyKeyName
+    {
+        get
+        {
+            if (Game == null)
+            {
+                return null;
+            }
+            try
+            {
+                bindsRef ??= AccessTools.FieldRefAccess<GlobalGame, Binds>("binds");
+                toMarkup ??= AccessTools.Method("SE.BindToMarkup:ToMarkup") ?? throw new MissingMethodException("SE.BindToMarkup.ToMarkup");
+                string markup = (string)toMarkup.Invoke(null, new object[] { bindsRef(Game).FlyToggle, false })!;
+                return markup.Length == 0 || markup.Contains('#') || markup.Contains('_') ? null : markup;
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
+    }
+
     private static AccessTools.FieldRef<GlobalGame, SettingsManager<Settings>>? settingsManagerRef;
     private static bool mirrorUnavailable;
 

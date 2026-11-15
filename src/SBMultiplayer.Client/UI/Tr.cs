@@ -224,12 +224,18 @@ internal static class Tr
     public static string KeySpectatePrevious => T("Spectator: previous player", "Spectateur : joueur précédent");
     public static string KeySpectateNext => T("Spectator: next player", "Spectateur : joueur suivant");
     public static string KeyStopFollowing => T("Frozen mouse: stop following", "Souris gelée : arrêter de suivre");
+    public static string KeyCatchMouse => T("Hunter: catch a mouse", "Chasseur : capturer une souris");
     public static string KeySwapped(string action, string key) => T($"\"{action}\" now uses {key}", $"\"{action}\" utilise maintenant {key}");
 
     /// <summary>Readable name of a MonoGame key ("OemComma" → ",", "Left" → "Gauche" in French).</summary>
     public static string KeyName(string key) => key switch
     {
         "Escape" => T("Escape", "Échap"),
+        "LeftButton" => T("Left click", "Clic gauche"),
+        "RightButton" => T("Right click", "Clic droit"),
+        "MiddleButton" => T("Middle click", "Clic molette"),
+        "XButton1" => T("Mouse 4", "Souris 4"),
+        "XButton2" => T("Mouse 5", "Souris 5"),
         "Enter" => T("Enter", "Entrée"),
         "Left" => T("Left", "Gauche"),
         "Right" => T("Right", "Droite"),
@@ -299,8 +305,11 @@ internal static class Tr
     public static string SpectatorTitle => T("SPECTATOR", "SPECTATEUR");
     public static string Following(string name) => T($"following {name}", $"suit {name}");
     public static string NobodyToFollow => T("nobody to follow on this map", "personne à suivre sur cette map");
-    public static string SpectatorKeys(string previous, string next) =>
-        T($"{previous} / {next}: change player    F: free camera", $"{previous} / {next} : changer de joueur    F : caméra libre");
+    public static string SpectatorKeys(string previous, string next, string fly) =>
+        T($"{previous} / {next}: change player    {fly}: free camera", $"{previous} / {next} : changer de joueur    {fly} : caméra libre");
+
+    /// <summary>The player's key for the game's free camera, as text.</summary>
+    public static string FlyKey => SBMultiplayer.Client.Ghosts.GameAccess.FlyKeyName ?? T("Free camera key", "Touche caméra libre");
 
     // ---------- End-of-game screen ----------
     public static string EndTitle(SBMultiplayer.Protocol.GameMode mode) => mode switch
@@ -373,13 +382,15 @@ internal static class Tr
     public static string HsMiceHiding => T("The mice are hiding... you'll be released in", "Les souris se cachent... tu seras libéré dans");
     public static string HsHide => T("Hide!", "Cache-toi !");
     public static string HsHuntBegins => T("The hunt begins!", "La chasse commence !");
-    public static string HsAimHint => T("Aim at a mouse and press grind (left click) to find it", "Vise une souris et appuie sur grind (clic gauche) pour la trouver");
+    public static string HsAimHint(string key) => T($"Aim at a mouse and press {key} to catch it", $"Vise une souris et appuie sur {key} pour la capturer");
     public static string HsFrozen => T("Frozen in your hiding place", "Gelé dans ta cachette");
     public static string HsFrozenTitle => T("FROZEN", "GELÉ");
     public static string HsFoundTitle => T("FOUND", "TROUVÉ");
-    public static string HsFrozenKeys(string previous, string next, string stop) =>
-        T($"F: free camera / your view    {previous} / {next}: follow a player    {stop}: stop following",
-          $"F : caméra libre / ta vue    {previous} / {next} : suivre un joueur    {stop} : arrêter de suivre");
+    public static string HsFrozenKeys(string previous, string next, string stop, string fly) =>
+        T($"{fly}: free camera / your view    {previous} / {next}: follow a player    {stop}: stop following",
+          $"{fly} : caméra libre / ta vue    {previous} / {next} : suivre un joueur    {stop} : arrêter de suivre");
+    public static string HsLockHint(string fly) => T($"{fly}: lock your hiding place now", $"{fly} : verrouiller ta cachette maintenant");
+    public static string HsLandToLock => T("Touch a surface to lock your hiding place", "Touche une surface pour verrouiller ta cachette");
     public static string HsLandToFreeze => T("Hunt started: you'll be frozen as soon as you touch a surface", "La chasse a commencé : tu seras gelé dès que tu touches une surface");
     public static string HsYouAreHunterNow => T("You were found: you're a hunter now!", "Tu as été trouvé : tu es chasseur maintenant !");
     public static string HsHunters(string names) => T($"Hunter: {names}", $"Chasseur : {names}");

@@ -345,7 +345,7 @@ internal sealed class GlobalOverlay : SE.IDrawBatch2
         string title = StartGate.IsEliminated ? Tr.EliminatedTag.ToUpperInvariant() : Tr.SpectatorTitle;
         string? name = Spectator.Target?.Name;
         text.DrawCentered(sb, name != null ? $"{title} - {Tr.Following(name)}" : $"{title} - {Tr.NobodyToFollow}", vp.Width / 2f, ref y, Color.White, s);
-        text.DrawCentered(sb, Tr.SpectatorKeys(Tr.KeyName(ModConfig.Current.SpectatePreviousKey), Tr.KeyName(ModConfig.Current.SpectateNextKey)), vp.Width / 2f, ref y, Color.LightGray, s * 0.8f);
+        text.DrawCentered(sb, Tr.SpectatorKeys(Tr.KeyName(ModConfig.Current.SpectatePreviousKey), Tr.KeyName(ModConfig.Current.SpectateNextKey), Tr.FlyKey), vp.Width / 2f, ref y, Color.LightGray, s * 0.8f);
     }
 
     /// <summary>
@@ -382,11 +382,18 @@ internal sealed class GlobalOverlay : SE.IDrawBatch2
             {
                 text.DrawCentered(sb, Tr.HsYouAreMouse, cx, ref y, new Color(140, 220, 255), scale * 0.9f);
                 text.DrawCentered(sb, $"{Tr.HsHide} {left / 60}:{left % 60:00}", cx, ref y, Gold, scale * 1.4f);
+                if (!HideSeek.KeepFrozen)
+                {
+                    text.DrawCentered(sb, Tr.HsLockHint(Tr.FlyKey), cx, ref y, Color.LightGray, scale * 0.6f);
+                }
             }
-            return;
+            if (!(role == HideSeek.Role.Mouse && HideSeek.KeepFrozen))
+            {
+                return; // a mouse that locked its hiding place gets the frozen view below
+            }
         }
 
-        if (now - seekStart < 2.0)
+        if (now >= seekStart && now - seekStart < 2.0)
         {
             float y = vp.Height * 0.25f;
             text.DrawCentered(sb, Tr.HsHuntBegins, cx, ref y, new Color(255, 110, 90), scale * 1.8f);
@@ -399,7 +406,7 @@ internal sealed class GlobalOverlay : SE.IDrawBatch2
             Vector2 size = text.Measure(cross, scale * 1.2f);
             text.DrawOutlined(sb, cross, new Vector2(cx, vp.Height / 2f) - size / 2f, Color.White, scale * 1.2f);
             float y = vp.Height * 0.9f;
-            text.DrawCentered(sb, Tr.HsAimHint, cx, ref y, Color.LightGray, scale * 0.6f);
+            text.DrawCentered(sb, Tr.HsAimHint(Tr.KeyName(ModConfig.Current.CatchKey)), cx, ref y, Color.LightGray, scale * 0.6f);
         }
         else if (role == HideSeek.Role.Mouse && HideSeek.KeepFrozen)
         {
@@ -407,7 +414,7 @@ internal sealed class GlobalOverlay : SE.IDrawBatch2
             string title = found ? Tr.HsFoundTitle : Tr.HsFrozenTitle;
             string? name = HideSeek.FollowRequested ? Spectator.Target?.Name : null;
             text.DrawCentered(sb, name != null ? $"{title} - {Tr.Following(name)}" : title, cx, ref y, found ? new Color(255, 120, 120) : new Color(140, 220, 255), scale * 0.75f);
-            text.DrawCentered(sb, Tr.HsFrozenKeys(Tr.KeyName(ModConfig.Current.SpectatePreviousKey), Tr.KeyName(ModConfig.Current.SpectateNextKey), Tr.KeyName(ModConfig.Current.StopFollowingKey)), cx, ref y, Color.LightGray, scale * 0.6f);
+            text.DrawCentered(sb, Tr.HsFrozenKeys(Tr.KeyName(ModConfig.Current.SpectatePreviousKey), Tr.KeyName(ModConfig.Current.SpectateNextKey), Tr.KeyName(ModConfig.Current.StopFollowingKey), Tr.FlyKey), cx, ref y, Color.LightGray, scale * 0.6f);
         }
         else if (role == HideSeek.Role.Mouse && !found)
         {

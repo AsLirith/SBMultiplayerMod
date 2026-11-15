@@ -189,7 +189,7 @@ public sealed class ServerOptions
           //  - "Cup": like Rounds; reaching CupPointsLimit makes you a finalist, and a finalist who wins a round wins the cup.
           //  - "Elimination": like Rounds, but the slowest players of each round are eliminated until one is left.
           //  - "HideAndSeek": a random hunter (never twice in a row) is frozen while the mice hide; then the mice are
-          //    frozen where they are and the hunter has RoundSeconds to find them (aim at a mouse and click).
+          //    frozen where they are and the hunter has RoundSeconds to find them (aim at a mouse and right click).
           "Mode": "TimeAttack",
 
           // Time Attack: round duration. Rounds: time limit after the start. Hide and Seek: hunting time. In seconds.

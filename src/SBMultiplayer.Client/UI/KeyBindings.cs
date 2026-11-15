@@ -8,7 +8,7 @@ namespace SBMultiplayer.Client.UI;
 
 /// <summary>
 /// F8 > Keys: the mod's keys, changed by clicking an action and pressing the new key.
-/// A key already used by another action of the mod is swapped with it. Escape cancels.
+/// A key already used by another action of the mod is swapped with it. Escape cancels. Mouse buttons work too.
 /// </summary>
 internal static class KeyBindings
 {
@@ -24,12 +24,13 @@ internal static class KeyBindings
         new(() => Tr.KeySpectatePrevious, c => c.SpectatePreviousKey, (c, k) => c.SpectatePreviousKey = k, "Left"),
         new(() => Tr.KeySpectateNext, c => c.SpectateNextKey, (c, k) => c.SpectateNextKey = k, "Right"),
         new(() => Tr.KeyStopFollowing, c => c.StopFollowingKey, (c, k) => c.StopFollowingKey = k, "Down"),
+        new(() => Tr.KeyCatchMouse, c => c.CatchKey, (c, k) => c.CatchKey = k, "RightButton"),
     };
 
     private static Binding? capturing;
 
     /// <summary>Keys already down when the capture started: ignored until released (e.g. Enter used to click).</summary>
-    private static readonly HashSet<Keys> heldAtStart = new();
+    private static readonly HashSet<string> heldAtStart = new();
 
     /// <summary>Escape was used to cancel: the menu mustn't close on the same press.</summary>
     private static bool escapeUsed;
@@ -60,7 +61,7 @@ internal static class KeyBindings
     {
         capturing = b;
         heldAtStart.Clear();
-        heldAtStart.UnionWith(Keyboard.GetState().GetPressedKeys());
+        heldAtStart.UnionWith(ModInput.AllDown());
         version++;
     }
 
@@ -76,29 +77,29 @@ internal static class KeyBindings
     }
 
     /// <summary>Called by the hotkey handler while capturing, instead of the hotkeys.</summary>
-    public static void TickCapture(KeyboardState keys)
+    public static void TickCapture()
     {
         if (capturing == null)
         {
             return;
         }
-        heldAtStart.RemoveWhere(k => !keys.IsKeyDown(k));
-        Keys? pressed = keys.GetPressedKeys().Where(k => !heldAtStart.Contains(k)).Select(k => (Keys?)k).FirstOrDefault();
-        if (pressed is not Keys key)
+        var down = ModInput.AllDown().ToList();
+        heldAtStart.IntersectWith(down);
+        string? name = down.FirstOrDefault(k => !heldAtStart.Contains(k));
+        if (name == null)
         {
             return;
         }
         Binding target = capturing;
         capturing = null;
         version++;
-        if (key == Keys.Escape)
+        if (name == "Escape")
         {
             escapeUsed = true; // cancel
             return;
         }
 
         ModConfig cfg = ModConfig.Current;
-        string name = key.ToString();
         string previous = target.Get(cfg);
         // Already used by another action: the two actions swap their keys.
         foreach (Binding other in All.Where(o => !ReferenceEquals(o, target)

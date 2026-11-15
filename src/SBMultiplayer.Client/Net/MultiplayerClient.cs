@@ -54,8 +54,6 @@ internal sealed class MultiplayerClient : INetEventListener
     private GlobalOverlay? overlay;
     private int localSkin;
     private int skinCheckTick;
-    private KeyboardState previousKeys;
-
     public string CurrentMapKey => mapKey;
 
     public string ServerAddress => serverAddress;
@@ -171,6 +169,7 @@ internal sealed class MultiplayerClient : INetEventListener
         }
 
         // Menus, chat and connection work as soon as the game runs (main menu included).
+        ModInput.Update();
         HandleHotkeys();
         PopupMenu.Tick();
         KeyBindings.Tick();
@@ -213,40 +212,37 @@ internal sealed class MultiplayerClient : INetEventListener
 
     private void HandleHotkeys()
     {
-        KeyboardState keys = Keyboard.GetState();
         if (KeyBindings.IsCapturing)
         {
-            KeyBindings.TickCapture(keys); // F8 > Keys: the next key pressed is the new binding
-            previousKeys = keys;
+            KeyBindings.TickCapture(); // F8 > Keys: the next key pressed is the new binding
             ScoreboardHeld = false;
             return;
         }
         if (GameAccess.IsTyping() || ChatInput.IsOpen)
         {
-            previousKeys = keys; // no hotkeys while typing text
-            ScoreboardHeld = false;
+            ScoreboardHeld = false; // no hotkeys while typing text
             return;
         }
-        ScoreboardHeld = Down(keys, ModConfig.Current.ScoreboardKey) && !PopupMenu.AnyOpen;
-        if (Pressed(keys, ModConfig.Current.ChatKey) && CanOpenChat())
+        ScoreboardHeld = ModInput.Down(ModConfig.Current.ScoreboardKey) && !PopupMenu.AnyOpen;
+        if (ModInput.Pressed(ModConfig.Current.ChatKey) && CanOpenChat())
         {
             ChatInput.Open();
         }
-        if (Pressed(keys, ModConfig.Current.MenuKey))
+        if (ModInput.Pressed(ModConfig.Current.MenuKey))
         {
             MultiplayerMenu.Open();
         }
         ModConfig cfg = ModConfig.Current;
-        if (Pressed(keys, cfg.CloseEndScreenKey) && GlobalOverlay.EndScreenVisible && !PopupMenu.AnyOpen && !KeyBindings.BlocksEscape)
+        if (ModInput.Pressed(cfg.CloseEndScreenKey) && GlobalOverlay.EndScreenVisible && !PopupMenu.AnyOpen && !KeyBindings.BlocksEscape)
         {
             GlobalOverlay.DismissEndScreen();
         }
-        if (Pressed(keys, ModConfig.Current.RejoinKey))
+        if (ModInput.Pressed(ModConfig.Current.RejoinKey))
         {
             RejoinRound();
         }
-        bool next = Pressed(keys, cfg.SpectateNextKey);
-        bool previous = Pressed(keys, cfg.SpectatePreviousKey);
+        bool next = ModInput.Pressed(cfg.SpectateNextKey);
+        bool previous = ModInput.Pressed(cfg.SpectatePreviousKey);
         if (Spectator.IsWatching)
         {
             if (next)
@@ -269,19 +265,15 @@ internal sealed class MultiplayerClient : INetEventListener
                 }
                 HideSeek.FollowRequested = true;
             }
-            if (Pressed(keys, cfg.StopFollowingKey))
+            if (ModInput.Pressed(cfg.StopFollowingKey))
             {
                 HideSeek.FollowRequested = false;
             }
         }
-        previousKeys = keys;
     }
 
     /// <summary>The player list key is held (see <see cref="GlobalOverlay"/>).</summary>
     public static bool ScoreboardHeld { get; private set; }
-
-    private static bool Down(KeyboardState keys, string keyName) =>
-        Enum.TryParse(keyName, ignoreCase: true, out Keys key) && keys.IsKeyDown(key);
 
     private static readonly Type? ClickToStartSceneType = HarmonyLib.AccessTools.TypeByName("SE.ClickToStartScene");
 
@@ -310,9 +302,6 @@ internal sealed class MultiplayerClient : INetEventListener
         gameReady = true; // explicit request
         LoadRoundMap(key);
     }
-
-    private bool Pressed(KeyboardState keys, string keyName) =>
-        Enum.TryParse(keyName, ignoreCase: true, out Keys key) && keys.IsKeyDown(key) && !previousKeys.IsKeyDown(key);
 
     /// <summary>The player can change skin in the game's menu: tell the others.</summary>
     private void TrackLocalSkin()

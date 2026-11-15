@@ -178,6 +178,19 @@ internal static class HideSeek
             FollowRequested = false;
             frozenRound = -1;
         }
+        if (IsHiding && LocalRole == Role.Mouse && frozenRound != roundId && LockPressed())
+        {
+            // Lock the hiding place before the hunt (the board never stops by itself): like prop hunt.
+            bool ready = board != null && scene != null && ReferenceEquals(scene, GameAccess.CurrentScene);
+            if (ready && NoMenuOnTop(scene!) && IsOnGround(board!))
+            {
+                Freeze(roundId);
+            }
+            else
+            {
+                Notifications.Warn(Tr.HsLandToLock);
+            }
+        }
         if (!IsActive || SeekStart is not double seekStart || NetClock.Now < seekStart)
         {
             return;
@@ -286,11 +299,24 @@ internal static class HideSeek
         }
     }
 
+    /// <summary>The game's free camera key (the free camera itself is off for mice while they hide).</summary>
+    private static bool LockPressed()
+    {
+        try
+        {
+            return GameAccess.Game != null && !GameAccess.IsTyping() && !UI.ChatInput.IsOpen && InputRef(GameAccess.Game).FlyToggle.Pressed;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
     private static bool TagPressed()
     {
         try
         {
-            return GameAccess.Game != null && !GameAccess.IsTyping() && InputRef(GameAccess.Game).GrindOrStartSkatingRaw.Pressed;
+            return !GameAccess.IsTyping() && !UI.ChatInput.IsOpen && !UI.PopupMenu.AnyOpen && UI.ModInput.Pressed(ModConfig.Current.CatchKey);
         }
         catch (Exception)
         {

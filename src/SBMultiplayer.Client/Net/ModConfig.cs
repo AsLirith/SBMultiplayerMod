@@ -102,6 +102,9 @@ internal sealed class ModConfig
     /// <summary>Frozen mouse: stop following a player, back to the free camera.</summary>
     public string StopFollowingKey { get; set; } = "Down";
 
+    /// <summary>Hide and Seek hunter: catch the mouse you're aiming at (a key or a mouse button, independent of the game's grind).</summary>
+    public string CatchKey { get; set; } = "RightButton";
+
     /// <summary>Players whose chat messages are hidden (/ignore).</summary>
     public List<string> IgnoredPlayers { get; set; } = new();
 
