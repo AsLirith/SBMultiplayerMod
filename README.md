@@ -113,9 +113,13 @@ dotnet build -p:GameDir=/path/to/steamapps/common/STUNTBOOST   # builds and copi
 
 The mod is loaded through a [.NET startup hook](https://github.com/dotnet/runtime/blob/main/docs/design/features/host-startup-hook.md) and patches the game in memory with [Harmony](https://github.com/pardeike/Harmony), without modifying any game file. Networking uses [LiteNetLib](https://github.com/RevenantX/LiteNetLib) (UDP), tunneled through Steam networking for Steam P2P games. Technical notes are in [docs/00-reverse-engineering.md](docs/00-reverse-engineering.md), and the compatibility rules of the network protocol in [docs/protocol.md](docs/protocol.md).
 
-## Legal
+## Thanks
 
-SBLB lobbies (WebSocket rooms through the community website) were contributed by TheFanMan, who runs [sblb.thefanclub.cc](https://sblb.thefanclub.cc).
+A big thank you to **TheFanMan**, who runs [sblb.thefanclub.cc](https://sblb.thefanclub.cc), the community's leaderboard, skin and map hub. He integrated the mod into his server and contributed the SBLB lobbies, so anyone can create a lobby from the game without opening a port. Thanks as well for everything he does for the STUNTBOOST community in general.
+
+Thanks also to everyone who joined the playtests and sent feedback.
+
+## Legal
 
 Code released under the [MIT license](LICENSE). This repository contains no code or assets from the game, and must never contain any (no decompiled code).
 STUNTBOOST is the property of Byting Games. This project is not affiliated with or endorsed by the studio.
