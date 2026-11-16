@@ -193,7 +193,6 @@ internal sealed class MultiplayerClient : INetEventListener
         // Menus, chat and connection work as soon as the game runs (main menu included).
         ModInput.Update();
         HandleHotkeys();
-        PopupMenu.Tick();
         KeyBindings.Tick();
         StartGate.Tick(this);
         HideSeek.Tick();

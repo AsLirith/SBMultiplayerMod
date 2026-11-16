@@ -55,7 +55,7 @@ The rotation can mix official levels and **Workshop maps**:
 - official level: `o:<id>` (any version) or `o:<id>:<version>`;
 - Workshop map: `c:M<workshop id>` (latest version, recommended: an update by the author doesn't break the rotation) or the full key with its version.
 
-The easiest way is to set the rotation in game (F8 > Admin > Mode and maps) with level codes: `A1, A5` for official levels, and the game's Workshop codes (`M3456789`) for Workshop maps, or "Add the map I'm on". Players who don't have a Workshop map download it automatically (without subscribing to it) when the round starts.
+The easiest way is to set the rotation in game (F8 > Admin > Map rotation) with level codes: `A1, A5` for official levels, and the game's Workshop codes (`M3456789`) for Workshop maps, or "Add the map I'm on". Players who don't have a Workshop map download it automatically (without subscribing to it) when the round starts.
 
 Local maps (not published on the Workshop) can't be used in a rotation, since the other players don't have them.
 
@@ -103,8 +103,8 @@ Players can spectate from the F8 menu ("Spectate"): they stay frozen on the star
 
 Admins can change the match settings without restarting the server: **F8 > Admin**, then:
 
-- **Mode and maps**: game mode, and the map rotation as level codes (`A1, A5, B2`…, or "Add the map I'm on");
-- **Timings and points**: round duration / time limit, results screen, rounds per map, end of round after the first finisher, wait for players, countdown, Cup points limit, eliminated per round, points by rank.
+- **Mode and settings**: the game mode and, right below, the settings this mode uses: round duration / time limit, results screen, rounds per map, end of round after the first finisher, wait for players, countdown, Cup points limit, eliminated per round, points by rank;
+- **Map rotation**: the list of maps, to reorder or trim; add levels by code (`A1, A5, B2`, several at once separated by commas) or with "Add the map I'm on".
 
 Durations and points apply from the next round. Changing the mode or the maps restarts the match on the first map. With "Also save to the server's config file", the config file (`--config`) is rewritten with the new values, keeping its comments; values given on the command line are saved too.
 

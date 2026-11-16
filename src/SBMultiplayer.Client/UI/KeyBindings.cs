@@ -45,7 +45,7 @@ internal static class KeyBindings
 
     public static void Open() => Show("keys", Build, () => version);
 
-    private static Element Build(Action close, Scene scene)
+    private static Element Build(Action close, Screen screen)
     {
         ModConfig cfg = ModConfig.Current;
         var rows = All.Select(b => Row(b.Label(), Button(

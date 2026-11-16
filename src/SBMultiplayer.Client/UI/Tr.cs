@@ -223,10 +223,17 @@ internal static class Tr
     };
 
     // ---------- Server settings (admins) ----------
-    public static string SettingsModeAndMapsTitle => T("Mode and maps", "Mode et maps");
-    public static string SettingsTimingsTitle => T("Timings and points", "Délais et points");
     public static string SettingsModeLabel(string mode) => T($"Game mode: {mode}", $"Mode de jeu : {mode}");
-    public static string SettingsMapsField => T("Level codes separated by commas: official levels (A1, A5…) and Workshop maps (M123456…):", "Codes séparés par des virgules : niveaux officiels (A1, A5…) et maps du Workshop (M123456…) :");
+    public static string SettingsMatchTitle => T("Mode and settings", "Mode et réglages");
+    public static string SettingsAddMaps => T("Add levels (codes)", "Ajouter des niveaux (codes)");
+    public static string SettingsAddButton => T("Add", "Ajouter");
+    public static string SettingsMapsHint => T("Codes: official levels (A1, A5...) and Workshop maps (M123456...). Several at once: separate them with commas.",
+        "Codes : niveaux officiels (A1, A5...) et maps du Workshop (M123456...). Plusieurs d'un coup : sépare-les par des virgules.");
+    public static string SettingsNoMaps => T("The rotation is empty.", "La rotation est vide.");
+    public static string MoveUp => T("Up", "Monter");
+    public static string MoveDown => T("Down", "Descendre");
+    public static string RemoveButton => T("Remove", "Retirer");
+    public static string RemoveAllButton => T("Remove all", "Tout retirer");
     public static string SettingsAddCurrentMap => T("Add the map I'm on", "Ajouter la map où je suis");
     public static string SettingsNoCurrentMap => T("You're not on a level", "Tu n'es pas sur un niveau");
     public static string SettingsLocalMap => T("Local maps can't be used on a server (the others don't have them): publish it on the Workshop first",
@@ -318,12 +325,7 @@ internal static class Tr
     public static string AdminChangeMap => T("Change map", "Changer de map");
     public static string AdminPlayersButton => T("Players", "Joueurs");
     public static string AdminNoOtherPlayers => T("No other player connected", "Aucun autre joueur connecté");
-    public static string SettingsModeSection => T("Game mode", "Mode de jeu");
     public static string SettingsMapsSection => T("Map rotation", "Rotation de maps");
-    public static string SettingsApplySection => T("Apply", "Appliquer");
-    public static string SettingsDurationsSection => T("Durations", "Durées");
-    public static string SettingsMatchSection => T("Match", "Match");
-    public static string SettingsFreeModeNothing => T("Nothing to set in Free mode: change the mode in \"Mode and maps\".", "Rien à régler en mode Libre : change le mode dans \"Mode et maps\".");
 
     public static string ModeDescription(SBMultiplayer.Protocol.GameMode mode) => mode switch
     {

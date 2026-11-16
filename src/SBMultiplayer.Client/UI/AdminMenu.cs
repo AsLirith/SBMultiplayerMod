@@ -13,14 +13,15 @@ namespace SBMultiplayer.Client.UI;
 /// </summary>
 internal static class AdminMenu
 {
-    private const int MaxMapButtons = 24;
+    /// <summary>Rows of buttons visible at once in the map and player lists (they scroll beyond that).</summary>
+    private const int VisibleRows = 7;
     private const int EchoIdOffset = 1_000_000;
 
     private static MultiplayerClient Client => MultiplayerClient.Instance;
 
     public static void Open() => Show("admin", Build, () => Client.AdminVersion * 31 + (Client.IsReady ? 1 : 0));
 
-    private static Element Build(Action close, Scene scene)
+    private static Element Build(Action close, Screen screen)
     {
         if (!Client.IsReady)
         {
@@ -60,8 +61,8 @@ internal static class AdminMenu
                     () => Client.Admin(AdminCommand.ResetMatch)))),
             Section(Tr.AdminServerSection),
             Buttons(
-                Button(Tr.SettingsModeAndMapsTitle, ServerSettingsMenu.OpenModeAndMaps),
-                Button(Tr.SettingsTimingsTitle, ServerSettingsMenu.OpenTimingsAndPoints)),
+                Button(Tr.SettingsMatchTitle, ServerSettingsMenu.OpenMatch),
+                Button(Tr.SettingsMapsSection, ServerSettingsMenu.OpenRotation)),
             Button(Tr.Back, close));
     }
 
@@ -87,12 +88,12 @@ internal static class AdminMenu
         {
             return Stack(Title(Tr.AdminChangeMap), Text(Tr.AdminNoRotation), Button(Tr.Back, close));
         }
-        var buttons = maps.Take(MaxMapButtons).Select((key, i) => Button($"{i + 1}. {GameAccess.DescribeMap(key)}", () =>
+        var buttons = maps.Select((key, i) => Button($"{i + 1}. {GameAccess.DescribeMap(key)}", () =>
         {
             Client.Admin(AdminCommand.GotoMap, i);
             close();
         })).ToList();
-        return Stack(Title(Tr.AdminChangeMap), Grid(buttons, 3), Button(Tr.Back, close));
+        return Stack(Title(Tr.AdminChangeMap), ScrollList(GridRows(buttons, 3), VisibleRows), Button(Tr.Back, close));
     }, () => Client.AdminVersion);
 
     // ---------- Hide and Seek: next hunter ----------
@@ -112,7 +113,7 @@ internal static class AdminMenu
         })).ToList();
         return Stack(
             Title(Tr.AdminNextHunter),
-            Grid(buttons, 3),
+            ScrollList(GridRows(buttons, 3), VisibleRows),
             Buttons(Button(Tr.AdminRandomHunter, () =>
             {
                 Client.Admin(AdminCommand.SetHunter, -1);
@@ -128,8 +129,8 @@ internal static class AdminMenu
         var others = Client.Players.Values.Where(p => p.Id < EchoIdOffset).OrderBy(p => p.Name).ToList();
         Element list = others.Count == 0
             ? Text(Tr.AdminNoOtherPlayers)
-            : Grid(others.Select(p => Button(Tr.AdminKick(p.Name), () => Confirm(Tr.ConfirmKick(p.Name), Tr.AdminKick(p.Name),
-                    () => Client.Admin(AdminCommand.Kick, p.Id)))).ToList(), 3);
+            : ScrollList(GridRows(others.Select(p => Button(Tr.AdminKick(p.Name), () => Confirm(Tr.ConfirmKick(p.Name), Tr.AdminKick(p.Name),
+                    () => Client.Admin(AdminCommand.Kick, p.Id)))).ToList(), 3), VisibleRows);
         return Stack(Title(Tr.AdminPlayersButton), list, Button(Tr.Back, close));
     }, () => Client.Players.Count * 31 + Client.AdminVersion);
 }

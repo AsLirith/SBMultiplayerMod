@@ -8,30 +8,89 @@ namespace SBMultiplayer.Client.UI;
 
 /// <summary>
 /// Shared plumbing for the mod's menus: popups built with the game's UI elements (same buttons, sliders and
-/// checkboxes as its options screens), closed with Escape, optionally rebuilt when their content changes,
-/// plus small layout helpers so every screen looks the same.
+/// checkboxes as its options screens), closed with Escape, rebuilt in place when their content changes
+/// (the popup stays open: no flicker, no sound), plus small layout helpers so every screen looks the same.
 /// </summary>
 internal static class PopupMenu
 {
     public static readonly Color InputBackground = new(0x5F, 0x5A, 0x59); // Colors.DarkBrighter of the game
 
-    private sealed record Definition(string Id, Func<Action, Scene, Element> Build, Func<int>? Signature);
+    // More of the game's Colors (internal to the game): Primary, PanelBackground, PanelSub.
+    private static readonly Color Highlight = new(0xE5, 0x50, 0x00);
+    private static readonly Color PanelBackground = new(0x16, 0x16, 0x16);
+    private static readonly Color PanelSub = Color.White * 0.05f;
+
+    /// <summary>
+    /// What a screen's builder can hook into: code run every tick while the screen is on top, code run when its
+    /// content goes away (closed or rebuilt), and a way to ask for a rebuild.
+    /// </summary>
+    public sealed class Screen
+    {
+        private readonly List<Action> ticks = new();
+        private readonly List<Action> leaving = new();
+
+        internal bool RefreshRequested { get; private set; }
+
+        /// <summary>Where the keyboard/gamepad selection (or the text cursor) goes back to after a rebuild.</summary>
+        internal Restore? PendingRestore { get; set; }
+
+        /// <summary>Runs every tick while the screen is the topmost one.</summary>
+        public void Every(Action tick) => ticks.Add(tick);
+
+        /// <summary>Runs when the content built by this call goes away: the screen closes or is rebuilt.</summary>
+        public void OnLeave(Action action) => leaving.Add(action);
+
+        /// <summary>Rebuilds the screen in place (after a click that changes what it shows).</summary>
+        public void Refresh() => RefreshRequested = true;
+
+        internal void Tick()
+        {
+            foreach (Action tick in ticks.ToArray())
+            {
+                tick();
+            }
+        }
+
+        internal void Reset()
+        {
+            foreach (Action action in leaving.ToArray())
+            {
+                try
+                {
+                    action();
+                }
+                catch (Exception e)
+                {
+                    ModLog.Error("Menu: leave action failed", e);
+                }
+            }
+            leaving.Clear();
+            ticks.Clear();
+            RefreshRequested = false;
+        }
+    }
+
+    internal sealed record Restore(Canvas Canvas, Element Root, Vector2 Position, bool Typing)
+    {
+        public int Attempts { get; set; }
+    }
+
+    private sealed record Definition(string Id, Func<Action, Screen, Element> Build, Func<int>? Signature);
 
     private static readonly HashSet<string> OpenIds = new();
 
     /// <summary>The open popups with their close action, in opening order (the game stacks them as a chain).</summary>
     private static readonly List<(string Id, Action Close)> OpenPopups = new();
-    private static Definition? pendingReopen;
 
     private static SE.UIAssets Ui => GameAccess.UiAssets;
 
     /// <summary>Opens a popup over the current scene (ignored if this popup is already open).</summary>
-    /// <param name="build">Builds the content; can add updaters to the scene.</param>
-    /// <param name="signature">When its value changes, the popup is rebuilt (e.g. admin status, player list).</param>
-    public static void Show(string id, Func<Action, Scene, Element> build, Func<int>? signature = null) =>
+    /// <param name="build">Builds the content; called again for every rebuild.</param>
+    /// <param name="signature">When its value changes, the content is rebuilt in place (e.g. admin status, player list).</param>
+    public static void Show(string id, Func<Action, Screen, Element> build, Func<int>? signature = null) =>
         Show(new Definition(id, build, signature));
 
-    public static bool IsOpen(string id) => OpenIds.Contains(id) || pendingReopen?.Id == id;
+    public static bool IsOpen(string id) => OpenIds.Contains(id);
 
     /// <summary>One of the mod's menus is open.</summary>
     public static bool AnyOpen => OpenIds.Count > 0;
@@ -39,7 +98,6 @@ internal static class PopupMenu
     /// <summary>Closes every menu of the mod, topmost first (the menu key pressed while a menu is open).</summary>
     public static void CloseAll()
     {
-        pendingReopen = null;
         foreach ((string id, Action close) in Enumerable.Reverse(OpenPopups).ToArray())
         {
             try
@@ -77,60 +135,180 @@ internal static class PopupMenu
         catch (Exception e)
         {
             OpenIds.Remove(def.Id);
+            OpenPopups.RemoveAll(p => p.Id == def.Id);
             ModLog.Error($"Could not open the menu {def.Id}", e);
             Notifications.Warn(Tr.MenuOpenFailed);
         }
     }
 
-    /// <summary>Called every global tick: reopens a popup that asked to be rebuilt.</summary>
-    public static void Tick()
-    {
-        if (pendingReopen is { } def && !OpenIds.Contains(def.Id))
-        {
-            pendingReopen = null;
-            Show(def);
-        }
-    }
-
     private static Scene Create(Definition def, Action close)
     {
-        OpenIds.Add(def.Id);
+        var screen = new Screen();
         var scene = new Scene();
-        Element content = def.Build(close, scene)
+        Element content = def.Build(close, screen)
             .SetStyle(Ui.TextSmallStyle)
             .SetNavigationStartToFirstNavigatable();
         CanvasScale canvas = GameAccess.CreateCanvas();
         canvas.Add(GameAccess.CreateMainPanel(content));
         scene.Add(canvas);
-        scene.Add(new Updater(def, close));
+        scene.Add(new Updater(def, close, screen, content));
+        OpenIds.Add(def.Id);
         OpenPopups.Add((def.Id, close));
         scene.OnDispose += () =>
         {
             OpenIds.Remove(def.Id);
             OpenPopups.RemoveAll(p => p.Id == def.Id);
+            screen.Reset();
         };
         return scene;
     }
 
-    private sealed class Updater(Definition def, Action close) : IUpdate
+    private sealed class Updater(Definition def, Action close, Screen screen, Element content) : IUpdate
     {
-        private readonly int builtSignature = def.Signature?.Invoke() ?? 0;
+        private int builtSignature = def.Signature?.Invoke() ?? 0;
         private bool escapeWasDown = true; // ignores an Escape still held when the popup opens
 
         public void Update()
         {
-            if (def.Signature != null && def.Signature() != builtSignature)
+            int signature = def.Signature?.Invoke() ?? 0;
+            if (screen.RefreshRequested || signature != builtSignature)
             {
-                pendingReopen = def;
-                close();
-                return;
+                builtSignature = signature;
+                if (!Rebuild())
+                {
+                    return;
+                }
             }
             bool escapeDown = Keyboard.GetState().IsKeyDown(Keys.Escape);
             if (escapeDown && !escapeWasDown && !KeyBindings.BlocksEscape)
             {
                 close();
+                return;
             }
             escapeWasDown = escapeDown;
+            screen.Tick();
+            RestoreSelection(screen);
+        }
+
+        /// <summary>Builds the content again and swaps it into the open popup.</summary>
+        private bool Rebuild()
+        {
+            screen.Reset();
+            try
+            {
+                Element fresh = def.Build(close, screen).SetStyle(Ui.TextSmallStyle);
+                screen.PendingRestore = Replace(content, fresh) ?? screen.PendingRestore;
+                content = fresh;
+                return true;
+            }
+            catch (Exception e)
+            {
+                ModLog.Error($"Could not rebuild the menu {def.Id}", e);
+                close();
+                return false;
+            }
+        }
+    }
+
+    /// <summary>
+    /// A part of a screen that rebuilds itself when <paramref name="signature"/> changes (a list that updates live),
+    /// without touching the rest of the screen: text being typed elsewhere keeps its cursor.
+    /// </summary>
+    public static Element Live(Screen screen, Func<int> signature, Func<Element> build)
+    {
+        Element current = build();
+        int built = signature();
+        Element holder = new PanelStack(0f).Add(current);
+        screen.Every(() =>
+        {
+            int now = signature();
+            if (now == built)
+            {
+                return;
+            }
+            built = now;
+            Element fresh = build();
+            screen.PendingRestore = Replace(current, fresh) ?? screen.PendingRestore;
+            current = fresh;
+        });
+        return holder;
+    }
+
+    /// <summary>
+    /// Swaps an element of an open popup for a new one. The canvas must forget the old elements (selection,
+    /// text focus, mouse capture); the returned value tells where to put the selection back, if it was in there.
+    /// </summary>
+    private static Restore? Replace(Element old, Element fresh)
+    {
+        Element parent = old.Parent ?? throw new InvalidOperationException("Element not shown");
+        Canvas? canvas = old.GetParents().OfType<Canvas>().FirstOrDefault();
+        Restore? restore = null;
+        if (canvas != null)
+        {
+            bool Inside(Element? e) => e != null && (ReferenceEquals(e, old) || e.GetParents().Contains(old));
+            Element? focus = canvas.Input.FocusElement;
+            Element? selected = canvas.NavigateElement;
+            bool typing = Inside(focus);
+            Element? anchor = typing ? focus : Inside(selected) ? selected : null;
+            if (anchor?.AbsoluteRect is { } rect)
+            {
+                restore = new Restore(canvas, fresh, new Vector2((rect.Left + rect.Right) / 2f, (rect.Top + rect.Bottom) / 2f), typing);
+            }
+            if (typing)
+            {
+                canvas.Input.FocusElement = null;
+            }
+            if (Inside(selected))
+            {
+                canvas.NavigateElement = null;
+            }
+            canvas.SetUpdateCatch(null);
+        }
+        int index = parent.Children.IndexOf(old);
+        parent.Remove(old);
+        parent.Insert(index, fresh);
+        old.Dispose();
+        return restore;
+    }
+
+    /// <summary>After a rebuild, once the new elements are laid out: selects the one where the selection was.</summary>
+    private static void RestoreSelection(Screen screen)
+    {
+        if (screen.PendingRestore is not { } restore)
+        {
+            return;
+        }
+        Element? target = null;
+        float best = float.MaxValue;
+        foreach (Element e in restore.Root.GetAllVisibleChildren())
+        {
+            if (e.AbsoluteRect is not { } rect || !e.CanBeNavigated || (restore.Typing && e is not TextInput))
+            {
+                continue;
+            }
+            float distance = rect.DistanceToPoint(restore.Position).LengthSquared();
+            if (distance < best)
+            {
+                best = distance;
+                target = e;
+            }
+        }
+        if (target == null)
+        {
+            if (++restore.Attempts > 30)
+            {
+                screen.PendingRestore = null; // nothing to select in the new content
+            }
+            return;
+        }
+        screen.PendingRestore = null;
+        if (restore.Typing)
+        {
+            restore.Canvas.Navigate(target); // a text field: it takes the focus again
+        }
+        else if (restore.Canvas.NavigateElement == null)
+        {
+            restore.Canvas.NavigateElement = target;
         }
     }
 
@@ -200,12 +378,18 @@ internal static class PopupMenu
     /// <summary>Estimated width of each button (text + padding), so button groups can be split into lines that fit.</summary>
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Element, object> ButtonWidths = new();
 
-    public static Element Button(string text, Action onClick)
+    /// <param name="selected">The current choice of a group of buttons: its text takes the game's highlight color.</param>
+    public static Element Button(string text, Action onClick, bool selected = false)
     {
         string label = Fit(text, MenuWidth - 100f);
+        Element caption = new Label(label);
+        if (selected)
+        {
+            caption.SetStyle(new Style { FontColor = Highlight });
+        }
         Element button = GameAccess.CreateButton(onClick)
             .SetStyle(new Style { ButtonAnimation = Ui.ButtonAnimation, ButtonPadding = new Padding(32f, 14f) })
-            .Add(new Label(label));
+            .Add(caption);
         try
         {
             ButtonWidths.AddOrUpdate(button, Measure(label) + 64f);
@@ -246,15 +430,66 @@ internal static class PopupMenu
         return lines.Count == 1 ? lines[0] : new PanelStack(18f).Add(lines);
     }
 
-    /// <summary>Grid of elements, <paramref name="perRow"/> per line.</summary>
-    public static Element Grid(IReadOnlyList<Element> items, int perRow)
+    /// <summary>The lines of a grid of elements, <paramref name="perRow"/> per line (for <see cref="ScrollList"/>).</summary>
+    public static List<Element> GridRows(IReadOnlyList<Element> items, int perRow)
     {
         var rows = new List<Element>();
         for (int i = 0; i < items.Count; i += perRow)
         {
             rows.Add(Line(items.Skip(i).Take(perRow).ToArray()));
         }
-        return new PanelStack(18f).Add(rows);
+        return rows;
+    }
+
+    /// <summary>Width left for the rows of a <see cref="ScrollList"/> (its scroll bar takes the rest).</summary>
+    public const float ScrollRowWidth = MenuWidth - ScrollBarWidth - 24f;
+
+    private const float ScrollBarWidth = 64f;
+
+    /// <summary>
+    /// Vertical list of rows (buttons or lines of buttons). Longer than <paramref name="visible"/> rows: it gets
+    /// that height and scrolls (mouse wheel, scroll bar, or keyboard selection), like the game's long screens.
+    /// </summary>
+    /// <param name="screen">With <paramref name="memory"/>: the scroll position survives the screen's rebuilds.</param>
+    public static Element ScrollList(IReadOnlyList<Element> rows, int visible, Screen? screen = null, ScrollMemory? memory = null)
+    {
+        const float Gap = 18f;
+        if (rows.Count <= visible)
+        {
+            if (memory != null)
+            {
+                memory.Position = 0f;
+            }
+            return new PanelStack(Gap).Add(rows.ToArray());
+        }
+        // Same width for every list, so short rows are centered like everywhere else.
+        // Anchored at the top of the scroll area: the default (centered) hides the top of a list taller than it.
+        Element stack = new PanelStack(Gap) { Anchor = Vector2.Zero }
+            .Add(new Label("", ScrollRowWidth, 1f, setSizeToText: false)).Add(rows.ToArray());
+        float rowHeight = Ui.FontSmall.Value.LineSpacing + 28f; // a button: one line of text + its padding
+        float height = visible * (rowHeight + Gap);
+        var scroll = new PanelScrollWithBar(PanelBackground, PanelSub, ScrollBarWidth, MenuWidth, height);
+        scroll.SetButtonHoverStyle(new Style { FontColor = Highlight, TextureColor = Highlight });
+        scroll.PanelScroll.Add(stack);
+        if (screen != null && memory != null)
+        {
+            // Back where the list was (clamped to the new length); set directly: nothing is laid out yet.
+            float max = (rows.Count - visible) * (rowHeight + Gap);
+            float position = Math.Clamp(memory.Position, 0f, max);
+            memory.Position = position;
+            if (position > 0f)
+            {
+                scroll.PanelScroll.Padding = new Padding(0f, -position, 0f, 0f);
+            }
+            screen.OnLeave(() =>
+            {
+                if (!float.IsPositiveInfinity(memory.Position)) // (unless the next build was just told to show the end)
+                {
+                    memory.Position = scroll.PanelScroll.Scroll;
+                }
+            });
+        }
+        return scroll;
     }
 
     /// <summary>Label on the left (right-aligned, like the game's settings rows), field on the right.</summary>
@@ -287,20 +522,30 @@ internal static class PopupMenu
     public static TextInput Input(string text, int maxLength, float width = FieldWidth) =>
         new(GameAccess.UpdateSpeed, text, width, Ui.FontSmall.Value.LineSpacing) { MaxTextLength = maxLength };
 
-    /// <summary>Width of a text field that shares its settings row with a button (<c>Row(label, Line(Field(input), Button(text)))</c>).</summary>
-    public static float WidthBeside(string buttonText)
+    /// <summary>Scroll position of a <see cref="ScrollList"/>, kept by the screen's own state across rebuilds.</summary>
+    public sealed class ScrollMemory
     {
-        float button;
+        public float Position { get; set; }
+
+        /// <summary>The next build shows the end of the list (a row was just added there).</summary>
+        public void ToEnd() => Position = float.PositiveInfinity;
+    }
+
+    /// <summary>Width of a button with this text.</summary>
+    public static float ButtonWidth(string text)
+    {
         try
         {
-            button = Measure(buttonText) + 64f;
+            return Measure(text) + 64f;
         }
         catch (Exception)
         {
-            button = 700f;
+            return 700f; // character missing from the font
         }
-        return MathF.Max(300f, FieldWidth - 22f - button);
     }
+
+    /// <summary>Width of a text field that shares its settings row with a button (<c>Row(label, Line(Field(input), Button(text)))</c>).</summary>
+    public static float WidthBeside(string buttonText) => MathF.Max(300f, FieldWidth - 22f - ButtonWidth(buttonText));
 
     /// <summary>A text field on the game's dark background.</summary>
     public static Element Field(TextInput input) => new Panel(0f, 0f, InputBackground, null, new Padding(14f)).Add(input);

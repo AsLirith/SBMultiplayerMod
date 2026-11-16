@@ -14,7 +14,7 @@ namespace SBMultiplayer.Client.UI;
 /// </summary>
 internal static class MultiplayerMenu
 {
-    /// <summary>Steam games shown in "Join a game" (the rest is summed up in one line).</summary>
+    /// <summary>Steam games visible at once in "Join a game" (the list scrolls beyond that).</summary>
     private const int MaxSteamGames = 6;
 
     public static string Version => typeof(MultiplayerMenu).Assembly.GetName().Version?.ToString(3) ?? "?";
@@ -42,11 +42,18 @@ internal static class MultiplayerMenu
         | (UpdateCheck.NewerVersion != null ? 64 : 0)
         | (Tr.French ? 128 : 0);
 
-    private static Element BuildMain(Action close, Scene scene)
+    private static Element BuildMain(Action close, Screen screen)
     {
         ModConfig cfg = ModConfig.Current;
         var status = new Label(StatusText(), MenuWidth);
-        scene.Add(new StatusUpdater(status));
+        int tick = 0;
+        screen.Every(() =>
+        {
+            if (++tick % 15 == 0 && StatusText() is string text && status.Text != text)
+            {
+                status.Text = text;
+            }
+        });
 
         return Stack(
             Title(Tr.MenuTitle(Version)),
@@ -79,29 +86,26 @@ internal static class MultiplayerMenu
 
     // ---------- Join a game: Steam games (friends, public), SBLB lobby code, server address ----------
 
-    // What the player is typing survives the screen's rebuilds (the Steam list arrives a moment after it opens).
-    private static string joinCodeDraft = "";
-    private static string joinServerDraft = "";
+    /// <summary>Incremented by "Refresh": the Steam list is read again (friends included).</summary>
     private static int joinRefreshes;
 
     private sealed record SteamGame(ulong HostId, string Name, string Label, bool HasPassword);
 
     private static void OpenJoin()
     {
-        joinCodeDraft = ModConfig.Current.LastRoomCode;
-        joinServerDraft = ModConfig.Current.Server;
         if (SteamP2P.Available)
         {
             SteamLobby.Refresh();
         }
-        Show("join", BuildJoin, JoinSignature);
+        Show("join", BuildJoin);
     }
 
     /// <summary>Changes when the list of public games really changes (not at every search), or on "Refresh".</summary>
-    private static int JoinSignature()
+    private static int SteamListSignature()
     {
         var hash = new HashCode();
         hash.Add(joinRefreshes);
+        hash.Add(SteamLobby.Searching && SteamLobby.Games.Count == 0); // "Searching..." becomes "no game"
         foreach (SteamLobby.PublicGame g in SteamLobby.Games)
         {
             hash.Add(g.HostId);
@@ -132,40 +136,11 @@ internal static class MultiplayerMenu
         return games;
     }
 
-    private static string SteamLine(int games) =>
-        games > 0 ? Tr.SteamGamesHint
-        : SteamLobby.Searching ? Tr.PublicGamesSearching
-        : Tr.NoSteamGames;
-
-    private static Element BuildJoin(Action close, Scene scene)
+    private static Element BuildJoin(Action close, Screen screen)
     {
-        TextInput code = Input(joinCodeDraft, 16, WidthBeside(Tr.JoinButton));
-        TextInput server = Input(joinServerDraft, 80, WidthBeside(Tr.Connect));
-        var items = new List<Element?> { Title(Tr.JoinGameButton) };
-
-        Label? steamLine = null;
-        int steamCount = 0;
-        if (SteamP2P.Available)
-        {
-            List<SteamGame> games = SteamGames();
-            steamCount = games.Count;
-            steamLine = new Label(SteamLine(steamCount), MenuWidth);
-            items.Add(steamLine);
-            items.AddRange(games.Take(MaxSteamGames).Select(g => Button(g.Label, () => JoinSteamGame(g, close))));
-            if (games.Count > MaxSteamGames)
-            {
-                items.Add(Text(Tr.AndMore(games.Count - MaxSteamGames)));
-            }
-        }
-        scene.Add(new Ticker(() =>
-        {
-            joinCodeDraft = code.Text;
-            joinServerDraft = server.Text;
-            if (steamLine != null && SteamLine(steamCount) is string line && steamLine.Text != line)
-            {
-                steamLine.Text = line;
-            }
-        }));
+        ModConfig cfg = ModConfig.Current;
+        TextInput code = Input(cfg.LastRoomCode, 16, WidthBeside(Tr.JoinButton));
+        TextInput server = Input(cfg.Server, 80, WidthBeside(Tr.Connect));
 
         void JoinLobby()
         {
@@ -193,24 +168,34 @@ internal static class MultiplayerMenu
         code.OnEnter += () => { JoinLobby(); return true; };
         server.OnEnter += () => { ConnectTo(server.Text); return true; };
 
-        items.Add(Row(Tr.RoomCodeField, Line(Field(code), Button(Tr.JoinButton, JoinLobby))));
-        items.Add(Row(Tr.ServerField, Line(Field(server), Button(Tr.Connect, () => ConnectTo(server.Text)))));
-        var recent = ModConfig.Current.RecentServers
-            .Where(r => !r.Equals(joinServerDraft.Trim(), StringComparison.OrdinalIgnoreCase))
+        var recent = cfg.RecentServers
+            .Where(r => !r.Equals(cfg.Server.Trim(), StringComparison.OrdinalIgnoreCase))
             .Select(r => Button(r, () => ConnectTo(r)))
             .ToArray();
-        if (recent.Length > 0)
-        {
-            items.Add(Buttons(recent));
-        }
-        items.Add(Buttons(
-            SteamP2P.Available ? Button(Tr.Refresh, () =>
-            {
-                joinRefreshes++;
-                SteamLobby.Refresh();
-            }) : null,
-            Button(Tr.Back, close)));
-        return Stack(items.ToArray());
+        return Stack(
+            Title(Tr.JoinGameButton),
+            // Only the Steam list is rebuilt when it changes: the fields below keep their text and cursor.
+            SteamP2P.Available ? Live(screen, SteamListSignature, () => BuildSteamList(close)) : null,
+            Row(Tr.RoomCodeField, Line(Field(code), Button(Tr.JoinButton, JoinLobby))),
+            Row(Tr.ServerField, Line(Field(server), Button(Tr.Connect, () => ConnectTo(server.Text)))),
+            recent.Length > 0 ? Buttons(recent) : null,
+            Buttons(
+                SteamP2P.Available ? Button(Tr.Refresh, () =>
+                {
+                    joinRefreshes++;
+                    SteamLobby.Refresh();
+                }) : null,
+                Button(Tr.Back, close)));
+    }
+
+    private static Element BuildSteamList(Action closeJoin)
+    {
+        List<SteamGame> games = SteamGames();
+        string line = games.Count > 0 ? Tr.SteamGamesHint : SteamLobby.Searching ? Tr.PublicGamesSearching : Tr.NoSteamGames;
+        Element text = Text(line);
+        return games.Count == 0 ? text : new PanelStack(26f).Add(
+            text,
+            ScrollList(games.Select(g => Button(g.Label, () => JoinSteamGame(g, closeJoin))).ToList(), MaxSteamGames));
     }
 
     private static void JoinSteamGame(SteamGame game, Action closeJoin)
@@ -319,7 +304,7 @@ internal static class MultiplayerMenu
 
     // ---------- Settings: name, then the themed screens ----------
 
-    private static void OpenSettings() => Show("settings", (close, scene) =>
+    private static void OpenSettings() => Show("settings", (close, screen) =>
     {
         ModConfig cfg = ModConfig.Current;
         TextInput name = Input(cfg.PlayerName, ProtocolInfo.MaxNameLength);
@@ -334,7 +319,7 @@ internal static class MultiplayerMenu
             }
         }
         name.OnEnter += () => { SaveName(); return true; };
-        scene.OnDispose += SaveName; // leaving the screen keeps what was typed
+        screen.OnLeave(SaveName); // leaving the screen keeps what was typed
         return Stack(
             Title(Tr.SettingsSection),
             Row(Tr.NameField, Field(name)),
@@ -363,9 +348,7 @@ internal static class MultiplayerMenu
 
     // ---------- Interface: HUD elements of the mod, language, updates ----------
 
-    private static int languageChanges;
-
-    private static void OpenInterface() => Show("interface", (close, _) =>
+    private static void OpenInterface() => Show("interface", (close, screen) =>
     {
         ModConfig cfg = ModConfig.Current;
         string language = cfg.Language.Trim().ToLowerInvariant() is "en" or "fr" ? cfg.Language.Trim().ToLowerInvariant() : "auto";
@@ -384,12 +367,12 @@ internal static class MultiplayerMenu
             {
                 cfg.Language = language switch { "auto" => "en", "en" => "fr", _ => "auto" };
                 ModConfig.Save();
-                languageChanges++; // the screen rebuilds itself in the new language
+                screen.Refresh(); // rebuilt in the new language
             })),
             Check(Tr.CheckForUpdates, ModSettings.CheckForUpdates),
             Button(Tr.Back, close)
         );
-    }, () => languageChanges);
+    });
 
     private static string StatusText()
     {
@@ -403,27 +386,5 @@ internal static class MultiplayerMenu
             return Tr.StatusConnecting(c.ServerAddress);
         }
         return c.IsUserDisconnected || !c.HasTarget ? Tr.StatusDisconnected : Tr.StatusOffline;
-    }
-
-    private sealed class StatusUpdater(Label status) : IUpdate
-    {
-        private int tick;
-
-        public void Update()
-        {
-            if (++tick % 15 == 0)
-            {
-                string text = StatusText();
-                if (status.Text != text)
-                {
-                    status.Text = text;
-                }
-            }
-        }
-    }
-
-    private sealed class Ticker(Action tick) : IUpdate
-    {
-        public void Update() => tick();
     }
 }

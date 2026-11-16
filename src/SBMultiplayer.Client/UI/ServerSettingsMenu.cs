@@ -1,6 +1,7 @@
 using System.Text.Json;
 using BytingLib;
 using BytingLib.UI;
+using Microsoft.Xna.Framework;
 using SBMultiplayer.Client.Ghosts;
 using SBMultiplayer.Client.Net;
 using SBMultiplayer.Protocol;
@@ -9,60 +10,197 @@ using static SBMultiplayer.Client.UI.PopupMenu;
 namespace SBMultiplayer.Client.UI;
 
 /// <summary>
-/// Admin screens to change the server's match settings in game: "Mode and maps" and "Timings and points".
-/// Both start from the server's current settings; "Timings and points" only shows what the mode uses.
+/// Admin screens to change the server's match settings in game: "Mode and settings" (the game mode, then the
+/// timings and points this mode uses, on the same screen) and "Map rotation" (a list to reorder, with levels
+/// added by code). Both start from the server's current settings and send only what changed on "Apply".
 /// </summary>
 internal static class ServerSettingsMenu
 {
+    /// <summary>Rotation rows visible at once (the list scrolls beyond that).</summary>
+    private const int VisibleMaps = 7;
+
+    private static MultiplayerClient Client => MultiplayerClient.Instance;
+
     /// <summary>Modes both this mod and the server know (an older server may lack the newest ones).</summary>
-    private static IEnumerable<GameMode> Modes =>
-        GameModes.Known.Where(MultiplayerClient.Instance.ServerCapabilities.Supports);
-
-    public static void OpenModeAndMaps()
-    {
-        if (MultiplayerClient.Instance.ServerSettings == null)
-        {
-            Notifications.Warn(Tr.AdminNeedsConnection);
-            return;
-        }
-        Show("settings-mode", BuildModeAndMaps);
-    }
-
-    public static void OpenTimingsAndPoints()
-    {
-        if (MultiplayerClient.Instance.ServerSettings == null)
-        {
-            Notifications.Warn(Tr.AdminNeedsConnection);
-            return;
-        }
-        Show("settings-timings", BuildTimingsAndPoints);
-    }
+    private static IEnumerable<GameMode> Modes => GameModes.Known.Where(Client.ServerCapabilities.Supports);
 
     /// <summary>Deep copy of the server's settings, edited by the screen until "Apply".</summary>
-    private static MatchSettings WorkingCopy() =>
-        JsonSerializer.Deserialize(JsonSerializer.Serialize(MultiplayerClient.Instance.ServerSettings!, MatchSettings.JsonInfo), MatchSettings.JsonInfo)!;
+    private static MatchSettings Copy(MatchSettings settings) =>
+        JsonSerializer.Deserialize(JsonSerializer.Serialize(settings, MatchSettings.JsonInfo), MatchSettings.JsonInfo)!;
 
-    // ---------- Mode and maps ----------
-
-    private static Element BuildModeAndMaps(Action close, Scene scene)
+    private static bool ServerSettingsKnown()
     {
-        MatchSettings working = WorkingCopy();
-        MatchSettings baseline = WorkingCopy(); // only the differences are sent
-        var save = new ValueEvent<bool>(false);
-        var modeLabel = new Label(Tr.SettingsModeLabel(Tr.ModeName(working.Mode)), MenuWidth);
-        var modeDescription = new Label(Tr.ModeDescription(working.Mode), MenuWidth);
-        TextInput maps = Input(string.Join(", ", working.Maps.Select(GameAccess.MapKeyToCode)), 2000, MenuWidth - 40f);
-
-        var modeButtons = Modes.Select(mode => Button(Tr.ModeName(mode), () =>
+        if (Client.ServerSettings != null)
         {
-            working.Mode = mode;
-            modeLabel.Text = Tr.SettingsModeLabel(Tr.ModeName(mode));
-            modeDescription.Text = Tr.ModeDescription(mode);
-        })).ToArray();
+            return true;
+        }
+        Notifications.Warn(Tr.AdminNeedsConnection);
+        return false;
+    }
+
+    // ---------- Mode and settings ----------
+
+    /// <summary>What the admin is editing. Kept outside the screen: choosing another mode rebuilds it.</summary>
+    private sealed class MatchDraft(MatchSettings server)
+    {
+        public MatchSettings Baseline { get; } = Copy(server); // only the differences are sent
+        public MatchSettings Working { get; } = Copy(server);
+        public ValueEvent<bool> Save { get; } = new(false);
+        public ValueEvent<float> RoundSeconds { get; } = new((float)server.RoundSeconds);
+        public ValueEvent<float> ResultsSeconds { get; } = new((float)server.ResultsSeconds);
+        public ValueEvent<float> RoundsPerMap { get; } = new(server.RoundsPerMap);
+        public ValueEvent<float> FinishTimeout { get; } = new((float)server.FinishTimeoutSeconds);
+        public ValueEvent<float> PrepareTimeout { get; } = new((float)server.PrepareTimeoutSeconds);
+        public ValueEvent<float> Countdown { get; } = new((float)server.CountdownSeconds);
+        public ValueEvent<float> CupLimit { get; } = new(server.CupPointsLimit);
+        public ValueEvent<float> Eliminated { get; } = new(server.EliminatedPerRound);
+        public ValueEvent<float> MatchEnd { get; } = new((float)server.MatchEndSeconds);
+        public ValueEvent<float> HideSeconds { get; } = new((float)server.HideSeconds);
+        public ValueEvent<bool> Infection { get; } = new(server.Infection);
+        public ValueEvent<bool> DnfFillsQuota { get; } = new(server.DnfFillsQuota);
+        public string Points { get; set; } = string.Join(", ", server.PointsTable);
+    }
+
+    private static MatchDraft? matchDraft;
+
+    public static void OpenMatch()
+    {
+        if (ServerSettingsKnown())
+        {
+            matchDraft = new MatchDraft(Client.ServerSettings!);
+            Show("settings-match", BuildMatch);
+        }
+    }
+
+    private static Element BuildMatch(Action close, Screen screen)
+    {
+        MatchDraft d = matchDraft!;
+        MatchSettings working = d.Working;
+        GameMode mode = working.Mode;
+        bool synchronized = mode.IsSynchronized();
+        bool hideAndSeek = mode == GameMode.HideAndSeek;
+        bool elimination = mode == GameMode.Elimination;
+        bool rounds = mode != GameMode.Free;
+        bool canDnfQuota = Client.ServerCapabilities.Has(ProtocolInfo.Features.DnfFillsQuota);
+        TextInput points = Input(d.Points, 300);
+        points.OnTextInputChanged += text => d.Points = text;
+
+        void Apply()
+        {
+            var table = new List<int>();
+            foreach (string part in d.Points.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                if (!int.TryParse(part, out int p) || p < 0)
+                {
+                    Notifications.Warn(Tr.SettingsBadPoints);
+                    return;
+                }
+                table.Add(p);
+            }
+            working.PointsTable = table;
+            working.RoundSeconds = MathF.Round(d.RoundSeconds.Value);
+            working.ResultsSeconds = MathF.Round(d.ResultsSeconds.Value);
+            working.RoundsPerMap = (int)MathF.Round(d.RoundsPerMap.Value);
+            working.FinishTimeoutSeconds = MathF.Round(d.FinishTimeout.Value);
+            working.PrepareTimeoutSeconds = MathF.Round(d.PrepareTimeout.Value);
+            working.CountdownSeconds = MathF.Round(d.Countdown.Value);
+            working.CupPointsLimit = (int)MathF.Round(d.CupLimit.Value);
+            working.EliminatedPerRound = (int)MathF.Round(d.Eliminated.Value);
+            working.MatchEndSeconds = MathF.Round(d.MatchEnd.Value);
+            working.HideSeconds = MathF.Round(d.HideSeconds.Value);
+            working.Infection = d.Infection.Value;
+            working.DnfFillsQuota = d.DnfFillsQuota.Value;
+            Client.SendSettings(working, d.Baseline, d.Save.Value);
+            close();
+        }
+
+        // The chosen mode is highlighted; choosing another one shows its own settings below.
+        var modeButtons = Modes.Select(m => Button(Tr.ModeName(m), () =>
+        {
+            working.Mode = m;
+            screen.Refresh();
+        }, selected: m == mode)).ToArray();
+
+        return Stack(
+            Title(Tr.SettingsMatchTitle),
+            Buttons(modeButtons),
+            Text(Tr.ModeDescription(mode)),
+            // Only the settings used by the chosen mode.
+            hideAndSeek ? Slider(Tr.SettingsHideSeconds, d.HideSeconds, Seconds, 10f, 180f, 5f) : null,
+            rounds ? Slider(hideAndSeek ? Tr.SettingsHuntSeconds : synchronized ? Tr.SettingsTimeLimit : Tr.SettingsRoundSeconds, d.RoundSeconds, Seconds, 30f, 900f, 30f) : null,
+            rounds ? Slider(Tr.SettingsResultsSeconds, d.ResultsSeconds, Seconds, 5f, 60f, 5f) : null,
+            rounds ? Slider(Tr.SettingsMatchEnd, d.MatchEnd, Seconds, 5f, 60f, 5f) : null,
+            synchronized && !hideAndSeek ? Slider(Tr.SettingsFinishTimeout, d.FinishTimeout, Seconds, 5f, 60f, 5f) : null,
+            synchronized ? Slider(Tr.SettingsPrepareTimeout, d.PrepareTimeout, Seconds, 5f, 60f, 5f) : null,
+            synchronized ? Slider(Tr.SettingsCountdown, d.Countdown, Seconds, 1f, 10f, 1f) : null,
+            synchronized ? Slider(Tr.SettingsRoundsPerMap, d.RoundsPerMap, Whole, 1f, 10f, 1f) : null,
+            mode == GameMode.Cup ? Slider(Tr.SettingsCupLimit, d.CupLimit, Whole, 10f, 300f, 10f) : null,
+            elimination ? Slider(Tr.SettingsEliminatedPerRound, d.Eliminated, Whole, 1f, 5f, 1f) : null,
+            elimination && canDnfQuota ? Check(Tr.SettingsDnfFillsQuota, d.DnfFillsQuota) : null,
+            elimination && canDnfQuota ? Text(Tr.SettingsDnfFillsQuotaHint) : null,
+            hideAndSeek ? Check(Tr.SettingsInfection, d.Infection) : null,
+            rounds && !elimination && !hideAndSeek ? Row(Tr.SettingsPointsTable, Field(points)) : null,
+            mode != d.Baseline.Mode ? Text(Tr.SettingsRestartWarning) : null,
+            Check(Tr.SettingsSaveToFile, d.Save),
+            Buttons(Button(Tr.SettingsApply, Apply), Button(Tr.Back, close)));
+    }
+
+    // ---------- Map rotation ----------
+
+    private sealed class RotationDraft(MatchSettings server)
+    {
+        public MatchSettings Baseline { get; } = Copy(server);
+        public List<string> Maps { get; } = server.Maps.ToList();
+        public ValueEvent<bool> Save { get; } = new(false);
+        public string AddText { get; set; } = "";
+        public ScrollMemory Scroll { get; } = new();
+    }
+
+    private static RotationDraft? rotationDraft;
+
+    public static void OpenRotation()
+    {
+        if (ServerSettingsKnown())
+        {
+            rotationDraft = new RotationDraft(Client.ServerSettings!);
+            Show("settings-maps", BuildRotation);
+        }
+    }
+
+    private static Element BuildRotation(Action close, Screen screen)
+    {
+        RotationDraft d = rotationDraft!;
+        List<string> maps = d.Maps;
+        TextInput add = Input(d.AddText, 2000, WidthBeside(Tr.SettingsAddButton));
+        add.OnTextInputChanged += text => d.AddText = text;
+
+        // Adds the codes typed (or pasted) in the field; nothing is added if one of them is unknown.
+        bool AddTyped()
+        {
+            var keys = new List<string>();
+            foreach (string part in d.AddText.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                string? key = GameAccess.CodeToMapKey(part);
+                if (key == null)
+                {
+                    Notifications.Warn(Tr.SettingsUnknownMap(part));
+                    return false;
+                }
+                keys.Add(key);
+            }
+            if (keys.Count > 0)
+            {
+                maps.AddRange(keys);
+                d.AddText = "";
+                d.Scroll.ToEnd();
+                screen.Refresh();
+            }
+            return true;
+        }
 
         void AddCurrentMap()
         {
-            string current = MultiplayerClient.Instance.CurrentMapKey;
+            string current = Client.CurrentMapKey;
             if (current.StartsWith("l:", StringComparison.Ordinal))
             {
                 Notifications.Warn(Tr.SettingsLocalMap);
@@ -73,125 +211,58 @@ internal static class ServerSettingsMenu
                 Notifications.Warn(Tr.SettingsNoCurrentMap);
                 return;
             }
-            string code = GameAccess.MapKeyToCode(current);
-            maps.Text = maps.Text.Trim().Length == 0 ? code : $"{maps.Text.TrimEnd(' ', ',')}, {code}";
+            maps.Add(current);
+            d.Scroll.ToEnd();
+            screen.Refresh();
+        }
+
+        void Move(int from, int to)
+        {
+            (maps[from], maps[to]) = (maps[to], maps[from]);
+            screen.Refresh();
         }
 
         void Apply()
         {
-            var keys = new List<string>();
-            foreach (string part in maps.Text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            if (!AddTyped())
             {
-                string? key = GameAccess.CodeToMapKey(part);
-                if (key == null)
-                {
-                    Notifications.Warn(Tr.SettingsUnknownMap(part));
-                    return;
-                }
-                keys.Add(key);
+                return; // codes still in the field: they're part of the rotation, or the mistake is shown
             }
-            working.Maps = keys;
-            MultiplayerClient.Instance.SendSettings(working, baseline, save.Value);
+            MatchSettings working = Copy(d.Baseline);
+            working.Maps = maps.ToList();
+            Client.SendSettings(working, d.Baseline, d.Save.Value);
             close();
         }
 
+        add.OnEnter += () => { AddTyped(); return true; };
+
+        // One row per map: "3. A5 Name" then its buttons, aligned in columns.
+        float buttons = ButtonWidth(Tr.MoveUp) + ButtonWidth(Tr.MoveDown) + ButtonWidth(Tr.RemoveButton) + 3 * 22f;
+        float nameWidth = ScrollRowWidth - buttons;
+        var rows = maps.Select((key, i) => Line(
+            new Label(Fit($"{i + 1}. {GameAccess.DescribeMap(key)}", nameWidth), nameWidth) { Anchor = new Vector2(0f, 0.5f) },
+            Button(Tr.MoveUp, () => Move(i, i == 0 ? maps.Count - 1 : i - 1)),
+            Button(Tr.MoveDown, () => Move(i, i == maps.Count - 1 ? 0 : i + 1)),
+            Button(Tr.RemoveButton, () =>
+            {
+                maps.RemoveAt(i);
+                screen.Refresh();
+            }))).ToList();
+
         return Stack(
-            Title(Tr.SettingsModeAndMapsTitle),
-            Section(Tr.SettingsModeSection),
-            Buttons(modeButtons),
-            modeLabel,
-            modeDescription,
-            Section(Tr.SettingsMapsSection),
-            Text(Tr.SettingsMapsField),
-            Field(maps),
-            Button(Tr.SettingsAddCurrentMap, AddCurrentMap),
+            Title(Tr.SettingsMapsSection),
+            maps.Count == 0 ? Text(Tr.SettingsNoMaps) : ScrollList(rows, VisibleMaps, screen, d.Scroll),
+            Row(Tr.SettingsAddMaps, Line(Field(add), Button(Tr.SettingsAddButton, () => AddTyped()))),
+            Text(Tr.SettingsMapsHint),
+            Buttons(
+                Button(Tr.SettingsAddCurrentMap, AddCurrentMap),
+                maps.Count > 0 ? Button(Tr.RemoveAllButton, () =>
+                {
+                    maps.Clear();
+                    screen.Refresh();
+                }) : null),
             Text(Tr.SettingsRestartWarning),
-            Check(Tr.SettingsSaveToFile, save),
+            Check(Tr.SettingsSaveToFile, d.Save),
             Buttons(Button(Tr.SettingsApply, Apply), Button(Tr.Back, close)));
-    }
-
-    // ---------- Timings and points ----------
-
-    private static Element BuildTimingsAndPoints(Action close, Scene scene)
-    {
-        MatchSettings working = WorkingCopy();
-        MatchSettings baseline = WorkingCopy(); // only the differences are sent
-        GameMode mode = working.Mode;
-        bool synchronized = mode.IsSynchronized();
-        var save = new ValueEvent<bool>(false);
-
-        var roundSeconds = new ValueEvent<float>((float)working.RoundSeconds);
-        var resultsSeconds = new ValueEvent<float>((float)working.ResultsSeconds);
-        var roundsPerMap = new ValueEvent<float>(working.RoundsPerMap);
-        var finishTimeout = new ValueEvent<float>((float)working.FinishTimeoutSeconds);
-        var prepareTimeout = new ValueEvent<float>((float)working.PrepareTimeoutSeconds);
-        var countdown = new ValueEvent<float>((float)working.CountdownSeconds);
-        var cupLimit = new ValueEvent<float>(working.CupPointsLimit);
-        var eliminated = new ValueEvent<float>(working.EliminatedPerRound);
-        var matchEnd = new ValueEvent<float>((float)working.MatchEndSeconds);
-        var hideSeconds = new ValueEvent<float>((float)working.HideSeconds);
-        var infection = new ValueEvent<bool>(working.Infection);
-        var dnfFillsQuota = new ValueEvent<bool>(working.DnfFillsQuota);
-        bool canDnfQuota = MultiplayerClient.Instance.ServerCapabilities.Has(ProtocolInfo.Features.DnfFillsQuota);
-        bool hideAndSeek = mode == GameMode.HideAndSeek;
-        TextInput points = Input(string.Join(", ", working.PointsTable), 300);
-
-        void Apply()
-        {
-            var table = new List<int>();
-            foreach (string part in points.Text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-            {
-                if (!int.TryParse(part, out int p) || p < 0)
-                {
-                    Notifications.Warn(Tr.SettingsBadPoints);
-                    return;
-                }
-                table.Add(p);
-            }
-            working.PointsTable = table;
-            working.RoundSeconds = MathF.Round(roundSeconds.Value);
-            working.ResultsSeconds = MathF.Round(resultsSeconds.Value);
-            working.RoundsPerMap = (int)MathF.Round(roundsPerMap.Value);
-            working.FinishTimeoutSeconds = MathF.Round(finishTimeout.Value);
-            working.PrepareTimeoutSeconds = MathF.Round(prepareTimeout.Value);
-            working.CountdownSeconds = MathF.Round(countdown.Value);
-            working.CupPointsLimit = (int)MathF.Round(cupLimit.Value);
-            working.EliminatedPerRound = (int)MathF.Round(eliminated.Value);
-            working.MatchEndSeconds = MathF.Round(matchEnd.Value);
-            working.HideSeconds = MathF.Round(hideSeconds.Value);
-            working.Infection = infection.Value;
-            working.DnfFillsQuota = dnfFillsQuota.Value;
-            MultiplayerClient.Instance.SendSettings(working, baseline, save.Value);
-            close();
-        }
-
-        if (mode == GameMode.Free)
-        {
-            return Stack(Title(Tr.SettingsTimingsTitle), Text(Tr.SettingsFreeModeNothing), Button(Tr.Back, close));
-        }
-
-        // Only the settings used by the current mode.
-        return Stack(
-            Title(Tr.SettingsTimingsTitle),
-            Text(Tr.SettingsModeLabel(Tr.ModeName(mode))),
-            Section(Tr.SettingsDurationsSection),
-            hideAndSeek ? Slider(Tr.SettingsHideSeconds, hideSeconds, Seconds, 10f, 180f, 5f) : null,
-            Slider(hideAndSeek ? Tr.SettingsHuntSeconds : synchronized ? Tr.SettingsTimeLimit : Tr.SettingsRoundSeconds, roundSeconds, Seconds, 30f, 900f, 30f),
-            Slider(Tr.SettingsResultsSeconds, resultsSeconds, Seconds, 5f, 60f, 5f),
-            Slider(Tr.SettingsMatchEnd, matchEnd, Seconds, 5f, 60f, 5f),
-            synchronized && !hideAndSeek ? Slider(Tr.SettingsFinishTimeout, finishTimeout, Seconds, 5f, 60f, 5f) : null,
-            synchronized ? Slider(Tr.SettingsPrepareTimeout, prepareTimeout, Seconds, 5f, 60f, 5f) : null,
-            synchronized ? Slider(Tr.SettingsCountdown, countdown, Seconds, 1f, 10f, 1f) : null,
-            Section(Tr.SettingsMatchSection),
-            synchronized ? Slider(Tr.SettingsRoundsPerMap, roundsPerMap, Whole, 1f, 10f, 1f) : null,
-            mode == GameMode.Cup ? Slider(Tr.SettingsCupLimit, cupLimit, Whole, 10f, 300f, 10f) : null,
-            mode == GameMode.Elimination ? Slider(Tr.SettingsEliminatedPerRound, eliminated, Whole, 1f, 5f, 1f) : null,
-            mode == GameMode.Elimination && canDnfQuota ? Check(Tr.SettingsDnfFillsQuota, dnfFillsQuota) : null,
-            mode == GameMode.Elimination && canDnfQuota ? Text(Tr.SettingsDnfFillsQuotaHint) : null,
-            hideAndSeek ? Check(Tr.SettingsInfection, infection) : null,
-            mode is not (GameMode.Elimination or GameMode.HideAndSeek) ? Row(Tr.SettingsPointsTable, Field(points)) : null,
-            Check(Tr.SettingsSaveToFile, save),
-            Buttons(Button(Tr.SettingsApply, Apply), Button(Tr.Back, close))
-        );
     }
 }
