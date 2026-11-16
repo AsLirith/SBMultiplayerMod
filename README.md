@@ -60,12 +60,9 @@ Works on Linux (native version of the game) and Windows.
 
 ## Getting started
 
-Press **F8** to open the multiplayer menu, then either:
-- **Join a Steam friend** who's hosting: one click, nothing to set up;
-- **Public games**: games anyone can join;
-- **Join / Create SBLB Lobby**: a lobby of the community website, with its code;
-- **Host a game**: your own game, you're its admin (choose the mode and maps in F8 > Admin);
-- or enter a **server address** (`address:port`) and click **Connect**.
+Press **F8** to open the multiplayer menu (F8 again closes it), then:
+- **Join a game**: the list shows your Steam friends who are hosting and the public games (one click, nothing to set up); below it, type an **SBLB lobby code** (a lobby of the community website) or a **server address** (`address:port`). If the game has a password, you're asked for it;
+- **Host a game**: your own game on your PC, or an SBLB lobby with a code to share. You're its admin (choose the mode and maps in F8 > Admin).
 
 | Key | Action |
 |---|---|
@@ -86,7 +83,7 @@ Every key of the mod can be changed in **F8 > Keys**.
 - **Nothing happens when pressing F8**: check the launch option (the path must point to `SBMultiplayer.Client.dll`; on Windows, no space before `&&`).
 - **"Incompatible mod version"**: you or the server runs a version older than 0.19.0. Update to the latest release.
 - **The mod says it's inactive after a game update**: the game changed something the mod relies on. Wait for a mod update (the mod tells you when one is out).
-- **Can't connect to a friend's server**: use Steam P2P (F8 > Join a Steam friend), or see the network section of the [hosting guide](docs/hosting.md).
+- **Can't connect to a friend's server**: use Steam P2P (F8 > Join a game), or see the network section of the [hosting guide](docs/hosting.md).
 - **Anything else**: open an [issue](../../issues) with your `SBMultiplayer/SBMultiplayer.log` file.
 
 ## Hosting a server

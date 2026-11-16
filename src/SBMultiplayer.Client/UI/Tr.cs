@@ -38,21 +38,43 @@ internal static class Tr
     // ---------- Menu ----------
     public static string MenuTitle(string version) => T($"Multiplayer  (SBMultiplayer v{version})", $"Multijoueur  (SBMultiplayer v{version})");
     public static string ServerField => T("Server (address:port)", "Serveur (adresse:port)");
-    public static string SblbLobbyButton => T("Join / Create SBLB Lobby", "Rejoindre / Créer un lobby SBLB");
-    public static string SblbLobbyTitle => T("SBLB lobbies", "Lobbys SBLB");
-    public static string SblbLobbyHint => T(
-        "Lobbies hosted by the community website (sblb.thefanclub.cc): nobody opens a port, share the code with your friends.",
-        "Lobbys hébergés par le site communautaire (sblb.thefanclub.cc) : personne n'ouvre de port, partage le code avec tes amis.");
-    public static string RoomCodeField => T("Lobby code", "Code du lobby");
+    public static string RoomCodeField => T("SBLB lobby code", "Code de lobby SBLB");
     public static string RoomPasswordField => T("Password (optional)", "Mot de passe (facultatif)");
-    public static string JoinRoomButton => T("Join a lobby", "Rejoindre un lobby");
     public static string CreateRoomButton => T("Create a lobby", "Créer un lobby");
-    public static string CreateRoomHint => T("Creates a lobby with a code to share. You are its admin.", "Crée un lobby avec un code à partager. Tu en es l'admin.");
     public static string RoomCreated(string code) => T($"Lobby created: {code}. Share this code.", $"Lobby créé : {code}. Partage ce code.");
     public static string RoomCreateFailed(string error) => T($"Could not create a lobby ({error})", $"Impossible de créer un lobby ({error})");
     public static string NoRoomChosen => T("Type a lobby code first", "Entre d'abord un code de lobby");
     public static string RoomNotFound => T("No lobby has that code", "Aucun lobby ne porte ce code");
     public static string RateLimited => T("Too many attempts, wait a minute", "Trop de tentatives, attends une minute");
+    public static string JoinGameButton => T("Join a game", "Rejoindre une partie");
+    public static string JoinButton => T("Join", "Rejoindre");
+    public static string SteamGamesHint => T("Steam friends and public games: click one to join it through Steam (no port to open).",
+        "Amis Steam et parties publiques : clique sur une partie pour la rejoindre via Steam (aucun port à ouvrir).");
+    public static string NoSteamGames => T("No Steam friend is hosting and there is no public game right now.",
+        "Aucun ami Steam n'héberge et il n'y a aucune partie publique pour le moment.");
+    public static string FriendTag => T("friend", "ami");
+    public static string NoServerAddress => T("Type a server address first", "Entre d'abord une adresse de serveur");
+    public static string RoomCodeLine(string code) => T($"SBLB lobby code: {code} (share it with your friends)", $"Code du lobby SBLB : {code} (partage-le avec tes amis)");
+    public static string CreateRoomHint => T(
+        "Or create an SBLB lobby, hosted by the community website (sblb.thefanclub.cc): nobody opens a port, you get a code to share and you are its admin.",
+        "Ou crée un lobby SBLB, hébergé par le site communautaire (sblb.thefanclub.cc) : personne n'ouvre de port, tu reçois un code à partager et tu en es l'admin.");
+    public static string PasswordTitle => T("Password", "Mot de passe");
+    public static string PasswordNeeded(string server) => T($"{server} is protected by a password.", $"{server} est protégé par un mot de passe.");
+    public static string Cancel => T("Cancel", "Annuler");
+    public static string Close => T("Close", "Fermer");
+    public static string NameHint => T("Your name changes at the next connection.", "Ton pseudo change à la prochaine connexion.");
+    public static string LanguageField => T("Language", "Langue");
+    public static string LanguageName(string language) => language switch
+    {
+        "en" => "English",
+        "fr" => "Français",
+        _ => T("Auto (the game's)", "Auto (celle du jeu)"),
+    };
+    public static string CheckForUpdates => T("Tell me about mod updates", "Signaler les mises à jour du mod");
+    public static string GeneralSection => T("General", "Général");
+    public static string ConfirmResetMatch => T("Reset every player's match points?", "Remettre à zéro les points de match de tous les joueurs ?");
+    public static string ConfirmKick(string name) => T($"Kick {name} from the server?", $"Expulser {name} du serveur ?");
+    public static string ConfirmStopHosting => T("Stop your hosted game? Every player will be disconnected.", "Arrêter ta partie hébergée ? Tous les joueurs seront déconnectés.");
     public static string NameField => T("Name (empty = Steam name)", "Pseudo (vide = pseudo Steam)");
     public static string Connect => T("Connect", "Se connecter");
     public static string Disconnect => T("Disconnect", "Se déconnecter");
@@ -102,7 +124,7 @@ internal static class Tr
     public static string StatusConnected(string server, string name, int others) =>
         T($"Connected to {server} as {name} ({Players(others)})", $"Connecté à {server} en tant que {name} ({Players(others)})");
     public static string StatusConnecting(string server) => T($"Connecting to {server}...", $"Connexion à {server}...");
-    public static string StatusDisconnected => T("Disconnected", "Déconnecté");
+    public static string StatusDisconnected => T("Not connected", "Non connecté");
     public static string StatusOffline => T("Offline - retrying automatically", "Hors ligne - nouvelle tentative automatique");
 
     // ---------- Round panel ----------
@@ -139,7 +161,7 @@ internal static class Tr
     public static string MapLoadFailedVersion(string key) => T($"Could not load map {key} (different game version?)", $"Impossible de charger la map {key} (version du jeu différente ?)");
     public static string MapLoadFailed(string key) => T($"Could not load map {key}", $"Impossible de charger la map {key}");
     public static string MapNotSupported(string key) => T($"Map not supported by this mod version: {key}", $"Map non supportée par cette version du mod : {key}");
-    public static string BadPassword => T("Wrong server password: set it in the F8 menu, then Connect", "Mot de passe du serveur incorrect : renseigne-le dans le menu F8, puis Se connecter");
+    public static string BadPassword => T("Wrong or missing server password", "Mot de passe du serveur incorrect ou manquant");
     public static string Kicked => T("You were kicked from the server", "Tu as été expulsé du serveur");
     public static string AdminLoginFailed => T("Wrong admin password", "Mot de passe admin incorrect");
 
@@ -228,7 +250,6 @@ internal static class Tr
     public static string SettingsBadPoints => T("Points: whole numbers separated by commas", "Points : des nombres entiers séparés par des virgules");
 
     // ---------- Menus: sections and sub-screens ----------
-    public static string ConnectionSection => T("Connection", "Connexion");
     public static string SettingsSection => T("Settings", "Réglages");
 
     // ---------- Keys ----------
@@ -355,14 +376,9 @@ internal static class Tr
           $"SBMultiplayer {version} est disponible : télécharge-la sur la page GitHub du mod (releases)");
 
     // ---------- Public games ----------
-    public static string PublicGamesButton => T("Public games", "Parties publiques");
-    public static string PublicGamesHint => T("Games hosted from the game and listed publicly. Click one to join it through Steam (no port to open). Password: enter it in the F8 Password field first.",
-        "Parties hébergées depuis le jeu et rendues publiques. Clique sur l'une d'elles pour la rejoindre via Steam (aucun port à ouvrir). Mot de passe : renseigne-le d'abord dans le champ Mot de passe de F8.");
     public static string PublicGamesSearching => T("Searching...", "Recherche...");
-    public static string NoPublicGames => T("No public game right now. Host one: F8 > Host a game, with \"Public game (anyone on Steam)\" ticked.",
-        "Aucune partie publique pour le moment. Héberges-en une : F8 > Héberger une partie, avec \"Partie publique (tout Steam)\" coché.");
     public static string PublicGameCheckbox => T("Public game (anyone on Steam)", "Partie publique (tout Steam)");
-    public static string PublicListingOn => T("Your game is now listed in F8 > Public games", "Ta partie apparaît maintenant dans F8 > Parties publiques");
+    public static string PublicListingOn => T("Your game is now listed in everyone's F8 > Join a game", "Ta partie apparaît maintenant chez tout le monde dans F8 > Rejoindre une partie");
     public static string PublicListingFailed => T("Could not list your game publicly (Steam lobbies unavailable)", "Impossible de rendre ta partie publique (lobbies Steam indisponibles)");
     public static string PasswordTag => T("password", "mot de passe");
     public static string OtherVersionWith(string version) => T($"other mod version ({version})", $"autre version du mod ({version})");
@@ -446,7 +462,6 @@ internal static class Tr
     // ---------- Host a game ----------
     public static string HostSection => T("Host a game", "Héberger une partie");
     public static string HostManageButton => T("My hosted game", "Ma partie hébergée");
-    public static string PlayWithFriendsSection => T("Play with friends", "Jouer entre amis");
     public static string HostPortLabel => T("UDP port", "Port UDP");
     public static string HostButton => T("Host", "Héberger");
     public static string HostStop => T("Stop hosting", "Arrêter la partie");
@@ -461,12 +476,8 @@ internal static class Tr
 
     // ---------- Steam P2P ----------
     public static string SteamHostCheckbox => T("Steam friends join via P2P (no port)", "Amis Steam via P2P (sans port)");
-    public static string SteamHostVisible => T("Your Steam friends can join you: F8 > Join a Steam friend", "Tes amis Steam peuvent te rejoindre : F8 > Rejoindre un ami Steam");
+    public static string SteamHostVisible => T("Your Steam friends can join you: F8 > Join a game", "Tes amis Steam peuvent te rejoindre : F8 > Rejoindre une partie");
     public static string SteamUnavailable => T("Steam P2P unavailable (see SBMultiplayer.log)", "P2P Steam indisponible (voir SBMultiplayer.log)");
-    public static string JoinFriendSection => T("Join a Steam friend", "Rejoindre un ami Steam");
-    public static string JoinFriendButton => T("Friends hosting a game", "Amis qui hébergent une partie");
-    public static string JoinFriendHint => T("Friends playing STUNTBOOST and hosting a game with the mod:", "Amis qui jouent à STUNTBOOST et hébergent une partie avec le mod :");
-    public static string NoFriendHosting => T("No friend is hosting a game right now", "Aucun ami n'héberge de partie pour le moment");
     public static string OtherVersion => T("other mod version", "autre version du mod");
     public static string Refresh => T("Refresh", "Actualiser");
     public static string JoiningFriend(string name) => T($"Joining {name}'s game through Steam...", $"Connexion à la partie de {name} via Steam...");
@@ -477,7 +488,6 @@ internal static class Tr
     public static string Points(int n) => T($"{n} pts", $"{n} pts");
 
     // ---------- Admin ----------
-    public static string PasswordField => T("Server password", "Mot de passe du serveur");
     public static string AdminTitle => T("Admin", "Admin");
     public static string AdminNeedsConnection => T("Connect to a server to use the admin panel", "Connecte-toi à un serveur pour utiliser le panneau admin");
     public static string AdminPasswordField => T("Admin password", "Mot de passe admin");

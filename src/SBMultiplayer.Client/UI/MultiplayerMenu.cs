@@ -8,16 +8,39 @@ using static SBMultiplayer.Client.UI.PopupMenu;
 namespace SBMultiplayer.Client.UI;
 
 /// <summary>
-/// F8 menu: connection (server, password, name) and links to the "Display", "Interface" and "Admin" screens.
-/// Each screen stays short; settings apply immediately and are saved in SBMultiplayer.json.
+/// F8 menu. The main screen is a hub: status, the actions of the current game (when connected), then
+/// "Join a game", "Host a game" and "Settings". It only shows what makes sense right now and rebuilds itself
+/// when the connection state changes. Settings apply immediately and are saved in SBMultiplayer.json.
 /// </summary>
 internal static class MultiplayerMenu
 {
+    /// <summary>Steam games shown in "Join a game" (the rest is summed up in one line).</summary>
+    private const int MaxSteamGames = 6;
+
     public static string Version => typeof(MultiplayerMenu).Assembly.GetName().Version?.ToString(3) ?? "?";
 
-    public static void Open() => Show("main", BuildMain);
+    private static MultiplayerClient Client => MultiplayerClient.Instance;
 
-    // ---------- Main screen: connection ----------
+    public static void Open() => Show("main", BuildMain, HubState);
+
+    // ---------- Main screen: hub ----------
+
+    private static bool RoundJoinable =>
+        Client.IsReady && Client.Round.Current.Info.Phase != RoundPhase.Free && !Client.IsOnRoundMap;
+
+    /// <summary>Something to stop: a connection, an attempt or the automatic retries (a hosted game is stopped from its own screen).</summary>
+    private static bool CanDisconnect => !HostedServer.IsRunning && !Client.IsUserDisconnected && Client.HasTarget;
+
+    /// <summary>Everything the hub's content depends on: it's rebuilt when this changes.</summary>
+    private static int HubState() =>
+        (Client.IsReady ? 1 : 0)
+        | (Client.IsSpectating ? 2 : 0)
+        | (HostedServer.IsRunning ? 4 : 0)
+        | (CanDisconnect ? 8 : 0)
+        | (RoundJoinable ? 16 : 0)
+        | (Client.IsReady && Client.RoomCode != null ? 32 : 0)
+        | (UpdateCheck.NewerVersion != null ? 64 : 0)
+        | (Tr.French ? 128 : 0);
 
     private static Element BuildMain(Action close, Scene scene)
     {
@@ -25,70 +48,126 @@ internal static class MultiplayerMenu
         var status = new Label(StatusText(), MenuWidth);
         scene.Add(new StatusUpdater(status));
 
-        TextInput server = Input(cfg.Server, 80);
-        TextInput password = Input(cfg.ServerPassword, 64);
-        TextInput name = Input(cfg.PlayerName, ProtocolInfo.MaxNameLength);
-
-        void ApplyAndConnect()
-        {
-            cfg.Server = server.Text.Trim();
-            cfg.ServerPassword = password.Text;
-            cfg.PlayerName = name.Text.Trim();
-            ModConfig.ForgetEnvironmentOverride();
-            ModConfig.Save();
-            MultiplayerClient.Instance.Connect();
-        }
-        foreach (TextInput input in new[] { server, password, name })
-        {
-            input.OnEnter += () => { ApplyAndConnect(); return true; };
-        }
-
         return Stack(
             Title(Tr.MenuTitle(Version)),
             UpdateCheck.NewerVersion is string newer ? Text(Tr.UpdateAvailable(newer)) : null,
             status,
-            Section(Tr.ConnectionSection),
-            Row(Tr.ServerField, Field(server)),
-            Row(Tr.PasswordField, Field(password)),
-            Row(Tr.NameField, Field(name)),
+            Client.IsReady && Client.RoomCode is string room ? Text(Tr.RoomCodeLine(room)) : null,
+            // The current game.
+            Client.IsReady
+                ? Buttons(
+                    RoundJoinable ? Button(Tr.JoinRound, () =>
+                    {
+                        CloseAll();
+                        Client.RejoinRound();
+                    }) : null,
+                    Button(Client.IsSpectating ? Tr.PlayButton : Tr.SpectateButton, () =>
+                    {
+                        CloseAll();
+                        Client.SetSpectating(!Client.IsSpectating);
+                    }),
+                    Button(Tr.AdminTitle, AdminMenu.Open))
+                : null,
             Buttons(
-                Button(Tr.Connect, ApplyAndConnect),
-                Button(Tr.Disconnect, () => MultiplayerClient.Instance.Disconnect()),
-                Button(Tr.JoinRound, () =>
-                {
-                    close();
-                    MultiplayerClient.Instance.RejoinRound();
-                }),
-                Button(MultiplayerClient.Instance.IsSpectating ? Tr.PlayButton : Tr.SpectateButton, () =>
-                {
-                    close();
-                    MultiplayerClient.Instance.SetSpectating(!MultiplayerClient.Instance.IsSpectating);
-                })),
-            Section(Tr.PlayWithFriendsSection),
-            Buttons(
+                Button(Tr.JoinGameButton, OpenJoin),
                 Button(HostedServer.IsRunning ? Tr.HostManageButton : Tr.HostSection, OpenHost),
-                SteamP2P.Available ? Button(Tr.JoinFriendSection, OpenFriends) : null,
-                SteamP2P.Available ? Button(Tr.PublicGamesButton, OpenPublicGames) : null,
-                Button(Tr.SblbLobbyButton, OpenSblbLobby)),
-            Section(Tr.SettingsSection),
-            Buttons(
-                Button(Tr.DisplayTitle, OpenDisplay),
-                Button(Tr.InterfaceTitle, OpenInterface),
-                Button(Tr.KeysTitle, KeyBindings.Open),
-                Button(Tr.AdminTitle, AdminMenu.Open)),
+                Button(Tr.SettingsSection, OpenSettings),
+                CanDisconnect ? Button(Tr.Disconnect, Client.Disconnect) : null),
             Text(Tr.KeysHint(Tr.KeyName(cfg.MenuKey), Tr.KeyName(cfg.RejoinKey), Tr.KeyName(cfg.ChatKey), Tr.KeyName(cfg.ScoreboardKey))),
-            Button(Tr.Back, close));
+            Button(Tr.Close, close));
     }
 
-    // ---------- SBLB lobbies (rooms on the community website, through its WebSocket) ----------
+    // ---------- Join a game: Steam games (friends, public), SBLB lobby code, server address ----------
 
-    private static void OpenSblbLobby() => Show("sblb", (close, _) =>
+    // What the player is typing survives the screen's rebuilds (the Steam list arrives a moment after it opens).
+    private static string joinCodeDraft = "";
+    private static string joinServerDraft = "";
+    private static int joinRefreshes;
+
+    private sealed record SteamGame(ulong HostId, string Name, string Label, bool HasPassword);
+
+    private static void OpenJoin()
     {
-        TextInput code = Input("", 16);
-        TextInput joinPassword = Input("", 64);
-        TextInput createPassword = Input("", 64);
+        joinCodeDraft = ModConfig.Current.LastRoomCode;
+        joinServerDraft = ModConfig.Current.Server;
+        if (SteamP2P.Available)
+        {
+            SteamLobby.Refresh();
+        }
+        Show("join", BuildJoin, JoinSignature);
+    }
 
-        void Join()
+    /// <summary>Changes when the list of public games really changes (not at every search), or on "Refresh".</summary>
+    private static int JoinSignature()
+    {
+        var hash = new HashCode();
+        hash.Add(joinRefreshes);
+        foreach (SteamLobby.PublicGame g in SteamLobby.Games)
+        {
+            hash.Add(g.HostId);
+            hash.Add(g.Players);
+            hash.Add(g.MapKey);
+            hash.Add(g.Mode);
+        }
+        return hash.ToHashCode();
+    }
+
+    /// <summary>Friends hosting a game first (with their public listing's details if they have one), then the other public games.</summary>
+    private static List<SteamGame> SteamGames()
+    {
+        var games = new List<SteamGame>();
+        var publicGames = SteamLobby.Games;
+        var friendIds = new HashSet<ulong>();
+        foreach (SteamP2P.HostingFriend f in SteamP2P.FriendsHosting())
+        {
+            friendIds.Add(f.SteamId);
+            SteamLobby.PublicGame listed = publicGames.FirstOrDefault(g => g.HostId == f.SteamId);
+            string label = listed.HostId != 0 ? DescribeGame(listed)
+                : f.SameVersion ? f.Name
+                : $"{f.Name} - {Tr.OtherVersion}";
+            games.Add(new SteamGame(f.SteamId, f.Name, $"{label} - {Tr.FriendTag}", listed.HostId != 0 && listed.HasPassword));
+        }
+        games.AddRange(publicGames.Where(g => !friendIds.Contains(g.HostId))
+            .Select(g => new SteamGame(g.HostId, g.Name, DescribeGame(g), g.HasPassword)));
+        return games;
+    }
+
+    private static string SteamLine(int games) =>
+        games > 0 ? Tr.SteamGamesHint
+        : SteamLobby.Searching ? Tr.PublicGamesSearching
+        : Tr.NoSteamGames;
+
+    private static Element BuildJoin(Action close, Scene scene)
+    {
+        TextInput code = Input(joinCodeDraft, 16, WidthBeside(Tr.JoinButton));
+        TextInput server = Input(joinServerDraft, 80, WidthBeside(Tr.Connect));
+        var items = new List<Element?> { Title(Tr.JoinGameButton) };
+
+        Label? steamLine = null;
+        int steamCount = 0;
+        if (SteamP2P.Available)
+        {
+            List<SteamGame> games = SteamGames();
+            steamCount = games.Count;
+            steamLine = new Label(SteamLine(steamCount), MenuWidth);
+            items.Add(steamLine);
+            items.AddRange(games.Take(MaxSteamGames).Select(g => Button(g.Label, () => JoinSteamGame(g, close))));
+            if (games.Count > MaxSteamGames)
+            {
+                items.Add(Text(Tr.AndMore(games.Count - MaxSteamGames)));
+            }
+        }
+        scene.Add(new Ticker(() =>
+        {
+            joinCodeDraft = code.Text;
+            joinServerDraft = server.Text;
+            if (steamLine != null && SteamLine(steamCount) is string line && steamLine.Text != line)
+            {
+                steamLine.Text = line;
+            }
+        }));
+
+        void JoinLobby()
         {
             string c = code.Text.Trim();
             if (c == "")
@@ -97,30 +176,79 @@ internal static class MultiplayerMenu
                 return;
             }
             close();
-            MultiplayerClient.Instance.JoinRoom(c, joinPassword.Text);
+            Client.JoinRoom(c, null); // a protected lobby refuses: the password is asked then
         }
 
-        void Create()
+        void ConnectTo(string address)
         {
+            if (address.Trim() == "")
+            {
+                Notifications.Warn(Tr.NoServerAddress);
+                return;
+            }
             close();
-            MultiplayerClient.Instance.CreateRoom(createPassword.Text);
+            Client.ConnectTo(address);
         }
 
-        code.OnEnter += () => { Join(); return true; };
-        joinPassword.OnEnter += () => { Join(); return true; };
-        createPassword.OnEnter += () => { Create(); return true; };
+        code.OnEnter += () => { JoinLobby(); return true; };
+        server.OnEnter += () => { ConnectTo(server.Text); return true; };
+
+        items.Add(Row(Tr.RoomCodeField, Line(Field(code), Button(Tr.JoinButton, JoinLobby))));
+        items.Add(Row(Tr.ServerField, Line(Field(server), Button(Tr.Connect, () => ConnectTo(server.Text)))));
+        var recent = ModConfig.Current.RecentServers
+            .Where(r => !r.Equals(joinServerDraft.Trim(), StringComparison.OrdinalIgnoreCase))
+            .Select(r => Button(r, () => ConnectTo(r)))
+            .ToArray();
+        if (recent.Length > 0)
+        {
+            items.Add(Buttons(recent));
+        }
+        items.Add(Buttons(
+            SteamP2P.Available ? Button(Tr.Refresh, () =>
+            {
+                joinRefreshes++;
+                SteamLobby.Refresh();
+            }) : null,
+            Button(Tr.Back, close)));
+        return Stack(items.ToArray());
+    }
+
+    private static void JoinSteamGame(SteamGame game, Action closeJoin)
+    {
+        void Join(string? password)
+        {
+            closeJoin();
+            Client.JoinFriend(game.HostId, game.Name, password);
+        }
+        if (game.HasPassword)
+        {
+            AskPassword(Tr.PasswordNeeded(game.Name), Join);
+        }
+        else
+        {
+            Join(null); // an unlisted friend's game may still refuse: the password is asked then
+        }
+    }
+
+    /// <summary>Asks for the password of a protected game (known from its listing, or after a refusal).</summary>
+    public static void AskPassword(string message, Action<string> onOk) => Show("password", (close, _) =>
+    {
+        TextInput password = Input("", 64);
+        void Ok()
+        {
+            string text = password.Text;
+            close();
+            onOk(text);
+        }
+        password.OnEnter += () => { Ok(); return true; };
         return Stack(
-            Title(Tr.SblbLobbyTitle),
-            Text(Tr.SblbLobbyHint),
-            Row(Tr.RoomCodeField, Field(code)),
-            Row(Tr.RoomPasswordField, Field(joinPassword)),
-            Button(Tr.JoinRoomButton, Join),
-            Text(Tr.CreateRoomHint),
-            Row(Tr.RoomPasswordField, Field(createPassword)),
-            Buttons(Button(Tr.CreateRoomButton, Create), Button(Tr.Back, close)));
+            Title(Tr.PasswordTitle),
+            Text(message),
+            Row(Tr.PasswordTitle, Field(password)),
+            Buttons(Button(Tr.Connect, Ok), Button(Tr.Cancel, close)));
     });
 
-    // ---------- Host a game ----------
+    // ---------- Host a game: on this PC, or an SBLB lobby on the community website ----------
 
     private static void OpenHost() => Show("host", (close, _) => Stack(Title(Tr.HostSection), BuildHostRow(close), Button(Tr.Back, close)));
 
@@ -134,13 +262,14 @@ internal static class MultiplayerMenu
                 Text(Tr.HostAddresses(addresses.Count > 0 ? string.Join(", ", addresses) : "?", HostedServer.Port)),
                 ModConfig.Current.SteamP2PHost && SteamP2P.Available ? Text(Tr.SteamHostVisible) : null,
                 SteamP2P.IsHosting ? Check(Tr.PublicGameCheckbox, ModSettings.PublicGame) : null,
-                Button(Tr.HostStop, () =>
+                Button(Tr.HostStop, () => Confirm(Tr.ConfirmStopHosting, Tr.HostStop, () =>
                 {
                     close();
-                    MultiplayerClient.Instance.StopHosting();
-                }));
+                    Client.StopHosting();
+                })));
         }
         TextInput port = Input(ModConfig.Current.HostPort.ToString(), 5, 300f);
+        TextInput lobbyPassword = Input("", 64, WidthBeside(Tr.CreateRoomButton));
         void Host()
         {
             if (!int.TryParse(port.Text.Trim(), out int p) || p < 1 || p > 65535)
@@ -151,59 +280,21 @@ internal static class MultiplayerMenu
             ModConfig.Current.HostPort = p;
             ModConfig.Save();
             close();
-            MultiplayerClient.Instance.HostGame(p);
+            Client.HostGame(p);
+        }
+        void CreateLobby()
+        {
+            close();
+            Client.CreateRoom(lobbyPassword.Text);
         }
         port.OnEnter += () => { Host(); return true; };
+        lobbyPassword.OnEnter += () => { CreateLobby(); return true; };
         return Stack(
             Row(Tr.HostPortLabel, Line(Field(port), Button(Tr.HostButton, Host))),
             SteamP2P.Available ? Check(Tr.SteamHostCheckbox, ModSettings.SteamP2PHost) : null,
-            SteamP2P.Available ? Check(Tr.PublicGameCheckbox, ModSettings.PublicGame) : null);
-    }
-
-    // ---------- Join a Steam friend (P2P) ----------
-
-    private static void OpenFriends() => Show("friends", (close, _) =>
-    {
-        var friends = SteamP2P.FriendsHosting();
-        Element list = friends.Count == 0
-            ? Text(Tr.NoFriendHosting)
-            : Grid(friends.Select(f => Button(f.SameVersion ? f.Name : $"{f.Name} ({Tr.OtherVersion})", () =>
-            {
-                close();
-                MultiplayerClient.Instance.JoinFriend(f.SteamId, f.Name);
-            })).ToList(), 3);
-        return Stack(
-            Title(Tr.JoinFriendSection),
-            Text(Tr.JoinFriendHint),
-            list,
-            Buttons(Button(Tr.Refresh, () =>
-            {
-                close();
-                OpenFriends();
-            }), Button(Tr.Back, close)));
-    });
-
-    // ---------- Public games (Steam lobbies) ----------
-
-    private static void OpenPublicGames()
-    {
-        SteamLobby.Refresh();
-        Show("public", (close, _) =>
-        {
-            var games = SteamLobby.Games;
-            Element list = SteamLobby.Searching ? Text(Tr.PublicGamesSearching)
-                : games.Count == 0 ? Text(Tr.NoPublicGames)
-                : Grid(games.Take(30).Select(g => Button(DescribeGame(g), () =>
-                {
-                    close();
-                    MultiplayerClient.Instance.JoinFriend(g.HostId, g.Name);
-                })).ToList(), 1);
-            return Stack(
-                Title(Tr.PublicGamesButton),
-                Text(Tr.PublicGamesHint),
-                list,
-                Buttons(Button(Tr.Refresh, SteamLobby.Refresh), Button(Tr.Back, close)));
-        }, () => SteamLobby.ListVersion);
+            SteamP2P.Available ? Check(Tr.PublicGameCheckbox, ModSettings.PublicGame) : null,
+            Text(Tr.CreateRoomHint),
+            Row(Tr.RoomPasswordField, Line(Field(lobbyPassword), Button(Tr.CreateRoomButton, CreateLobby))));
     }
 
     /// <summary>"Bob's game - Hide and Seek - C9 Castle - 3/32 - password".</summary>
@@ -226,6 +317,35 @@ internal static class MultiplayerMenu
         return string.Join(" - ", parts);
     }
 
+    // ---------- Settings: name, then the themed screens ----------
+
+    private static void OpenSettings() => Show("settings", (close, scene) =>
+    {
+        ModConfig cfg = ModConfig.Current;
+        TextInput name = Input(cfg.PlayerName, ProtocolInfo.MaxNameLength);
+        void SaveName()
+        {
+            string text = name.Text.Trim();
+            if (text != cfg.PlayerName)
+            {
+                cfg.PlayerName = text;
+                ModConfig.ForgetEnvironmentOverride();
+                ModConfig.Save();
+            }
+        }
+        name.OnEnter += () => { SaveName(); return true; };
+        scene.OnDispose += SaveName; // leaving the screen keeps what was typed
+        return Stack(
+            Title(Tr.SettingsSection),
+            Row(Tr.NameField, Field(name)),
+            Text(Tr.NameHint),
+            Buttons(
+                Button(Tr.DisplayTitle, OpenDisplay),
+                Button(Tr.InterfaceTitle, OpenInterface),
+                Button(Tr.KeysTitle, KeyBindings.Open)),
+            Button(Tr.Back, close));
+    }, () => Tr.French ? 1 : 0);
+
     // ---------- Display: how other players are shown ----------
 
     private static void OpenDisplay() => Show("display", (close, _) =>
@@ -241,10 +361,14 @@ internal static class MultiplayerMenu
         );
     });
 
-    // ---------- Interface: HUD elements of the mod ----------
+    // ---------- Interface: HUD elements of the mod, language, updates ----------
+
+    private static int languageChanges;
 
     private static void OpenInterface() => Show("interface", (close, _) =>
     {
+        ModConfig cfg = ModConfig.Current;
+        string language = cfg.Language.Trim().ToLowerInvariant() is "en" or "fr" ? cfg.Language.Trim().ToLowerInvariant() : "auto";
         return Stack(
             Title(Tr.InterfaceTitle),
             Check(Tr.ShowSplits, ModSettings.ShowSplits),
@@ -255,9 +379,17 @@ internal static class MultiplayerMenu
             Section(Tr.RoundPanel),
             Check(Tr.ShowRoundPanel, ModSettings.ShowRoundPanel),
             Slider(Tr.RoundPanelSize, ModSettings.RoundPanelScale, Percent, 0.3f, 1.2f, 0.1f),
+            Section(Tr.GeneralSection),
+            Row(Tr.LanguageField, Button(Tr.LanguageName(language), () =>
+            {
+                cfg.Language = language switch { "auto" => "en", "en" => "fr", _ => "auto" };
+                ModConfig.Save();
+                languageChanges++; // the screen rebuilds itself in the new language
+            })),
+            Check(Tr.CheckForUpdates, ModSettings.CheckForUpdates),
             Button(Tr.Back, close)
         );
-    });
+    }, () => languageChanges);
 
     private static string StatusText()
     {
@@ -270,7 +402,7 @@ internal static class MultiplayerMenu
         {
             return Tr.StatusConnecting(c.ServerAddress);
         }
-        return c.IsUserDisconnected ? Tr.StatusDisconnected : Tr.StatusOffline;
+        return c.IsUserDisconnected || !c.HasTarget ? Tr.StatusDisconnected : Tr.StatusOffline;
     }
 
     private sealed class StatusUpdater(Label status) : IUpdate
@@ -288,5 +420,10 @@ internal static class MultiplayerMenu
                 }
             }
         }
+    }
+
+    private sealed class Ticker(Action tick) : IUpdate
+    {
+        public void Update() => tick();
     }
 }

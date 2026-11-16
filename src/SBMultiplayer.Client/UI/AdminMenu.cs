@@ -56,7 +56,8 @@ internal static class AdminMenu
                 Button(Tr.AdminChangeMap, OpenMaps),
                 Button(Tr.AdminPlayersButton, OpenPlayers),
                 Client.ServerSettings?.Mode == GameMode.HideAndSeek ? Button(Tr.AdminNextHunter, OpenNextHunter) : null,
-                Button(Tr.AdminResetMatch, () => Client.Admin(AdminCommand.ResetMatch))),
+                Button(Tr.AdminResetMatch, () => Confirm(Tr.ConfirmResetMatch, Tr.AdminResetMatch,
+                    () => Client.Admin(AdminCommand.ResetMatch)))),
             Section(Tr.AdminServerSection),
             Buttons(
                 Button(Tr.SettingsModeAndMapsTitle, ServerSettingsMenu.OpenModeAndMaps),
@@ -127,7 +128,8 @@ internal static class AdminMenu
         var others = Client.Players.Values.Where(p => p.Id < EchoIdOffset).OrderBy(p => p.Name).ToList();
         Element list = others.Count == 0
             ? Text(Tr.AdminNoOtherPlayers)
-            : Grid(others.Select(p => Button(Tr.AdminKick(p.Name), () => Client.Admin(AdminCommand.Kick, p.Id))).ToList(), 3);
+            : Grid(others.Select(p => Button(Tr.AdminKick(p.Name), () => Confirm(Tr.ConfirmKick(p.Name), Tr.AdminKick(p.Name),
+                    () => Client.Admin(AdminCommand.Kick, p.Id)))).ToList(), 3);
         return Stack(Title(Tr.AdminPlayersButton), list, Button(Tr.Back, close));
     }, () => Client.Players.Count * 31 + Client.AdminVersion);
 }

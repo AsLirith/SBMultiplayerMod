@@ -10,7 +10,7 @@ namespace SBMultiplayer.Client.Net;
 internal sealed class ModConfig
 {
     /// <summary>Format of this file. Bumped only with a migration in <see cref="Migrate"/>: settings are never lost on update.</summary>
-    public const int CurrentConfigVersion = 1;
+    public const int CurrentConfigVersion = 2;
 
     /// <summary>Format of the file that was read (0 = written before 0.19).</summary>
     public int ConfigVersion { get; set; }
@@ -19,8 +19,14 @@ internal sealed class ModConfig
     [System.Text.Json.Serialization.JsonExtensionData]
     public Dictionary<string, JsonElement>? UnknownSettings { get; set; }
 
-    /// <summary>Server address, "host:port" or "host".</summary>
-    public string Server { get; set; } = $"127.0.0.1:{ProtocolInfo.DefaultPort}";
+    /// <summary>Server address, "host:port" or "host". Empty = no server: the player joins a game from the menu.</summary>
+    public string Server { get; set; } = "";
+
+    /// <summary>Last servers joined by address (most recent first), offered again in F8 > Join a game.</summary>
+    public List<string> RecentServers { get; set; } = new();
+
+    /// <summary>Code of the last SBLB lobby joined, prefilled in F8 > Join a game.</summary>
+    public string LastRoomCode { get; set; } = "";
 
     /// <summary>Website that hosts rooms ("Create a room" and room codes), e.g. https://playsbm.thefanclub.cc.</summary>
     public string RoomSite { get; set; } = "https://playsbm.thefanclub.cc";
@@ -233,7 +239,21 @@ internal sealed class ModConfig
                 c.ChatKey = "Enter";
             }
         }
-        // Next format: if (c.ConfigVersion < 2) { ... }
+        if (c.ConfigVersion < 2)
+        {
+            // Before 1.1, the default server was this PC: with no server there, the mod retried it forever.
+            // It's now empty (games are joined from the menu); the old default stays one click away in the recent servers.
+            string oldDefault = $"127.0.0.1:{ProtocolInfo.DefaultPort}";
+            if (c.Server.Trim() == oldDefault)
+            {
+                c.Server = "";
+                if (!c.RecentServers.Contains(oldDefault))
+                {
+                    c.RecentServers.Add(oldDefault);
+                }
+            }
+        }
+        // Next format: if (c.ConfigVersion < 3) { ... }
     }
 
     /// <summary>The WebSocket address of a room: the room site with wss:// (or ws://) and /multiplayer/ws/CODE.</summary>

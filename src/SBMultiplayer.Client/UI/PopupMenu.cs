@@ -18,6 +18,9 @@ internal static class PopupMenu
     private sealed record Definition(string Id, Func<Action, Scene, Element> Build, Func<int>? Signature);
 
     private static readonly HashSet<string> OpenIds = new();
+
+    /// <summary>The open popups with their close action, in opening order (the game stacks them as a chain).</summary>
+    private static readonly List<(string Id, Action Close)> OpenPopups = new();
     private static Definition? pendingReopen;
 
     private static SE.UIAssets Ui => GameAccess.UiAssets;
@@ -32,6 +35,34 @@ internal static class PopupMenu
 
     /// <summary>One of the mod's menus is open.</summary>
     public static bool AnyOpen => OpenIds.Count > 0;
+
+    /// <summary>Closes every menu of the mod, topmost first (the menu key pressed while a menu is open).</summary>
+    public static void CloseAll()
+    {
+        pendingReopen = null;
+        foreach ((string id, Action close) in Enumerable.Reverse(OpenPopups).ToArray())
+        {
+            try
+            {
+                close();
+            }
+            catch (Exception e)
+            {
+                ModLog.Error($"Could not close the menu {id}", e);
+            }
+        }
+    }
+
+    /// <summary>Small "are you sure?" popup in front of an action that can't be undone.</summary>
+    public static void Confirm(string question, string yesLabel, Action onYes) => Show("confirm", (close, _) => Stack(
+        Text(question),
+        Buttons(
+            Button(yesLabel, () =>
+            {
+                close();
+                onYes();
+            }),
+            Button(Tr.Cancel, close))));
 
     private static void Show(Definition def)
     {
@@ -72,7 +103,12 @@ internal static class PopupMenu
         canvas.Add(GameAccess.CreateMainPanel(content));
         scene.Add(canvas);
         scene.Add(new Updater(def, close));
-        scene.OnDispose += () => OpenIds.Remove(def.Id);
+        OpenPopups.Add((def.Id, close));
+        scene.OnDispose += () =>
+        {
+            OpenIds.Remove(def.Id);
+            OpenPopups.RemoveAll(p => p.Id == def.Id);
+        };
         return scene;
     }
 
@@ -250,6 +286,21 @@ internal static class PopupMenu
     /// <summary>Text field (FieldWidth wide unless told otherwise, e.g. MenuWidth for a field alone on its line).</summary>
     public static TextInput Input(string text, int maxLength, float width = FieldWidth) =>
         new(GameAccess.UpdateSpeed, text, width, Ui.FontSmall.Value.LineSpacing) { MaxTextLength = maxLength };
+
+    /// <summary>Width of a text field that shares its settings row with a button (<c>Row(label, Line(Field(input), Button(text)))</c>).</summary>
+    public static float WidthBeside(string buttonText)
+    {
+        float button;
+        try
+        {
+            button = Measure(buttonText) + 64f;
+        }
+        catch (Exception)
+        {
+            button = 700f;
+        }
+        return MathF.Max(300f, FieldWidth - 22f - button);
+    }
 
     /// <summary>A text field on the game's dark background.</summary>
     public static Element Field(TextInput input) => new Panel(0f, 0f, InputBackground, null, new Padding(14f)).Add(input);

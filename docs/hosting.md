@@ -4,9 +4,9 @@
 
 In the game, open **F8 > Host a game**, choose the UDP port (24800 by default) and click **Host**. The server runs inside your game (it keeps running when the game window loses focus), you're connected to it automatically and you're its **admin**: set the mode and the maps in F8 > Admin. The menu shows the addresses your friends should use.
 
-**Steam friends can join without opening any port**: with "Steam friends can join without opening a port (Steam P2P)" checked (default), your game appears in their **F8 > Join a Steam friend** list while they play STUNTBOOST, and one click connects them through Steam (NAT traversal and Steam's relays). Other players can still join with your IP address and an open port.
+**Steam friends can join without opening any port**: with "Steam friends can join without opening a port (Steam P2P)" checked (default), your game appears in their **F8 > Join a game** list while they play STUNTBOOST, and one click connects them through Steam (NAT traversal and Steam's relays). Other players can still join with your IP address and an open port.
 
-**Public games**: tick "Public game (anyone on Steam)" (it needs Steam P2P) and your game appears in everyone's **F8 > Public games** list, with its name, mode, map and number of players: anyone on Steam can join it in one click, the same way. It's listed through a Steam lobby, so nothing else has to be hosted. Set a password in `hosted-server.json` if you only want some players to come in. Dedicated servers aren't listed (they don't run Steam): share their address.
+**Public games**: tick "Public game (anyone on Steam)" (it needs Steam P2P) and your game appears in everyone's **F8 > Join a game** list, with its name, mode, map and number of players: anyone on Steam can join it in one click, the same way. It's listed through a Steam lobby, so nothing else has to be hosted. Set a password in `hosted-server.json` if you only want some players to come in. Dedicated servers aren't listed (they don't run Steam): share their address.
 
 Its settings are kept in `SBMultiplayer/hosted-server.json` (same format as below). The game stops when you click "Stop hosting" or quit the game. For a server that runs all the time, or for tournaments, prefer the dedicated server below. The network setup (firewall, port forwarding) is the same.
 
@@ -139,7 +139,7 @@ When `ResultsDirectory` is set, the server writes after every round:
 
 1. **Firewall** (Linux with ufw): `sudo ufw allow 24800/udp`
 2. **Router**: forward **UDP** port 24800 to the server's local IP.
-3. Players enter `PUBLIC_IP:24800` as the server address (and the password, if any) in the in-game menu (F8).
+3. Players enter `PUBLIC_IP:24800` as the server address in the in-game menu (F8 > Join a game); the password, if any, is asked for then.
 
 ### ⚠️ PC connected through both Ethernet AND Wi-Fi
 
@@ -158,7 +158,7 @@ If your router is behind CGNAT, or port forwarding isn't possible: install [Tail
 ## Web rooms (SBLB lobbies, no open port)
 
 Players can also create a lobby on the community website [sblb.thefanclub.cc](https://sblb.thefanclub.cc) from the game
-(F8 > Join / Create SBLB Lobby), with a code to share and an optional password. Their game goes through the website's
+(F8 > Host a game; the others type its code in F8 > Join a game), with a code to share and an optional password. Their game goes through the website's
 WebSocket, so nobody opens a port. The website's room host, contributed by TheFanMan, runs the rooms behind one HTTP
 port, on the same machine as the website (the HTTP link between them isn't encrypted, and every request needs the
 gateway secret):

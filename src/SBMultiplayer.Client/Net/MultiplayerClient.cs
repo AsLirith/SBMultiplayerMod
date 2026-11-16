@@ -21,6 +21,7 @@ namespace SBMultiplayer.Client.Net;
 internal sealed class MultiplayerClient : INetEventListener
 {
     private const double ReconnectDelaySeconds = 5;
+    private const int MaxRecentServers = 5;
 
     public static MultiplayerClient Instance { get; } = new();
 
@@ -204,6 +205,16 @@ internal sealed class MultiplayerClient : INetEventListener
         EnsureConnected();
         FlushPendingFinish();
         AnnounceConnection();
+        if (passwordRefused)
+        {
+            passwordRefused = false;
+            if (askPasswordIfRefused)
+            {
+                // The player just asked for this connection: ask for the password right away.
+                askPasswordIfRefused = false;
+                MultiplayerMenu.AskPassword(Tr.PasswordNeeded(serverAddress), RetryWithPassword);
+            }
+        }
 
         var r = Round.Current;
         AnnounceRound(r);
@@ -251,7 +262,14 @@ internal sealed class MultiplayerClient : INetEventListener
         }
         if (ModInput.Pressed(ModConfig.Current.MenuKey))
         {
-            MultiplayerMenu.Open();
+            if (PopupMenu.AnyOpen)
+            {
+                PopupMenu.CloseAll(); // the menu key also closes the menu, whatever the screen
+            }
+            else
+            {
+                MultiplayerMenu.Open();
+            }
         }
         ModConfig cfg = ModConfig.Current;
         if (ModInput.Pressed(cfg.CloseEndScreenKey) && GlobalOverlay.EndScreenVisible && !PopupMenu.AnyOpen && !KeyBindings.BlocksEscape)
@@ -358,8 +376,38 @@ internal sealed class MultiplayerClient : INetEventListener
             int others = Players.Count;
             Notifications.Good(Tr.Connected(serverAddress, others, Tr.KeyName(ModConfig.Current.MenuKey)));
             lastDisconnectReason = "";
+            askPasswordIfRefused = false;
+            RememberConnection();
         }
         wasReady = ready;
+    }
+
+    /// <summary>Connected: the lobby code or the server address is offered again next time (F8 > Join a game).</summary>
+    private void RememberConnection()
+    {
+        ModConfig cfg = ModConfig.Current;
+        if (roomUrl != null)
+        {
+            if (RoomCode is string code && code != cfg.LastRoomCode)
+            {
+                cfg.LastRoomCode = code;
+                ModConfig.Save();
+            }
+        }
+        else if (hostAddress == null)
+        {
+            string address = cfg.Server.Trim();
+            if (address.Length > 0 && (cfg.RecentServers.Count == 0 || cfg.RecentServers[0] != address))
+            {
+                cfg.RecentServers.RemoveAll(s => s.Equals(address, StringComparison.OrdinalIgnoreCase));
+                cfg.RecentServers.Insert(0, address);
+                if (cfg.RecentServers.Count > MaxRecentServers)
+                {
+                    cfg.RecentServers.RemoveRange(MaxRecentServers, cfg.RecentServers.Count - MaxRecentServers);
+                }
+                ModConfig.Save();
+            }
+        }
     }
 
     private void AnnounceRound(RoundState.Snapshot r)
@@ -393,6 +441,46 @@ internal sealed class MultiplayerClient : INetEventListener
     private string? hostAddressLabel;
     private string? hostAdminPassword;
 
+    /// <summary>Password typed for a game joined through Steam (instead of the configured server password).</summary>
+    private string? sessionPassword;
+
+    /// <summary>The player asked for the current connection: a refused password opens the password prompt.</summary>
+    private bool askPasswordIfRefused;
+
+    /// <summary>Set on the network thread when the server refuses our password.</summary>
+    private volatile bool passwordRefused;
+
+    /// <summary>There is something to connect to: a lobby, a hosted or Steam game, or a configured server address.</summary>
+    public bool HasTarget => roomUrl != null || hostAddress != null || ModConfig.Current.Server.Trim().Length > 0;
+
+    /// <summary>Connects to a server by its address ("host:port"), which becomes the configured server.</summary>
+    public void ConnectTo(string address)
+    {
+        ModConfig.Current.Server = address.Trim();
+        ModConfig.ForgetEnvironmentOverride();
+        ModConfig.Save();
+        Connect();
+    }
+
+    /// <summary>Tries the same game again with another password (after a refusal).</summary>
+    public void RetryWithPassword(string password)
+    {
+        if (roomUrl != null)
+        {
+            roomPassword = password.Length == 0 ? null : password;
+        }
+        else if (hostAddress != null)
+        {
+            sessionPassword = password;
+        }
+        else
+        {
+            ModConfig.Current.ServerPassword = password;
+            ModConfig.Save();
+        }
+        ConnectNow();
+    }
+
     /// <summary>Hosting from F8: starts the in-game server, then connects to it as admin.</summary>
     public void HostGame(int port)
     {
@@ -406,6 +494,7 @@ internal sealed class MultiplayerClient : INetEventListener
         SteamP2P.StopJoin();
         hostAddress = $"127.0.0.1:{port}";
         hostAddressLabel = null;
+        sessionPassword = null;
         hostAdminPassword = HostedServer.AdminPassword;
         ConnectNow();
         Notifications.Good(Tr.HostStarted(port));
@@ -425,7 +514,7 @@ internal sealed class MultiplayerClient : INetEventListener
     }
 
     /// <summary>Joins a Steam friend's hosted game through Steam P2P (no port to open).</summary>
-    public void JoinFriend(ulong steamId, string name)
+    public void JoinFriend(ulong steamId, string name, string? password = null)
     {
         if (HostedServer.IsRunning)
         {
@@ -438,6 +527,7 @@ internal sealed class MultiplayerClient : INetEventListener
             hostAddress = $"127.0.0.1:{localPort}";
             hostAddressLabel = $"Steam: {name}";
             hostAdminPassword = null;
+            sessionPassword = password;
             ConnectNow();
             Notifications.Info(Tr.JoiningFriend(name));
         }
@@ -512,6 +602,7 @@ internal sealed class MultiplayerClient : INetEventListener
         SteamP2P.StopJoin();
         hostAddress = null;
         hostAddressLabel = null;
+        sessionPassword = null;
         RoomCode = code;
         roomUrl = url;
         roomPassword = string.IsNullOrEmpty(password) ? null : password;
@@ -541,6 +632,7 @@ internal sealed class MultiplayerClient : INetEventListener
             hostAddress = null;
             hostAddressLabel = null;
         }
+        sessionPassword = null;
         ClearRoom();
         ConnectNow();
     }
@@ -548,6 +640,8 @@ internal sealed class MultiplayerClient : INetEventListener
     private void ConnectNow()
     {
         userDisconnected = false;
+        askPasswordIfRefused = true;
+        passwordRefused = false;
         if (HasLink)
         {
             DropConnection("reconnecting");
@@ -747,9 +841,9 @@ internal sealed class MultiplayerClient : INetEventListener
             // AutoConnect = false: wait for the player to connect from the menu.
             userDisconnected = true;
         }
-        if (userDisconnected || HasLink || NetClock.Now - lastConnectAttempt < ReconnectDelaySeconds)
+        if (userDisconnected || HasLink || !HasTarget || NetClock.Now - lastConnectAttempt < ReconnectDelaySeconds)
         {
-            return;
+            return; // (no target: no server configured, the player joins a game from the menu)
         }
         lastConnectAttempt = NetClock.Now;
 
@@ -788,7 +882,8 @@ internal sealed class MultiplayerClient : INetEventListener
                 : ModConfig.Current.ParseServer();
             serverAddress = hostAddressLabel ?? $"{host}:{port}";
             ModLog.Info($"Connecting to {serverAddress} as \"{playerName}\"…");
-            server = net.Connect(host, port, ProtocolInfo.ConnectionData(ModConfig.Current.ServerPassword));
+            server = net.Connect(host, port, ProtocolInfo.ConnectionData(
+                hostAddress != null && sessionPassword != null ? sessionPassword : ModConfig.Current.ServerPassword));
         }
         catch (Exception e)
         {
@@ -944,8 +1039,9 @@ internal sealed class MultiplayerClient : INetEventListener
         };
         if (code is ServerReasons.BadPassword or ServerReasons.Kicked)
         {
-            // Retrying would be pointless: wait for the player to act (F8 menu).
+            // Retrying would be pointless: wait for the player to act (password prompt, F8 menu).
             userDisconnected = true;
+            passwordRefused = code == ServerReasons.BadPassword;
             ModLog.Warn($"Disconnected from the server: {reason}");
             NotifyDisconnect(reason);
         }
@@ -1231,8 +1327,9 @@ internal sealed class MultiplayerClient : INetEventListener
         if (code is ServerReasons.BadPassword or ServerReasons.Kicked or ServerReasons.RoomNotFound
             || code.StartsWith(ServerReasons.VersionMismatch, StringComparison.Ordinal))
         {
-            // Retrying would be pointless: wait for the player to act (F8 menu).
+            // Retrying would be pointless: wait for the player to act (password prompt, F8 menu).
             userDisconnected = true;
+            passwordRefused = code == ServerReasons.BadPassword;
             ModLog.Warn($"Disconnected from the room: {reason}");
             NotifyDisconnect(reason);
         }
