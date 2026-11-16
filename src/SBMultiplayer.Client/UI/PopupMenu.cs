@@ -16,7 +16,7 @@ internal static class PopupMenu
     public static readonly Color InputBackground = new(0x5F, 0x5A, 0x59); // Colors.DarkBrighter of the game
 
     // More of the game's Colors (internal to the game): Primary, PanelBackground, PanelSub.
-    private static readonly Color Highlight = new(0xE5, 0x50, 0x00);
+    internal static readonly Color Highlight = new(0xE5, 0x50, 0x00);
     private static readonly Color PanelBackground = new(0x16, 0x16, 0x16);
     private static readonly Color PanelSub = Color.White * 0.05f;
 

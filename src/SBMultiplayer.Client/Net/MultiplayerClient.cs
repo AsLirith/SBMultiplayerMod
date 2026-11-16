@@ -196,6 +196,7 @@ internal sealed class MultiplayerClient : INetEventListener
         KeyBindings.Tick();
         StartGate.Tick(this);
         HideSeek.Tick();
+        GameMenuButtons.Tick(currentScene);
         if (SteamP2P.Available)
         {
             SteamLobby.Tick();

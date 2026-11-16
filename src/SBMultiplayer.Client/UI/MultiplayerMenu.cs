@@ -369,6 +369,7 @@ internal static class MultiplayerMenu
                 ModConfig.Save();
                 screen.Refresh(); // rebuilt in the new language
             })),
+            Check(Tr.GameMenuButtonSetting, ModSettings.GameMenuButton),
             Check(Tr.CheckForUpdates, ModSettings.CheckForUpdates),
             Button(Tr.Back, close)
         );

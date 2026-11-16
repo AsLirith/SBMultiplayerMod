@@ -60,7 +60,7 @@ Works on Linux (native version of the game) and Windows.
 
 ## Getting started
 
-Press **F8** to open the multiplayer menu (F8 again closes it), then:
+Press **F8** to open the multiplayer menu (F8 again closes it), or click **Multiplayer** in the game's main menu or pause menu, then:
 - **Join a game**: the list shows your Steam friends who are hosting and the public games (one click, nothing to set up); below it, type an **SBLB lobby code** (a lobby of the community website) or a **server address** (`address:port`). If the game has a password, you're asked for it;
 - **Host a game**: your own game on your PC, or an SBLB lobby with a code to share. You're its admin (choose the mode and maps in F8 > Admin).
 

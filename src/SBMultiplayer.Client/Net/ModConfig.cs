@@ -90,6 +90,9 @@ internal sealed class ModConfig
     /// <summary>Key to write in the chat. With Enter (the game's confirm key), the chat only opens in a level.</summary>
     public string ChatKey { get; set; } = "Enter";
 
+    /// <summary>Adds a "Multiplayer" button to the game's main menu and pause menu (it opens the same menu as the key).</summary>
+    public bool GameMenuButton { get; set; } = true;
+
     /// <summary>Checks GitHub at startup for a newer version of the mod (reads the public release page only).</summary>
     public bool CheckForUpdates { get; set; } = true;
 

@@ -37,6 +37,8 @@ internal static class ModSettings
 
     public static ValueEvent<bool> CheckForUpdates { get; } = Bind(ModConfig.Current.CheckForUpdates, v => ModConfig.Current.CheckForUpdates = v);
 
+    public static ValueEvent<bool> GameMenuButton { get; } = Bind(ModConfig.Current.GameMenuButton, v => ModConfig.Current.GameMenuButton = v);
+
     private static ValueEvent<T> Bind<T>(T initial, Action<T> apply)
     {
         var value = new ValueEvent<T>(initial);

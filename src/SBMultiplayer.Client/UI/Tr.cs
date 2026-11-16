@@ -71,6 +71,8 @@ internal static class Tr
         _ => T("Auto (the game's)", "Auto (celle du jeu)"),
     };
     public static string CheckForUpdates => T("Tell me about mod updates", "Signaler les mises à jour du mod");
+    public static string MultiplayerButton => T("Multiplayer", "Multijoueur");
+    public static string GameMenuButtonSetting => T("Button in the game's menus", "Bouton dans les menus du jeu");
     public static string GeneralSection => T("General", "Général");
     public static string ConfirmResetMatch => T("Reset every player's match points?", "Remettre à zéro les points de match de tous les joueurs ?");
     public static string ConfirmKick(string name) => T($"Kick {name} from the server?", $"Expulser {name} du serveur ?");
