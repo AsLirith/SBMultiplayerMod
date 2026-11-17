@@ -175,3 +175,9 @@ dotnet SBMultiplayer.Server.dll --rooms 9000 --max-rooms 20
 
 Each room is a game server of its own, with the same settings as a UDP server. The room's password is checked by the
 website, not by the room host.
+
+**Public lobbies**: a lobby made without a password is public. It's listed on the website's
+[lobbies page](https://sblb.thefanclub.cc/lobbies) and in everyone's F8 > Join a game, with its mode, map and players,
+and a click joins it. A password makes the lobby private: it's never listed, and players need its code. The room host
+reports its rooms to the website on `GET /rooms` (with the gateway secret), and the website only shows the ones without
+a password.

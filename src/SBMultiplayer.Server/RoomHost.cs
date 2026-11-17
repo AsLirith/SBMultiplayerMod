@@ -10,7 +10,7 @@ namespace SBMultiplayer.Server;
 
 /// <summary>
 /// Runs many rooms in one process behind one HTTP port. The website (the gateway) creates and deletes rooms
-/// through /rooms, and bridges each player's WebSocket to /room/{id}. Each room is one GameServer.
+/// through /rooms (GET lists them), and bridges each player's WebSocket to /room/{id}. Each room is one GameServer.
 /// Everything that touches a room runs on one thread (<see cref="Run"/>), fed by a queue.
 /// </summary>
 public sealed class RoomHost
@@ -135,6 +135,11 @@ public sealed class RoomHost
                 await CreateRoomAsync(context);
                 return;
             }
+            if (path == "/rooms" && request.HttpMethod == "GET")
+            {
+                await ListRoomsAsync(context);
+                return;
+            }
             var deleteMatch = System.Text.RegularExpressions.Regex.Match(path, @"^/rooms/(\d+)$");
             if (deleteMatch.Success && request.HttpMethod == "DELETE")
             {
@@ -216,6 +221,21 @@ public sealed class RoomHost
             return (201, "");
         });
         await ReplyAsync(context, status, status == 201 ? "{\"ok\":true}" : $"{{\"error\":\"{error}\"}}");
+    }
+
+    /// <summary>
+    /// Every open room with what a lobby list shows: name, mode, map and players. The website decides which rooms are
+    /// public; this only reports. The summaries are refreshed once a second by each room's own Poll.
+    /// </summary>
+    private async Task ListRoomsAsync(HttpListenerContext context)
+    {
+        List<RoomListEntry> list = await Post(() => rooms.Values
+            .Select(room => (room.Id, Summary: room.Game.Summary))
+            .Where(r => r.Summary != null)
+            .Select(r => new RoomListEntry(r.Id, r.Summary!.Name, r.Summary.Mode, r.Summary.MapKey, r.Summary.Players,
+                r.Summary.MaxPlayers, r.Summary.HasPassword))
+            .ToList());
+        await ReplyAsync(context, 200, JsonSerializer.Serialize(list, ServerJson.Default.ListRoomListEntry));
     }
 
     private async Task DeleteRoomAsync(HttpListenerContext context, int id)
@@ -321,3 +341,13 @@ public sealed class RoomHost
 
 /// <summary>The website's request to open a room (JSON, property names case-insensitive).</summary>
 internal sealed record CreateRoomRequest(int Id, string Name, string? Password, string? AdminPassword, int MaxPlayers);
+
+/// <summary>One room in the reply to GET /rooms.</summary>
+internal sealed record RoomListEntry(
+    [property: System.Text.Json.Serialization.JsonPropertyName("id")] int Id,
+    [property: System.Text.Json.Serialization.JsonPropertyName("name")] string Name,
+    [property: System.Text.Json.Serialization.JsonPropertyName("mode")] GameMode Mode,
+    [property: System.Text.Json.Serialization.JsonPropertyName("map")] string Map,
+    [property: System.Text.Json.Serialization.JsonPropertyName("players")] int Players,
+    [property: System.Text.Json.Serialization.JsonPropertyName("maxPlayers")] int MaxPlayers,
+    [property: System.Text.Json.Serialization.JsonPropertyName("hasPassword")] bool HasPassword);

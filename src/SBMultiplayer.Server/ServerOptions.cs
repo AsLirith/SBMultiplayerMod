@@ -246,6 +246,7 @@ public sealed class ServerOptions
 [System.Text.Json.Serialization.JsonSerializable(typeof(ServerOptions))]
 [System.Text.Json.Serialization.JsonSerializable(typeof(string))]
 [System.Text.Json.Serialization.JsonSerializable(typeof(CreateRoomRequest))]
+[System.Text.Json.Serialization.JsonSerializable(typeof(List<RoomListEntry>))]
 internal partial class ServerJson : System.Text.Json.Serialization.JsonSerializerContext
 {
 }

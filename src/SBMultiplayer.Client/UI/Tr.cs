@@ -53,6 +53,13 @@ internal static class Tr
     public static string NoSteamGames => T("No Steam friend is hosting and there is no public game right now.",
         "Aucun ami Steam n'héberge et il n'y a aucune partie publique pour le moment.");
     public static string FriendTag => T("friend", "ami");
+    public static string SblbLobbiesHint => T("Public SBLB lobbies: click one to join it (no port to open).",
+        "Lobbies SBLB publics : clique sur un lobby pour le rejoindre (aucun port à ouvrir).");
+    public static string NoSblbLobbies => T("No public SBLB lobby right now. Create one in Host a game, without a password.",
+        "Aucun lobby SBLB public pour le moment. Crées-en un dans Héberger une partie, sans mot de passe.");
+    public static string SblbPublicHint => T(
+        "Without a password, your lobby is public: it's listed on the website's lobby page and in everyone's Join a game. A password makes it private.",
+        "Sans mot de passe, ton lobby est public : il apparaît sur la page des lobbies du site et chez tout le monde dans Rejoindre une partie. Un mot de passe le rend privé.");
     public static string NoServerAddress => T("Type a server address first", "Entre d'abord une adresse de serveur");
     public static string RoomCodeLine(string code) => T($"SBLB lobby code: {code} (share it with your friends)", $"Code du lobby SBLB : {code} (partage-le avec tes amis)");
     public static string CreateRoomHint => T(

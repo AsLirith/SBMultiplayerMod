@@ -97,7 +97,63 @@ internal static class MultiplayerMenu
         {
             SteamLobby.Refresh();
         }
+        SblbLobbies.Refresh();
         Show("join", BuildJoin);
+    }
+
+    /// <summary>Changes when the SBLB lobby list changes. Also asks the website again every few seconds while the screen is open.</summary>
+    private static int SblbListSignature()
+    {
+        SblbLobbies.Tick();
+        var hash = new HashCode();
+        hash.Add(SblbLobbies.Available);
+        hash.Add(SblbLobbies.Searching && SblbLobbies.Lobbies.Count == 0);
+        foreach (SblbLobbies.Lobby l in SblbLobbies.Lobbies)
+        {
+            hash.Add(l.Code);
+            hash.Add(l.Players);
+            hash.Add(l.MapKey);
+            hash.Add(l.ModeText);
+        }
+        return hash.ToHashCode();
+    }
+
+    /// <summary>The website's public lobbies (no password), or nothing when the website doesn't list them.</summary>
+    private static Element BuildSblbList(Action closeJoin)
+    {
+        if (!SblbLobbies.Available)
+        {
+            return new PanelStack(0f); // empty: the live part keeps a place to come back to
+        }
+        IReadOnlyList<SblbLobbies.Lobby> lobbies = SblbLobbies.Lobbies;
+        if (lobbies.Count == 0)
+        {
+            return Text(SblbLobbies.Searching ? Tr.PublicGamesSearching : Tr.NoSblbLobbies);
+        }
+        return new PanelStack(26f).Add(
+            Text(Tr.SblbLobbiesHint),
+            ScrollList(lobbies.Select(l => Button(DescribeLobby(l), () =>
+            {
+                closeJoin();
+                Client.JoinRoom(l.Code, null); // listed lobbies have no password
+            })).ToList(), MaxSteamGames));
+    }
+
+    /// <summary>"MAPLE-42 - Rounds - A5 Jump - 3/32".</summary>
+    private static string DescribeLobby(SblbLobbies.Lobby l)
+    {
+        var parts = new List<string> { l.Code };
+        string mode = l.Mode is GameMode m ? Tr.ModeName(m) : l.ModeText;
+        if (mode != "")
+        {
+            parts.Add(mode);
+        }
+        if (l.MapKey != "")
+        {
+            parts.Add(GameAccess.DescribeMap(l.MapKey));
+        }
+        parts.Add($"{l.Players}/{l.MaxPlayers}");
+        return string.Join(" - ", parts);
     }
 
     /// <summary>Changes when the list of public games really changes (not at every search), or on "Refresh".</summary>
@@ -176,15 +232,20 @@ internal static class MultiplayerMenu
             Title(Tr.JoinGameButton),
             // Only the Steam list is rebuilt when it changes: the fields below keep their text and cursor.
             SteamP2P.Available ? Live(screen, SteamListSignature, () => BuildSteamList(close)) : null,
+            Live(screen, SblbListSignature, () => BuildSblbList(close)),
             Row(Tr.RoomCodeField, Line(Field(code), Button(Tr.JoinButton, JoinLobby))),
             Row(Tr.ServerField, Line(Field(server), Button(Tr.Connect, () => ConnectTo(server.Text)))),
             recent.Length > 0 ? Buttons(recent) : null,
             Buttons(
-                SteamP2P.Available ? Button(Tr.Refresh, () =>
+                Button(Tr.Refresh, () =>
                 {
                     joinRefreshes++;
-                    SteamLobby.Refresh();
-                }) : null,
+                    if (SteamP2P.Available)
+                    {
+                        SteamLobby.Refresh();
+                    }
+                    SblbLobbies.Refresh();
+                }),
                 Button(Tr.Back, close)));
     }
 
@@ -279,6 +340,7 @@ internal static class MultiplayerMenu
             SteamP2P.Available ? Check(Tr.SteamHostCheckbox, ModSettings.SteamP2PHost) : null,
             SteamP2P.Available ? Check(Tr.PublicGameCheckbox, ModSettings.PublicGame) : null,
             Text(Tr.CreateRoomHint),
+            Text(Tr.SblbPublicHint),
             Row(Tr.RoomPasswordField, Line(Field(lobbyPassword), Button(Tr.CreateRoomButton, CreateLobby))));
     }
 

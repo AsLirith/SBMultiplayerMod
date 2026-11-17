@@ -52,6 +52,10 @@ message carries one game message, in the same format. Only the connection differ
 - Refusals use the HTTP status of the handshake (401 wrong password, 404 no room, 426 version, 429 rate limit, 503 full),
   or a WebSocket close reason. The client translates them with the same codes as UDP.
 - New reason codes: `ROOM_NOT_FOUND`, `RATE_LIMITED`, `UNREACHABLE`. An older client shows the code as plain text.
+- Public lobbies (lobbies without a password) are read from the website's `GET /multiplayer/api/lobbies`, outside the
+  game protocol. Each entry has `code`, `mode`, `modeId` (a `GameMode` name), `map` (a map key), `players` and
+  `maxPlayers`; read them leniently, since the website may add fields. A website without the list answers 404, and the
+  mod then hides the section.
 
 ## Breaking changes (to avoid)
 
