@@ -31,6 +31,15 @@ internal sealed class ModConfig
     /// <summary>Website that hosts rooms ("Create a room" and room codes), e.g. https://playsbm.thefanclub.cc.</summary>
     public string RoomSite { get; set; } = "https://playsbm.thefanclub.cc";
 
+    /// <summary>
+    /// "Join in game" on the website's lobby page: the mod answers on 127.0.0.1 (this computer only) so the page can
+    /// ask it to join a lobby. false turns it off.
+    /// </summary>
+    public bool WebJoin { get; set; } = true;
+
+    /// <summary>Other websites whose lobby page may ask the game to join (besides <see cref="RoomSite"/>).</summary>
+    public List<string> WebJoinSites { get; set; } = new() { "https://sblb.thefanclub.cc" };
+
     /// <summary>Displayed name. Empty = Steam name.</summary>
     public string PlayerName { get; set; } = "";
 

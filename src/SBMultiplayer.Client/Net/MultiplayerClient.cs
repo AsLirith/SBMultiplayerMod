@@ -201,6 +201,7 @@ internal sealed class MultiplayerClient : INetEventListener
         {
             SteamLobby.Tick();
         }
+        WebJoin.Tick(this);
         TrackLocalSkin();
         EnsureConnected();
         FlushPendingFinish();

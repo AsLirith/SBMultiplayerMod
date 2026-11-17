@@ -181,3 +181,9 @@ website, not by the room host.
 and a click joins it. A password makes the lobby private: it's never listed, and players need its code. The room host
 reports its rooms to the website on `GET /rooms` (with the gateway secret), and the website only shows the ones without
 a password.
+
+**Join in game from the website**: while the game runs, the mod answers on `127.0.0.1:24810`, on the player's own
+computer only, so the lobbies page can ask the game to join a lobby (its "Join in game" button). It only listens to
+pages from the lobby websites (`RoomSite` and `WebJoinSites` in SBMultiplayer.json, checked on the browser's `Origin`),
+and the only request it takes is a lobby code. `"WebJoin": false` turns it off. Some browsers ask the player once
+whether the site may talk to apps on their computer.
