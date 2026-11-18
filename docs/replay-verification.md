@@ -53,6 +53,6 @@ Options (environment variables):
 
 ## Known limits
 
-- Grind Park (`o:83`) can't be verified: its finish isn't detected by the game's test harness (`no-goal`, without desync).
+- Freeroam maps (B7, C9: explore to find every collectible, e.g. Grind Park `o:83`) have no real finish: their replays come out `no-goal` (without desync). They aren't race maps, so they aren't meant for tournaments anyway.
 - Tested on Linux; Windows is untested so far.
 - A replay recorded on an older version of a map (or of the game) can't be re-simulated on the current one.
