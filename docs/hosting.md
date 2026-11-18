@@ -45,7 +45,8 @@ Every setting can also be given (or overridden) on the command line:
 | | `MatchEndSeconds` | 20 | Duration of the end-of-game screen |
 | `--results <s>` | `ResultsSeconds` | 15 | Results screen duration in seconds |
 | | `PointsTable` | 10, 8, 6, 5, 4, 3, 2, 1 | Match points by rank at the end of each round |
-| | `ResultsDirectory` | `results` | Where results are exported (empty = no export) |
+| | `RunCheck` | `Report` | Checks of the finish times: `Off`, `Report` or `Enforce` (see [Time checks](#time-checks)) |
+| | `ResultsDirectory` | `results` | Where results and the replays of the best times are exported (empty = no export) |
 | `--echo` | `Echo` | off | Sends each player their own board back with a delay, as a fake "Echo" player, to test alone |
 
 ## Maps
@@ -103,7 +104,7 @@ Players can spectate from the F8 menu ("Spectate"): they stay frozen on the star
 
 Admins can change the match settings without restarting the server: **F8 > Admin**, then:
 
-- **Mode and settings**: the game mode and, right below, the settings this mode uses: round duration / time limit, results screen, rounds per map, end of round after the first finisher, wait for players, countdown, Cup points limit, eliminated per round, points by rank;
+- **Mode and settings**: the game mode and, right below, the settings this mode uses: round duration / time limit, results screen, rounds per map, end of round after the first finisher, wait for players, countdown, Cup points limit, eliminated per round, points by rank, time checks;
 - **Map rotation**: the list of maps, to reorder or trim; add levels by code (`A1, A5, B2`, several at once separated by commas) or with "Add the map I'm on".
 
 Durations and points apply from the next round. Changing the mode or the maps restarts the match on the first map. With "Also save to the server's config file", the config file (`--config`) is rewritten with the new values, keeping its comments; values given on the command line are saved too.
@@ -132,8 +133,23 @@ Other console commands: `list` (connected players), `round` (current round), `st
 
 When `ResultsDirectory` is set, the server writes after every round:
 
-- `<date>_round<N>_<map>.json`: rank, name, time and points of every player in that round;
-- `match_standings.csv`: the current match standings (rank, name, points, rounds played).
+- `<date>_round<N>_<map>.json`: rank, name, time and points of every player in that round, and the result of the time checks (`Check`: `verified`, `flagged` or `no replay`, with the `Flags` and `Notes`, the game version, and the saved replay);
+- `match_standings.csv`: the current match standings (rank, name, points, rounds played);
+- `replays/`: the replay of each player's best time in each round (a STUNTBOOST `.rpl` file, recorded by the player's game).
+
+### Time checks
+
+The server doesn't simulate the game: each player's game measures their time. With mod 1.2 or newer, each finish comes with what the server needs to check it (`RunCheck`, also in **F8 > Admin > Mode and settings > Time checks**):
+
+- the game settings that the official leaderboards refuse (physics version, tutorial abilities, the gameplay options that change the physics, dev keys, modding mode);
+- the run's replay, recorded by the game itself. The server checks that it reaches the finish on the round's map, in the announced time, without a custom start speed or challenge modifier;
+- the game's speed: the mod sends one update per game tick (60 per second), so a game slowed down by a speed hack sends fewer while racing (pauses are left out).
+
+With `Report` (the default), every time counts; the ones that fail a check are shown to the logged-in admins, in the console and in the results export. With `Enforce`, a time counts only once its replay arrived (within 15 s) and passed every check; otherwise the player is told why and, in one-attempt modes, their run is over. Players with an older mod can still play, but their times don't count. Use `Enforce` for competitions.
+
+The replays of the best times are saved in `ResultsDirectory/replays`: copy one into your game's replay folder to watch the run if a time is disputed.
+
+These checks stop casual cheating and external tools, but someone who rebuilds the mod could send a forged replay. After a tournament, re-simulate the saved replays with the game to rule that out: see [Replay verification](replay-verification.md) (`verify-replays.sh` / `verify-replays.bat` in the mod's folder, given the results folder).
 
 ## Network
 

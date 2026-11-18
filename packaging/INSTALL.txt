@@ -29,5 +29,8 @@ SBMultiplayer - unofficial multiplayer mod for STUNTBOOST
 Other players riding the same level show up as translucent boards.
 The mod's interface follows the game's language (English or French).
 
+Tournament organizers: SBMultiplayer/verify-replays.sh (Linux) or verify-replays.bat (Windows) re-simulates
+the replays saved by the server with the game, to check the times (see docs/replay-verification.md on GitHub).
+
 Problem? Send the SBMultiplayer/SBMultiplayer.log file.
 More info: https://github.com/AsLirith/SBMultiplayerMod

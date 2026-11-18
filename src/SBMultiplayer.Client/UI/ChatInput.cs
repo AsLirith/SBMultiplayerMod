@@ -64,7 +64,7 @@ internal static class ChatInput
         IsOpen = true;
         openedAt = NetClock.Now;
         SE.UIAssets ui = GameAccess.UiAssets;
-        var input = new TextInput(GameAccess.UpdateSpeed, draft, 1800f, ui.FontSmall.Value.LineSpacing) { MaxTextLength = ProtocolInfo.MaxChatLength };
+        var input = new GrowingTextInput(GameAccess.UpdateSpeed, draft, 1800f, ui.FontSmall.Value.LineSpacing) { MaxTextLength = ProtocolInfo.MaxChatLength };
         draft = "";
         bool sent = false;
         closeChat = close;
@@ -106,6 +106,28 @@ internal static class ChatInput
             }
         };
         return scene;
+    }
+
+    /// <summary>
+    /// The game's text field keeps the height it was given: a message that wraps onto a second line overflowed it and the
+    /// cursor stayed on the first line. This one takes the height of its wrapped text (one line at least).
+    /// </summary>
+    private sealed class GrowingTextInput : TextInput
+    {
+        private readonly float lineHeight;
+
+        public GrowingTextInput(GameSpeed updateSpeed, string text, float width, float lineHeight) : base(updateSpeed, text, width, lineHeight)
+        {
+            this.lineHeight = lineHeight;
+            AutoSetSizeToText = true;
+        }
+
+        protected override Label SetSizeToText(StyleRoot style)
+        {
+            base.SetSizeToText(style);
+            Height = MathF.Max(Height, lineHeight);
+            return this;
+        }
     }
 
     private sealed class EscapeCloser(Action close) : IUpdate

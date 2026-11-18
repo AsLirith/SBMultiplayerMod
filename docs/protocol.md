@@ -39,7 +39,20 @@ never resets a setting it doesn't know.
 
 **New optional feature**: add a string to the features in `ProtocolInfo.OwnCapabilities`. Clients send theirs in
 `Hello`, the server sends its own in `Welcome`. Use `Capabilities.Has("name")` to decide whether to send a new
-message or to show a button. Known features: `dnf-fills-quota` (0.21.0, the server knows `MatchSettings.DnfFillsQuota`).
+message or to show a button. Known features: `dnf-fills-quota` (0.21.0, the server knows `MatchSettings.DnfFillsQuota`), `run-proof` (1.2.0: the
+server checks finish times, see below).
+
+## Time checks (1.2.0)
+
+- `Finish` gets three fields appended: `lostMs` (part of the time lost by respawning at the start in synchronized modes,
+  not in the replay), `runId` (0 = no replay follows) and `nonStandard` (game settings the official leaderboards refuse,
+  one per line). A 1.1 server stops reading before them; a 1.1 client's finish gets the defaults.
+- `ReplayChunk` (25, C→S): `runId`, total length, offset, then up to 16 KB of the run's `.rpl` file. Sent only to a
+  server with `run-proof`, right after the `Finish`, in order.
+- `MatchSettings.RunCheck` (`Off`, `Report`, `Enforce`).
+- Replies `TIME_REJECTED` (to the player, argument: why) and `TIME_FLAGGED` (to the admins, argument:
+  `name\ntime\nreasons`), with an English fallback.
+- `ReplayFile` (Protocol project) reads the metadata of a replay without the game.
 
 ## Web rooms (0.22.0)
 

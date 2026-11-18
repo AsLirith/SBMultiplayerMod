@@ -29,6 +29,7 @@ Works on Linux (native version of the game) and Windows.
 - **SBLB lobbies**: create a lobby on the community website [sblb.thefanclub.cc](https://sblb.thefanclub.cc) right from the game and share its code, or join one with a code. Nobody opens a port.
 - **Dedicated server** (console app, no game needed) for servers that run all the time or for tournaments: map rotation, password, results export (JSON/CSV).
 - **Admin panel in game**: change the mode, maps, timings and points; skip, restart, pause or extend a round; kick players.
+- **Time checks for competitions**: each finish comes with the run's replay and the game settings; the server checks them (right map, same time, standard physics settings, normal game speed) and keeps the replays of the best times. After a tournament, `verify-replays` re-simulates them with the game to prove every time ([details](docs/replay-verification.md)).
 
 **And also**
 - Interface in **English or French**, following the game's language.
