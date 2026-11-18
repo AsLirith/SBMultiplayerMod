@@ -272,9 +272,11 @@ internal sealed class MultiplayerClient : INetEventListener
             }
         }
         ModConfig cfg = ModConfig.Current;
-        if (ModInput.Pressed(cfg.CloseEndScreenKey) && GlobalOverlay.EndScreenVisible && !PopupMenu.AnyOpen && !KeyBindings.BlocksEscape)
+        // The end-of-game screen is on top of everything: its key closes it before any menu open under it.
+        if (ModInput.Pressed(cfg.CloseEndScreenKey) && GlobalOverlay.EndScreenVisible && !KeyBindings.BlocksEscape && !ChatInput.IsOpen)
         {
             GlobalOverlay.DismissEndScreen();
+            PopupMenu.IgnoreEscapeUntilReleased();
         }
         if (ModInput.Pressed(ModConfig.Current.RejoinKey))
         {

@@ -1098,6 +1098,8 @@ public sealed class GameServer : INetEventListener
                         TimeMs = e.BestMs,
                         Time = Msg.FormatTime(e.BestMs),
                         Points = i < options.PointsTable.Count ? options.PointsTable[i] : 0,
+                        // Part of the time lost by respawning at the start (synchronized modes): not in the replay.
+                        LostMs = proof?.LostMs ?? 0,
                         // "verified", "flagged" or "no replay" ("off" without checks).
                         Check = options.RunCheck == RunCheck.Off ? "off" : proof?.Status ?? "no replay",
                         Flags = proof?.Flags ?? new List<string>(),

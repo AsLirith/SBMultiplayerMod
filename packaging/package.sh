@@ -13,6 +13,7 @@ out=src/SBMultiplayer.Client/bin/Release/net8.0
 rm -rf dist/pkg
 mkdir -p dist/pkg/SBMultiplayer
 cp "$out"/{SBMultiplayer.Client.dll,0Harmony.dll,LiteNetLib.dll,SBMultiplayer.Protocol.dll,SBMultiplayer.Server.dll} dist/pkg/SBMultiplayer/
+cp packaging/verify-replays.sh packaging/verify-replays.bat dist/pkg/SBMultiplayer/
 cp packaging/INSTALL.txt dist/pkg/
 
 python3 -c "import shutil, sys; shutil.make_archive(sys.argv[1], 'zip', 'dist/pkg')" "dist/SBMultiplayer-$version"
@@ -22,6 +23,6 @@ echo "Client package: dist/SBMultiplayer-$version.zip"
 rm -rf dist/server
 dotnet publish src/SBMultiplayer.Server -c Release -o dist/server/SBMultiplayer.Server -nologo -v quiet
 rm -f dist/server/SBMultiplayer.Server/*.pdb
-cp docs/hosting.md dist/server/
+cp docs/hosting.md docs/replay-verification.md dist/server/
 python3 -c "import shutil, sys; shutil.make_archive(sys.argv[1], 'zip', 'dist/server')" "dist/SBMultiplayer-Server-$version"
 echo "Server package: dist/SBMultiplayer-Server-$version.zip"

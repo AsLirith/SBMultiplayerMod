@@ -149,7 +149,7 @@ With `Report` (the default), every time counts; the ones that fail a check are s
 
 The replays of the best times are saved in `ResultsDirectory/replays`: copy one into your game's replay folder to watch the run if a time is disputed.
 
-These checks stop casual cheating and external tools. They can't stop someone who rebuilds the mod to send forged data: re-simulating the replays with the game (planned) is what will close that gap.
+These checks stop casual cheating and external tools, but someone who rebuilds the mod could send a forged replay. After a tournament, re-simulate the saved replays with the game to rule that out: see [Replay verification](replay-verification.md) (`verify-replays.sh` / `verify-replays.bat` in the mod's folder, given the results folder).
 
 ## Network
 

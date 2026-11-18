@@ -7,15 +7,19 @@ using SE;
 namespace SBMultiplayer.Client.Verify;
 
 /// <summary>
-/// PROTOTYPE - replay verification by re-simulation. When SBMULTI_VERIFY is set (path of the JSON report) and the game
-/// is launched with .rpl files or folders as arguments, the multiplayer mod stays off and each replay is played through
-/// the game's own test harness (the one its developers use for replay tests): no Steam, many updates per frame, desync
-/// detection forced to Strict (the replayed board must be bit-for-bit where the file says it was, every update).
-/// One JSON line per replay is appended to the report, then the game quits.
+/// Replay verification by re-simulation. When SBMULTI_VERIFY is set (path of the JSON report) and the game is launched
+/// with .rpl files, folders of replays or results folders (exported by the server) as arguments, the multiplayer mod
+/// stays off and each replay is played through the game's own test harness (the one its developers use for replay
+/// tests): no Steam, many updates per frame, desync detection forced to Strict (the replayed board must be bit-for-bit
+/// where the file says it was, every update). One JSON line per replay is appended to the report, then the game quits.
+/// For a results folder, verification.csv is also written in it: every result of every round, with the verdict.
 /// </summary>
 internal static class ReplayVerifier
 {
     public const string EnvVar = "SBMULTI_VERIFY";
+
+    /// <summary>Set for the child processes (one replay each): they only append their line to the report.</summary>
+    private const string ChildVar = "SBMULTI_VERIFY_CHILD";
 
     public static string? ReportPath => Environment.GetEnvironmentVariable(EnvVar) is { Length: > 0 } p ? p : null;
 
@@ -59,14 +63,78 @@ internal static class ReplayVerifier
         {
             return true; // our own per-replay calls
         }
-        List<string> files = args.SelectMany(ExpandReplays).ToList();
-        if (files.Count == 0)
+        if (Environment.GetEnvironmentVariable(ChildVar) == "1" && args.Length == 1)
+        {
+            __result = VerifyOne(args[0], Path.GetFullPath(ReportPath!)).ContinueWith(_ => 0); // one replay for the parent process
+            return false;
+        }
+        List<ResultsFolder> folders = args.Select(ResultsFolder.TryRead).OfType<ResultsFolder>().ToList();
+        List<string> files = args.Where(a => !folders.Any(f => f.Path == Path.GetFullPath(a))).SelectMany(ExpandReplays)
+            .Concat(folders.SelectMany(f => f.Replays))
+            .Distinct(StringComparer.Ordinal).ToList();
+        if (files.Count == 0 && folders.Count == 0)
         {
             ModLog.Warn("Replay verification: no .rpl file in the arguments, starting the game normally");
             return true;
         }
-        __result = RunAll(files);
+        __result = RunAllThenSummarize(files, folders);
         return false;
+    }
+
+    private static async Task<int> RunAllThenSummarize(List<string> files, List<ResultsFolder> folders)
+    {
+        Say($"Replay verification: {files.Count} replay(s) to re-simulate");
+        if (files.Count > 0)
+        {
+            await RunAll(files);
+        }
+        string report = Path.GetFullPath(ReportPath!);
+        Dictionary<string, VerifyResult> results = ReadReport(report);
+        foreach (ResultsFolder folder in folders)
+        {
+            folder.WriteSummary(results);
+        }
+        if (folders.Count == 0)
+        {
+            foreach (string file in files)
+            {
+                Say(results.TryGetValue(file, out VerifyResult? r) ? $"  {r.Verdict,-16} {Path.GetFileName(file)}" : $"  {"not verified",-16} {Path.GetFileName(file)}");
+            }
+        }
+        Say($"Report: {report}");
+        return 0;
+    }
+
+    /// <summary>Latest line of the report for each replay (the report is appended to, a replay may be there twice).</summary>
+    private static Dictionary<string, VerifyResult> ReadReport(string report)
+    {
+        var results = new Dictionary<string, VerifyResult>(StringComparer.Ordinal);
+        if (!File.Exists(report))
+        {
+            return results;
+        }
+        foreach (string line in File.ReadLines(report))
+        {
+            try
+            {
+                if (line.Trim().Length > 0 && JsonSerializer.Deserialize(line, VerifyJson.Default.VerifyResult) is { } r)
+                {
+                    results[r.File] = r;
+                }
+            }
+            catch (JsonException)
+            {
+                // a line cut by a crash: that replay shows as not verified
+            }
+        }
+        return results;
+    }
+
+    /// <summary>To the log, and to the console of whoever started the verification.</summary>
+    internal static void Say(string line)
+    {
+        ModLog.Info(line);
+        Console.WriteLine(line);
     }
 
     private static IEnumerable<string> ExpandReplays(string arg)
@@ -172,13 +240,16 @@ internal static class ReplayVerifier
             await VerifyOne(files[0], report);
             return 0;
         }
+        int index = 0;
         // The game can't be created twice in one process (native crash on the second one): one child process per replay.
         ModLog.Info($"Replay verification: {files.Count} replay(s), one process each, report {report}");
         string exe = Environment.ProcessPath!;
         foreach (string file in files)
         {
             string original = Path.GetFullPath(file);
+            Say($"  [{++index}/{files.Count}] {Path.GetFileName(original)}");
             var start = new ProcessStartInfo(exe) { UseShellExecute = false, WorkingDirectory = AppContext.BaseDirectory };
+            start.Environment[ChildVar] = "1";
             start.ArgumentList.Add(original);
             using Process? child = Process.Start(start);
             if (child == null)
@@ -420,6 +491,124 @@ internal sealed class VerifyTest : TestReplay, IGoalReached
 }
 
 /// <param name="FileTotalMs">Run time including the parts before restarts (the mod's back-to-start penalty is TotalMs - Ms).</param>
+/// <summary>
+/// A results folder exported by the server (ResultsDirectory): the round files list each result with the replay the
+/// server saved for it and how much of the time was lost at the start (not in the replay).
+/// </summary>
+internal sealed class ResultsFolder
+{
+    /// <param name="Order">Index of the round file (sorted by name, i.e. by date: round numbers restart with each server run).</param>
+    /// <param name="Ended">When the round ended, from the file name ("20261118-042516").</param>
+    private sealed record Entry(int Order, string Ended, int Round, string Map, int Rank, string Name, uint TimeMs, uint LostMs, string ServerCheck, string? Replay);
+
+    public string Path { get; }
+    private readonly List<Entry> entries;
+
+    private ResultsFolder(string path, List<Entry> entries)
+    {
+        Path = path;
+        this.entries = entries;
+    }
+
+    public IEnumerable<string> Replays => entries.Where(e => e.Replay != null).Select(e => e.Replay!);
+
+    public static ResultsFolder? TryRead(string arg)
+    {
+        if (!Directory.Exists(arg))
+        {
+            return null;
+        }
+        string path = System.IO.Path.GetFullPath(arg);
+        string[] rounds = Directory.GetFiles(path, "*_round*.json").OrderBy(f => f, StringComparer.Ordinal).ToArray();
+        if (rounds.Length == 0)
+        {
+            return null; // a plain folder of replays
+        }
+        var entries = new List<Entry>();
+        for (int order = 0; order < rounds.Length; order++)
+        {
+            string file = rounds[order];
+            string name = System.IO.Path.GetFileName(file);
+            string ended = name.Length >= 15 ? name[..15] : name;
+            try
+            {
+                using JsonDocument doc = JsonDocument.Parse(File.ReadAllText(file));
+                JsonElement root = doc.RootElement;
+                int round = root.TryGetProperty("Round", out JsonElement r) ? r.GetInt32() : 0;
+                string map = root.TryGetProperty("Map", out JsonElement m) ? m.GetString() ?? "" : "";
+                if (!root.TryGetProperty("Results", out JsonElement list))
+                {
+                    continue;
+                }
+                foreach (JsonElement e in list.EnumerateArray())
+                {
+                    string? replay = e.TryGetProperty("Replay", out JsonElement rp) && rp.ValueKind == JsonValueKind.String
+                        ? System.IO.Path.GetFullPath(System.IO.Path.Combine(path, rp.GetString()!))
+                        : null;
+                    entries.Add(new Entry(order, ended, round, map,
+                        e.TryGetProperty("Rank", out JsonElement rank) ? rank.GetInt32() : 0,
+                        e.TryGetProperty("Name", out JsonElement n) ? n.GetString() ?? "" : "",
+                        e.TryGetProperty("TimeMs", out JsonElement t) ? t.GetUInt32() : 0,
+                        e.TryGetProperty("LostMs", out JsonElement l) ? l.GetUInt32() : 0,
+                        e.TryGetProperty("Check", out JsonElement c) ? c.GetString() ?? "" : "",
+                        replay != null && File.Exists(replay) ? replay : null));
+                }
+            }
+            catch (Exception ex) when (ex is JsonException or InvalidOperationException or IOException)
+            {
+                ReplayVerifier.Say($"Skipped {System.IO.Path.GetFileName(file)}: {ex.Message}");
+            }
+        }
+        return new ResultsFolder(path, entries);
+    }
+
+    /// <summary>
+    /// The verdict of a result: the re-simulated time plus the time lost at the start must be the time that counted.
+    /// </summary>
+    private static (string Verdict, string Details) Judge(Entry e, IReadOnlyDictionary<string, VerifyResult> results)
+    {
+        if (e.Replay == null)
+        {
+            return ("no replay", "");
+        }
+        if (!results.TryGetValue(e.Replay, out VerifyResult? r))
+        {
+            return ("not verified", "");
+        }
+        uint resim = (r.ResimMs ?? 0) + e.LostMs;
+        string details = r.Desync ?? r.Error ?? (r.ResimMs != null && r.Verdict is "time-mismatch" or "penalty-mismatch"
+            ? $"re-simulated {FormatTime(resim)}" : "");
+        if (r.Verdict != "valid")
+        {
+            return (r.Verdict, details);
+        }
+        return resim == e.TimeMs
+            ? ("verified", "")
+            : ("time-mismatch", $"re-simulated {FormatTime(resim)}");
+    }
+
+    private static string FormatTime(uint ms) => $"{ms / 60000}:{ms / 1000 % 60:00}.{ms % 1000:000}";
+
+    public void WriteSummary(IReadOnlyDictionary<string, VerifyResult> results)
+    {
+        var csv = new System.Text.StringBuilder("Ended,Round,Map,Rank,Name,Time,ServerCheck,Resimulation,Details,Replay\n");
+        ReplayVerifier.Say($"Results in {Path}:");
+        foreach (Entry e in entries.OrderBy(e => e.Order).ThenBy(e => e.Rank))
+        {
+            var (verdict, details) = Judge(e, results);
+            csv.Append(e.Ended).Append(',').Append(e.Round).Append(',').Append(Csv(e.Map)).Append(',').Append(e.Rank).Append(',').Append(Csv(e.Name)).Append(',')
+                .Append(FormatTime(e.TimeMs)).Append(',').Append(Csv(e.ServerCheck)).Append(',').Append(verdict).Append(',')
+                .Append(Csv(details)).Append(',').Append(Csv(e.Replay == null ? "" : System.IO.Path.GetRelativePath(Path, e.Replay))).Append('\n');
+            ReplayVerifier.Say($"  {e.Ended}  round {e.Round,3}  {e.Rank,2}. {e.Name,-24} {FormatTime(e.TimeMs)}  {verdict}{(details != "" ? $" ({details})" : "")}");
+        }
+        string file = System.IO.Path.Combine(Path, "verification.csv");
+        File.WriteAllText(file, csv.ToString());
+        ReplayVerifier.Say($"Summary: {file}");
+    }
+
+    private static string Csv(string s) => s.IndexOfAny(new[] { ',', '"', '\n' }) >= 0 ? $"\"{s.Replace("\"", "\"\"")}\"" : s;
+}
+
 internal sealed record VerifyResult(string File, string Verdict, uint LevelId, uint? UserId, bool? FileGoalReached, uint FileMs, uint FileRestarts,
     bool ResimGoalReached, uint? ResimMs, string? DesyncDetection, string? Desync, string? Error, int Updates, int? GoalAtUpdate,
     int? StreamEndAtUpdate, double WallSeconds, uint FileTotalMs = 0, uint? ResimTotalMs = null);

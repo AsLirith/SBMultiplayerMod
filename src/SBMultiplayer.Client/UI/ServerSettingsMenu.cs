@@ -99,16 +99,16 @@ internal static class ServerSettingsMenu
                 table.Add(p);
             }
             working.PointsTable = table;
-            working.RoundSeconds = MathF.Round(d.RoundSeconds.Value);
-            working.ResultsSeconds = MathF.Round(d.ResultsSeconds.Value);
+            working.RoundSeconds = SecondsValue(d.RoundSeconds.Value);
+            working.ResultsSeconds = SecondsValue(d.ResultsSeconds.Value);
             working.RoundsPerMap = (int)MathF.Round(d.RoundsPerMap.Value);
-            working.FinishTimeoutSeconds = MathF.Round(d.FinishTimeout.Value);
-            working.PrepareTimeoutSeconds = MathF.Round(d.PrepareTimeout.Value);
-            working.CountdownSeconds = MathF.Round(d.Countdown.Value);
+            working.FinishTimeoutSeconds = SecondsValue(d.FinishTimeout.Value);
+            working.PrepareTimeoutSeconds = SecondsValue(d.PrepareTimeout.Value);
+            working.CountdownSeconds = SecondsValue(d.Countdown.Value);
             working.CupPointsLimit = (int)MathF.Round(d.CupLimit.Value);
             working.EliminatedPerRound = (int)MathF.Round(d.Eliminated.Value);
-            working.MatchEndSeconds = MathF.Round(d.MatchEnd.Value);
-            working.HideSeconds = MathF.Round(d.HideSeconds.Value);
+            working.MatchEndSeconds = SecondsValue(d.MatchEnd.Value);
+            working.HideSeconds = SecondsValue(d.HideSeconds.Value);
             working.Infection = d.Infection.Value;
             working.DnfFillsQuota = d.DnfFillsQuota.Value;
             Client.SendSettings(working, d.Baseline, d.Save.Value);

@@ -163,6 +163,11 @@ internal static class PopupMenu
         return scene;
     }
 
+    /// <summary>Escape was just used for something on top of the menus (the end-of-game screen): it doesn't close a menu.</summary>
+    private static bool escapeUsedElsewhere;
+
+    public static void IgnoreEscapeUntilReleased() => escapeUsedElsewhere = true;
+
     private sealed class Updater(Definition def, Action close, Screen screen, Element content) : IUpdate
     {
         private int builtSignature = def.Signature?.Invoke() ?? 0;
@@ -180,7 +185,13 @@ internal static class PopupMenu
                 }
             }
             bool escapeDown = Keyboard.GetState().IsKeyDown(Keys.Escape);
-            if (escapeDown && !escapeWasDown && !KeyBindings.BlocksEscape)
+            if (!escapeDown)
+            {
+                escapeUsedElsewhere = false;
+            }
+            // The end-of-game screen takes Escape first (closed by the global tick, before or after this update).
+            bool endScreenTakesIt = escapeUsedElsewhere || (GlobalOverlay.EndScreenVisible && Net.ModConfig.Current.CloseEndScreenKey == "Escape");
+            if (escapeDown && !escapeWasDown && !KeyBindings.BlocksEscape && !endScreenTakesIt)
             {
                 close();
                 return;
@@ -552,7 +563,14 @@ internal static class PopupMenu
 
     public static string Percent(string f) => MathF.Round(float.Parse(f) * 100f) + "%";
 
-    public static string Seconds(string f) => MathF.Round(float.Parse(f)) + " s";
+    /// <summary>Seconds sliders: 70 is shown and applied as 69 (players asked for it).</summary>
+    public static string Seconds(string f) => SecondsValue(float.Parse(f)) + " s";
+
+    public static float SecondsValue(float sliderValue)
+    {
+        float s = MathF.Round(sliderValue);
+        return s == 70f ? 69f : s;
+    }
 
     public static string Whole(string f) => MathF.Round(float.Parse(f)).ToString();
 }
