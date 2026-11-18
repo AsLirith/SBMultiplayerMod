@@ -11,6 +11,22 @@ internal static class Plugin
     public static void Load()
     {
         ModLog.Info($"SBMultiplayer v{UI.MultiplayerMenu.Version} - game {Compatibility.GameVersion} - .NET {Environment.Version}, Harmony {typeof(Harmony).Assembly.GetName().Version}");
+
+        // Prototype: replay verification run (no multiplayer at all).
+        if (Verify.ReplayVerifier.ReportPath != null)
+        {
+            Harmony = new Harmony(HarmonyId);
+            try
+            {
+                Verify.ReplayVerifier.Install(Harmony);
+            }
+            catch (Exception e)
+            {
+                ModLog.Error("Replay verification: could not install", e);
+            }
+            return;
+        }
+
         Net.ModConfig.Load(Path.GetDirectoryName(typeof(Plugin).Assembly.Location)!);
         ModLog.Info($"Configured server: {Net.ModConfig.Current.Server}");
 
