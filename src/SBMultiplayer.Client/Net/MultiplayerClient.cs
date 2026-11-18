@@ -769,16 +769,20 @@ internal sealed class MultiplayerClient : INetEventListener
         }
         pendingFinish = null;
         uint ms = finish.Timer.Counter.MS;
+        uint runMs = ms;
         int? delta = SplitTracker.Finished(mapKey, finish.RoundId, finish.Timer, finish.Display);
         if (!finish.SendToServer)
         {
+            RunIntegrity.LastFinishedReplay = null;
             return; // outside a round: only shown by the splits
         }
+        uint lostMs = 0;
         if (Round.Current.Info.Mode.IsSynchronized() && StartGate.LostMs > 0)
         {
             // One-attempt round: the time lost by respawning at the start (the game restarted its timer) counts.
-            ms += StartGate.LostMs;
-            delta += (int)StartGate.LostMs;
+            lostMs = StartGate.LostMs;
+            ms += lostMs;
+            delta += (int)lostMs;
         }
         ModLog.Info($"Finished in {Msg.FormatTime(ms)} (round {finish.RoundId}) → sent to the server");
         if (Round.Current.Info.Mode.IsSynchronized())
@@ -793,7 +797,7 @@ internal sealed class MultiplayerClient : INetEventListener
         {
             Notifications.Info(Tr.TimeVsBest(Msg.FormatTime(ms), Msg.FormatTime((uint)(ms - d)), d / 1000f));
         }
-        SendFinish(finish.RoundId, ms);
+        SendFinish(finish.RoundId, ms, lostMs, runMs);
     }
 
     public void SendReady(int roundId) => Send(w => Msg.Ready(w, roundId), DeliveryMethod.ReliableOrdered);
@@ -811,11 +815,32 @@ internal sealed class MultiplayerClient : INetEventListener
         }
     }
 
-    public void SendFinish(int roundId, uint timeMs)
+    /// <param name="runMs">The game's own time for the run (without <paramref name="lostMs"/>): the time in its replay.</param>
+    private void SendFinish(int roundId, uint timeMs, uint lostMs, uint runMs)
     {
-        if (IsReady)
+        if (!IsReady)
         {
-            Send(w => Msg.Finish(w, roundId, timeMs), DeliveryMethod.ReliableOrdered);
+            return;
+        }
+        // Servers that check times get the game settings the official leaderboards refuse, then the run's replay.
+        bool proof = ServerCapabilities.Has(ProtocolInfo.Features.RunProof);
+        byte[]? replay = proof ? RunIntegrity.TakeReplay(runMs) : null;
+        RunIntegrity.LastFinishedReplay = null;
+        int runId = replay != null ? RunIntegrity.NewRunId() : 0;
+        string nonStandard = proof ? string.Join("\n", RunIntegrity.NonStandardSettings()) : "";
+        if (nonStandard != "")
+        {
+            ModLog.Warn($"Non-standard game settings sent with the time: {nonStandard.Replace('\n', ',')}");
+        }
+        Send(w => Msg.Finish(w, roundId, timeMs, lostMs, runId, nonStandard), DeliveryMethod.ReliableOrdered);
+        if (replay != null)
+        {
+            for (int offset = 0; offset < replay.Length; offset += Msg.ReplayChunkBytes)
+            {
+                int start = offset, count = Math.Min(Msg.ReplayChunkBytes, replay.Length - offset);
+                Send(w => Msg.ReplayChunk(w, runId, replay.Length, start, replay, count), DeliveryMethod.ReliableOrdered);
+            }
+            ModLog.Info($"Replay of the run sent ({replay.Length / 1024.0:0.0} KB)");
         }
     }
 

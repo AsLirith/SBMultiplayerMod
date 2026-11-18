@@ -116,6 +116,9 @@ internal static class Tr
         SBMultiplayer.Protocol.CommandResults.Unknown => T($"Unknown command {arg} (see /help)", $"Commande inconnue {arg} (voir /help)"),
         SBMultiplayer.Protocol.CommandResults.TooFast => T("You're sending messages too fast", "Tu envoies des messages trop vite"),
         SBMultiplayer.Protocol.CommandResults.InvalidSettings => T($"Settings refused: {arg}", $"Paramètres refusés : {arg}"),
+        SBMultiplayer.Protocol.CommandResults.TimeRejected => T($"Your time doesn't count: {arg}", $"Ton temps ne compte pas : {arg}"),
+        SBMultiplayer.Protocol.CommandResults.TimeFlagged when arg.Split('\n') is { Length: 3 } f => T(
+            $"Suspicious time: {f[0]} {f[1]} ({f[2]})", $"Temps suspect : {f[0]} {f[1]} ({f[2]})"),
         SBMultiplayer.Protocol.CommandResults.NoConfigFile => T("Settings applied, but not saved: the server wasn't started with a config file (--config)", "Paramètres appliqués, mais pas enregistrés : le serveur n'a pas été lancé avec un fichier de config (--config)"),
         _ => null,
     };
@@ -453,6 +456,25 @@ internal static class Tr
         "Ticked: players who don't finish fill the quota, first to give up first (quota 2, 3 give-ups: only the first two are out). Unticked: all of them are eliminated.",
         "Coché : les joueurs qui ne finissent pas remplissent le quota, premier abandon d'abord (quota 2, 3 abandons : seuls les deux premiers sortent). Décoché : ils sont tous éliminés.");
     public static string HsRespawnedOut => T("You left your hiding place during the hunt: you're out of this round", "Tu as quitté ta cachette pendant la chasse : tu es hors jeu pour cette manche");
+    public static string SettingsRunCheck => T("Time checks", "Contrôle des temps");
+    public static string RunCheckName(SBMultiplayer.Protocol.RunCheck check) => check switch
+    {
+        SBMultiplayer.Protocol.RunCheck.Off => T("Off", "Désactivé"),
+        SBMultiplayer.Protocol.RunCheck.Enforce => T("Enforce", "Strict"),
+        _ => T("Report", "Signaler"),
+    };
+    public static string RunCheckDescription(SBMultiplayer.Protocol.RunCheck check) => check switch
+    {
+        SBMultiplayer.Protocol.RunCheck.Off => T(
+            "Every plausible time counts, nothing is checked.",
+            "Tout temps plausible compte, rien n'est vérifié."),
+        SBMultiplayer.Protocol.RunCheck.Enforce => T(
+            "A time counts only once its replay was checked: right map, right time, standard game settings, normal game speed. Players with an older mod can play, but their times don't count.",
+            "Un temps ne compte qu'une fois son replay vérifié : bonne map, bon temps, réglages de jeu standard, vitesse de jeu normale. Les joueurs avec un ancien mod peuvent jouer, mais leurs temps ne comptent pas."),
+        _ => T(
+            "Times count; the ones that fail a check (replay, game settings, game speed) are shown to the admins and in the results export.",
+            "Les temps comptent ; ceux qui échouent à un contrôle (replay, réglages de jeu, vitesse de jeu) sont signalés aux admins et dans l'export des résultats."),
+    };
     public static string SettingsInfection => T("Infection: found mice hunt too", "Contagion : trouvées = chasseuses");
     public static string AdminNextHunter => T("Next hunter", "Prochain chasseur");
     public static string AdminRandomHunter => T("Random", "Au hasard");

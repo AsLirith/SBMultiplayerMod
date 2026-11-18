@@ -16,13 +16,19 @@ public static class ProtocolInfo
     private static string FormatVersion(System.Version? v) => v == null ? "?" : $"{v.Major}.{v.Minor}.{Math.Max(0, v.Build)}";
 
     /// <summary>What this build supports, sent by the client in Hello and by the server in Welcome.</summary>
-    public static Capabilities OwnCapabilities => new(ModVersion, GameModes.Known, new[] { Features.DnfFillsQuota });
+    public static Capabilities OwnCapabilities => new(ModVersion, GameModes.Known, new[] { Features.DnfFillsQuota, Features.RunProof });
 
     /// <summary>Optional features (see docs/protocol.md).</summary>
     public static class Features
     {
         /// <summary>The server knows <see cref="MatchSettings.DnfFillsQuota"/>.</summary>
         public const string DnfFillsQuota = "dnf-fills-quota";
+
+        /// <summary>
+        /// Server: checks finish times (<see cref="RunCheck"/>) and accepts their replays (<see cref="MessageType.ReplayChunk"/>).
+        /// Client: sends its non-standard game settings with each finish, and the run's replay to a server that has it.
+        /// </summary>
+        public const string RunProof = "run-proof";
     }
 
     public const int DefaultPort = 24800;
@@ -138,6 +144,10 @@ public static class CommandResults
     /// <summary>Argument: what is wrong.</summary>
     public const string InvalidSettings = "INVALID_SETTINGS";
     public const string NoConfigFile = "NO_CONFIG_FILE";
+    /// <summary>To the player: their finish time doesn't count. Argument: why (English, from the server's checks).</summary>
+    public const string TimeRejected = "TIME_REJECTED";
+    /// <summary>To the admins: a time failed a check but counts (RunCheck Report). Argument: "name\ntime\nreasons".</summary>
+    public const string TimeFlagged = "TIME_FLAGGED";
 }
 
 public enum AdminCommand : byte
@@ -229,6 +239,22 @@ public enum MessageType : byte
 
     /// <summary>S→C, unreliable. Board positions of the players on the recipient's map, grouped in one packet.</summary>
     States = 24,
+
+    /// <summary>C→S, reliable. A piece of the replay of a finished run (servers with <see cref="ProtocolInfo.Features.RunProof"/>).</summary>
+    ReplayChunk = 25,
+}
+
+/// <summary>What the server does with the checks of a finish time (game settings, game speed, the run's replay).</summary>
+public enum RunCheck : byte
+{
+    /// <summary>No checks: every plausible time counts (as before 1.2).</summary>
+    Off = 0,
+
+    /// <summary>Times count; the ones that fail a check are reported to the admins, in the log and in the results export.</summary>
+    Report = 1,
+
+    /// <summary>A time counts only once its replay arrived and passed every check.</summary>
+    Enforce = 2,
 }
 
 public enum RoundPhase : byte
@@ -321,6 +347,8 @@ public sealed class MatchSettings
     /// (otherwise every one of them is eliminated).
     /// </summary>
     public bool DnfFillsQuota { get; set; }
+    /// <summary>Checks of the finish times (added in 1.2: older servers don't send it and older clients ignore it).</summary>
+    public RunCheck RunCheck { get; set; } = RunCheck.Report;
 
     /// <summary>Serialization metadata generated at compile time (no reflection needed).</summary>
     public static System.Text.Json.Serialization.Metadata.JsonTypeInfo<MatchSettings> JsonInfo => ProtocolJson.Default.MatchSettings;
@@ -797,14 +825,47 @@ public static class Msg
         return list;
     }
 
-    public static NetDataWriter Finish(NetDataWriter w, int roundId, uint timeMs)
+    /// <param name="lostMs">Part of <paramref name="timeMs"/> lost by respawning at the start (synchronized modes): not in the replay.</param>
+    /// <param name="runId">Identifies the run for its <see cref="MessageType.ReplayChunk"/> messages (0 = no replay will follow).</param>
+    /// <param name="nonStandard">Game settings that differ from the official leaderboards' rules, one per line ("" = none).</param>
+    public static NetDataWriter Finish(NetDataWriter w, int roundId, uint timeMs, uint lostMs = 0, int runId = 0, string nonStandard = "")
     {
         w.Reset();
         w.Put((byte)MessageType.Finish);
         w.Put(roundId);
         w.Put(timeMs);
+        // Appended in 1.2 (older servers stop reading before them).
+        w.Put(lostMs);
+        w.Put(runId);
+        w.Put(nonStandard);
         return w;
     }
+
+    public readonly record struct FinishInfo(int RoundId, uint TimeMs, uint LostMs, int RunId, string NonStandard);
+
+    /// <summary>Reads a Finish (after its type byte); fields of a 1.1 client get their defaults.</summary>
+    public static FinishInfo GetFinish(NetDataReader r) =>
+        new(r.GetInt(), r.GetUInt(), r.GetUIntOr(0), r.GetIntOr(0), r.GetStringOr(4096, ""));
+
+    /// <summary>Replay bytes per <see cref="MessageType.ReplayChunk"/>: well under the web rooms' 64 KB message limit.</summary>
+    public const int ReplayChunkBytes = 16 * 1024;
+
+    /// <summary>Largest replay accepted (a 5-minute run is well under 1 MB).</summary>
+    public const int MaxReplayBytes = 8 * 1024 * 1024;
+
+    public static NetDataWriter ReplayChunk(NetDataWriter w, int runId, int totalLength, int offset, byte[] data, int count)
+    {
+        w.Reset();
+        w.Put((byte)MessageType.ReplayChunk);
+        w.Put(runId);
+        w.Put(totalLength);
+        w.Put(offset);
+        w.PutBytesWithLength(data, offset, (ushort)count);
+        return w;
+    }
+
+    public static (int RunId, int TotalLength, int Offset, byte[] Data) GetReplayChunk(NetDataReader r) =>
+        (r.GetInt(), r.GetInt(), r.GetInt(), r.GetBytesWithLength());
 
     public static NetDataWriter Leaderboard(NetDataWriter w, int roundId, IReadOnlyCollection<LeaderboardEntry> entries)
     {
@@ -1125,6 +1186,8 @@ public static class OptionalFields
     public static byte GetByteOr(this NetDataReader r, byte fallback) => r.AvailableBytes >= 1 ? r.GetByte() : fallback;
 
     public static int GetIntOr(this NetDataReader r, int fallback) => r.AvailableBytes >= 4 ? r.GetInt() : fallback;
+
+    public static uint GetUIntOr(this NetDataReader r, uint fallback) => r.AvailableBytes >= 4 ? r.GetUInt() : fallback;
 
     public static float GetFloatOr(this NetDataReader r, float fallback) => r.AvailableBytes >= 4 ? r.GetFloat() : fallback;
 

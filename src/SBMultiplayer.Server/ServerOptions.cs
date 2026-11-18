@@ -66,6 +66,9 @@ public sealed class ServerOptions
     /// <summary>Elimination mode: players who didn't finish fill the quota (first to give up first) instead of all being eliminated.</summary>
     public bool DnfFillsQuota { get; set; }
 
+    /// <summary>Checks of the finish times: Off, Report (default) or Enforce (see the template).</summary>
+    public RunCheck RunCheck { get; set; } = RunCheck.Report;
+
     /// <summary>Folder where round results and match standings are written ("" = no export).</summary>
     public string ResultsDirectory { get; set; } = "results";
 
@@ -92,6 +95,7 @@ public sealed class ServerOptions
         HideSeconds = HideSeconds,
         Infection = Infection,
         DnfFillsQuota = DnfFillsQuota,
+        RunCheck = RunCheck,
     };
 
     /// <summary>Applies settings received from an admin, clamped to sane ranges. Returns an error, or null.</summary>
@@ -106,6 +110,10 @@ public sealed class ServerOptions
         if (!Enum.IsDefined(s.Mode))
         {
             return "unknown game mode (newer mod version?)";
+        }
+        if (!Enum.IsDefined(s.RunCheck))
+        {
+            return "unknown run check (newer mod version?)";
         }
         if (s.Mode != GameMode.Free && maps.Count == 0)
         {
@@ -126,6 +134,7 @@ public sealed class ServerOptions
         HideSeconds = Math.Clamp(s.HideSeconds, 5, 600);
         Infection = s.Infection;
         DnfFillsQuota = s.DnfFillsQuota;
+        RunCheck = s.RunCheck;
         return null;
     }
 
@@ -155,6 +164,7 @@ public sealed class ServerOptions
             .Replace("\"Infection\": false", $"\"Infection\": {(Infection ? "true" : "false")}")
             .Replace("\"DnfFillsQuota\": false", $"\"DnfFillsQuota\": {(DnfFillsQuota ? "true" : "false")}")
             .Replace("\"PointsTable\": [ 10, 8, 6, 5, 4, 3, 2, 1 ]", $"\"PointsTable\": [ {string.Join(", ", PointsTable)} ]")
+            .Replace("\"RunCheck\": \"Report\"", $"\"RunCheck\": \"{RunCheck}\"")
             .Replace("\"ResultsDirectory\": \"results\"", $"\"ResultsDirectory\": {J(ResultsDirectory)}");
         File.WriteAllText(path, text);
     }
@@ -231,7 +241,20 @@ public sealed class ServerOptions
           "HideSeconds": 30,
           "Infection": false,
 
-          // Folder for round results (JSON) and match standings (CSV). Empty = no export.
+          // Checks of the finish times (mod 1.2+). With each finish, the mod sends the game settings that differ from
+          // the official leaderboards' rules (physics, abilities...) and the run's replay, made by the game itself; the
+          // server also measures the game's speed (a slowed-down game sends fewer updates per second).
+          // The replay must reach the finish on the round's map, in the time announced. Checked replays of the best
+          // times are saved in ResultsDirectory/replays (open them in the game to watch the run).
+          //  - "Off": no checks.
+          //  - "Report": times count; the ones that fail a check are shown to the admins, in this console and in the
+          //    results export.
+          //  - "Enforce": a time counts only once its replay arrived and passed every check (players with an older mod
+          //    can still play, but their times don't count). For competitions.
+          // These checks stop casual cheating; they can't stop someone who rebuilds the mod to lie.
+          "RunCheck": "Report",
+
+          // Folder for round results (JSON), match standings (CSV) and the replays of the best times. Empty = no export.
           "ResultsDirectory": "results"
         }
         """;

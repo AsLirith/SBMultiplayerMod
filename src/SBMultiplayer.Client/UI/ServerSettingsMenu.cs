@@ -82,6 +82,7 @@ internal static class ServerSettingsMenu
         bool elimination = mode == GameMode.Elimination;
         bool rounds = mode != GameMode.Free;
         bool canDnfQuota = Client.ServerCapabilities.Has(ProtocolInfo.Features.DnfFillsQuota);
+        bool canRunCheck = Client.ServerCapabilities.Has(ProtocolInfo.Features.RunProof) && rounds && !hideAndSeek;
         TextInput points = Input(d.Points, 300);
         points.OnTextInputChanged += text => d.Points = text;
 
@@ -140,6 +141,13 @@ internal static class ServerSettingsMenu
             elimination && canDnfQuota ? Text(Tr.SettingsDnfFillsQuotaHint) : null,
             hideAndSeek ? Check(Tr.SettingsInfection, d.Infection) : null,
             rounds && !elimination && !hideAndSeek ? Row(Tr.SettingsPointsTable, Field(points)) : null,
+            // Off, Report, Enforce, Off...
+            canRunCheck ? Row(Tr.SettingsRunCheck, Button(Tr.RunCheckName(working.RunCheck), () =>
+            {
+                working.RunCheck = (RunCheck)(((int)working.RunCheck + 1) % 3);
+                screen.Refresh();
+            })) : null,
+            canRunCheck ? Text(Tr.RunCheckDescription(working.RunCheck)) : null,
             mode != d.Baseline.Mode ? Text(Tr.SettingsRestartWarning) : null,
             Check(Tr.SettingsSaveToFile, d.Save),
             Buttons(Button(Tr.SettingsApply, Apply), Button(Tr.Back, close)));

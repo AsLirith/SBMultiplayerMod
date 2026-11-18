@@ -38,6 +38,12 @@ public sealed class GameServer : INetEventListener
         public bool IsPlaying => HasSaidHello && !IsSpectator;
         public Queue<double> RecentChat { get; } = new();
         public HashSet<MessageType> UnknownMessages { get; } = new();
+
+        /// <summary>Game speed seen from here (board states per second).</summary>
+        public TickRateTracker TickRate { get; } = new();
+
+        /// <summary>Finish times waiting for their replay, by run id.</summary>
+        public Dictionary<int, RunProof> PendingRuns { get; } = new();
     }
 
     private readonly ServerOptions options;
@@ -89,6 +95,9 @@ public sealed class GameServer : INetEventListener
 
     /// <summary>Best time of each player in the current round (the name is kept if the player leaves).</summary>
     private readonly Dictionary<int, LeaderboardEntry> best = new();
+
+    /// <summary>Checks of each player's best time in the current round (for the results export).</summary>
+    private readonly Dictionary<int, RunProof> bestProof = new();
 
     /// <summary>Match standings, by player name (players get a new id when they reconnect).</summary>
     private readonly Dictionary<string, StandingEntry> standings = new();
@@ -165,6 +174,7 @@ public sealed class GameServer : INetEventListener
                   + (options.Mode == GameMode.Elimination ? $", {options.EliminatedPerRound} eliminated per round{(options.DnfFillsQuota ? " (players who don't finish fill the quota)" : "")}" : "")
                   + (IsHideAndSeek ? $", {options.HideSeconds:0} s to hide{(options.Infection ? ", infection" : "")}" : "")
                 : $"Time Attack - rotation: {string.Join(", ", options.Maps)} - {options.RoundSeconds:0} s rounds, {options.ResultsSeconds:0} s results")
+              + $" - run checks: {options.RunCheck}"
             : "Free mode: no rounds, everyone rides wherever they want");
     }
 
@@ -173,6 +183,7 @@ public sealed class GameServer : INetEventListener
 
     private volatile ServerSummary? summary;
     private double nextSummaryAt;
+    private double nextPendingCheckAt;
 
     public ServerSummary? Summary => summary;
 
@@ -192,6 +203,11 @@ public sealed class GameServer : INetEventListener
         if (options.Echo)
         {
             FlushEcho();
+        }
+        if (Now >= nextPendingCheckAt)
+        {
+            nextPendingCheckAt = Now + 1;
+            ExpirePendingRuns();
         }
         UpdateRound();
     }
@@ -331,6 +347,7 @@ public sealed class GameServer : INetEventListener
         matchEnded = false;
         phaseStart = Now;
         best.Clear();
+        bestProof.Clear();
         ready.Clear();
         participants.Clear();
         gaveUp.Clear();
@@ -820,11 +837,12 @@ public sealed class GameServer : INetEventListener
     private void BroadcastEvent(string code, string argument) =>
         Broadcast(Msg.Event(writer, code, argument), DeliveryMethod.ReliableOrdered, except: null);
 
-    private void OnFinish(Player p, int finishRoundId, uint timeMs)
+    private void OnFinish(Player p, Msg.FinishInfo finish)
     {
+        uint timeMs = finish.TimeMs;
         string reject = "";
         double elapsed = Now - phaseStart;
-        if (phase != RoundPhase.Playing || finishRoundId != roundId)
+        if (phase != RoundPhase.Playing || finish.RoundId != roundId)
         {
             reject = "outside of a round";
         }
@@ -836,7 +854,8 @@ public sealed class GameServer : INetEventListener
         {
             reject = "spectating";
         }
-        else if (IsRoundsMode && (!participants.Contains(p.Id) || gaveUp.Contains(p.Id) || best.ContainsKey(p.Id)))
+        else if (IsRoundsMode && (!participants.Contains(p.Id) || gaveUp.Contains(p.Id) || best.ContainsKey(p.Id)
+            || p.PendingRuns.Values.Any(r => r.RoundId == roundId)))
         {
             reject = "not racing in this round (one attempt per round)";
         }
@@ -844,7 +863,7 @@ public sealed class GameServer : INetEventListener
         {
             reject = $"wrong map ({p.MapKey})";
         }
-        else if (timeMs == 0 || timeMs / 1000.0 > elapsed + FinishToleranceSeconds)
+        else if (timeMs == 0 || finish.LostMs > timeMs || timeMs / 1000.0 > elapsed + FinishToleranceSeconds)
         {
             // A run can't last longer than the round has been running.
             reject = $"impossible time ({Msg.FormatTime(timeMs)} while the round started {elapsed:0.0} s ago)";
@@ -856,13 +875,183 @@ public sealed class GameServer : INetEventListener
             return;
         }
 
+        var run = new RunProof
+        {
+            RoundId = roundId, RunId = finish.RunId, TimeMs = timeMs, LostMs = finish.LostMs, MapKey = CurrentMap, ReceivedAt = Now,
+        };
+        if (options.RunCheck == RunCheck.Off)
+        {
+            CountTime(p, run);
+            return;
+        }
+
+        string[] nonStandard = finish.NonStandard.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (nonStandard.Length > 0)
+        {
+            run.Flags.Add($"non-standard game settings: {string.Join(", ", nonStandard.Take(8))}");
+        }
+        if (p.TickRate.RacingRate(Now, (timeMs - finish.LostMs) / 1000.0) is double rate && rate < RunChecks.MinUpdatesPerSecond)
+        {
+            run.Flags.Add($"game ran slow ({rate:0} updates per second instead of 60)");
+        }
+
+        bool replayComing = finish.RunId != 0 && p.Capabilities.Has(ProtocolInfo.Features.RunProof);
+        if (options.RunCheck == RunCheck.Enforce)
+        {
+            if (!replayComing)
+            {
+                RejectTime(p, run, "this mod version doesn't send the run's replay (update the mod)");
+            }
+            else if (run.Flags.Count > 0)
+            {
+                RejectTime(p, run, string.Join("; ", run.Flags));
+            }
+            else
+            {
+                p.PendingRuns[run.RunId] = run; // counts once the replay is checked
+            }
+            return;
+        }
+
+        // Report: the time counts now, the replay is checked when it arrives.
+        CountTime(p, run);
+        if (replayComing)
+        {
+            p.PendingRuns[run.RunId] = run;
+        }
+        else
+        {
+            CompleteRun(p, run);
+        }
+    }
+
+    /// <summary>Puts a time in the round's leaderboard.</summary>
+    private void CountTime(Player p, RunProof run)
+    {
+        run.Counted = true;
+        uint timeMs = run.TimeMs;
         firstFinishAt ??= Now;
         bool improved = !best.TryGetValue(p.Id, out LeaderboardEntry previous) || timeMs < previous.BestMs;
-        Log($"{p.Name}: {Msg.FormatTime(timeMs)}{(improved ? " (personal best)" : "")}");
+        string status = options.RunCheck == RunCheck.Enforce ? " (replay verified)" : "";
+        Log($"{p.Name}: {Msg.FormatTime(timeMs)}{(improved ? " (personal best)" : "")}{status}");
         if (improved)
         {
             best[p.Id] = new LeaderboardEntry(p.Id, p.Name, timeMs);
+            bestProof[p.Id] = run;
             BroadcastLeaderboard();
+        }
+    }
+
+    private void RejectTime(Player p, RunProof run, string reason)
+    {
+        Log($"Time rejected for {p.Name} ({Msg.FormatTime(run.TimeMs)}): {reason}");
+        p.Peer.Send(Msg.Reply(writer, CommandResults.TimeRejected, Shorten(reason, 240), Shorten($"Your time doesn't count: {reason}", 500)),
+            DeliveryMethod.ReliableOrdered);
+        if (IsRoundsMode && run.RoundId == roundId && participants.Contains(p.Id) && gaveUp.Add(p.Id))
+        {
+            gaveUpOrder.Add(p.Id); // one attempt: the round doesn't wait for them anymore
+        }
+    }
+
+    /// <summary>A piece of a finished run's replay.</summary>
+    private void OnReplayChunk(Player p, int runId, int totalLength, int offset, byte[] data)
+    {
+        if (!p.PendingRuns.TryGetValue(runId, out RunProof? run))
+        {
+            return; // unknown, expired or already complete
+        }
+        if (totalLength <= 0 || totalLength > Msg.MaxReplayBytes || (run.Replay != null && run.Replay.Length != totalLength)
+            || offset != run.Received || data.Length == 0 || offset + data.Length > totalLength)
+        {
+            run.Flags.Add("invalid replay transfer");
+            CompleteRun(p, run);
+            return;
+        }
+        run.Replay ??= new byte[totalLength];
+        Buffer.BlockCopy(data, 0, run.Replay, offset, data.Length);
+        run.Received += data.Length;
+        if (run.Received == totalLength)
+        {
+            RunChecks.CheckReplay(run, run.Replay);
+            CompleteRun(p, run);
+        }
+    }
+
+    /// <summary>Replays that didn't arrive in time.</summary>
+    private void ExpirePendingRuns()
+    {
+        foreach (Player p in players.Values)
+        {
+            foreach (RunProof run in p.PendingRuns.Values.Where(r => Now - r.ReceivedAt > RunChecks.ReplayTimeoutSeconds).ToList())
+            {
+                run.Flags.Add(run.Received > 0 ? "replay incomplete" : "replay not received");
+                CompleteRun(p, run);
+            }
+        }
+    }
+
+    /// <summary>The run's checks are over (replay checked, missing, or not expected): the time counts, is refused or is reported.</summary>
+    private void CompleteRun(Player p, RunProof run)
+    {
+        p.PendingRuns.Remove(run.RunId);
+        if (options.RunCheck == RunCheck.Enforce && !run.Counted)
+        {
+            if (run.Flags.Count > 0)
+            {
+                RejectTime(p, run, string.Join("; ", run.Flags));
+                return;
+            }
+            if (run.RoundId != roundId || phase != RoundPhase.Playing)
+            {
+                RejectTime(p, run, "the round ended before the replay was checked");
+                return;
+            }
+            CountTime(p, run);
+        }
+        else if (run.Flags.Count > 0)
+        {
+            string reasons = string.Join("; ", run.Flags);
+            Log($"Time flagged for {p.Name} ({Msg.FormatTime(run.TimeMs)}): {reasons}");
+            foreach (Player admin in players.Values.Where(o => o.IsAdmin))
+            {
+                admin.Peer.Send(Msg.Reply(writer, CommandResults.TimeFlagged, Shorten($"{p.Name}\n{Msg.FormatTime(run.TimeMs)}\n{reasons}", 240),
+                    Shorten($"Suspicious time: {p.Name} {Msg.FormatTime(run.TimeMs)} ({reasons})", 500)), DeliveryMethod.ReliableOrdered);
+            }
+        }
+        if (run.Notes.Count > 0)
+        {
+            Log($"Run of {p.Name} ({Msg.FormatTime(run.TimeMs)}): {string.Join("; ", run.Notes)}");
+        }
+        if (run.Replay != null && run.ReplayChecked && bestProof.TryGetValue(p.Id, out RunProof? bestRun) && bestRun == run)
+        {
+            SaveReplay(p, run);
+        }
+    }
+
+    /// <summary>Coded texts have length limits (see <see cref="Msg.GetCodedText"/>).</summary>
+    private static string Shorten(string text, int max) => text.Length <= max ? text : text[..(max - 3)] + "...";
+
+    /// <summary>Keeps the replay of a best time next to the results export (tournament organizers can watch it in the game).</summary>
+    private void SaveReplay(Player p, RunProof run)
+    {
+        if (string.IsNullOrWhiteSpace(options.ResultsDirectory) || run.Replay == null)
+        {
+            return;
+        }
+        try
+        {
+            string dir = Path.Combine(options.ResultsDirectory, "replays");
+            Directory.CreateDirectory(dir);
+            string stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
+            string safeName = string.Concat(p.Name.Select(c => char.IsLetterOrDigit(c) ? c : '_'));
+            string time = Msg.FormatTime(run.TimeMs).Replace(':', '-').Replace('.', '-');
+            run.ReplayFile = Path.Combine("replays", $"{stamp}_round{run.RoundId}_{safeName}_{time}.rpl");
+            File.WriteAllBytes(Path.Combine(options.ResultsDirectory, run.ReplayFile), run.Replay);
+        }
+        catch (Exception e)
+        {
+            Log($"Could not save the replay of {p.Name}: {e.Message}");
+            run.ReplayFile = null;
         }
     }
 
@@ -898,13 +1087,24 @@ public sealed class GameServer : INetEventListener
                 Round = roundId,
                 Map = CurrentMap,
                 EndedAt = DateTime.Now.ToString("o", CultureInfo.InvariantCulture),
-                Results = board.Select((e, i) => new
+                RunCheck = options.RunCheck.ToString(),
+                Results = board.Select((e, i) =>
                 {
-                    Rank = i + 1,
-                    e.Name,
-                    TimeMs = e.BestMs,
-                    Time = Msg.FormatTime(e.BestMs),
-                    Points = i < options.PointsTable.Count ? options.PointsTable[i] : 0,
+                    bestProof.TryGetValue(e.PlayerId, out RunProof? proof);
+                    return new
+                    {
+                        Rank = i + 1,
+                        e.Name,
+                        TimeMs = e.BestMs,
+                        Time = Msg.FormatTime(e.BestMs),
+                        Points = i < options.PointsTable.Count ? options.PointsTable[i] : 0,
+                        // "verified", "flagged" or "no replay" ("off" without checks).
+                        Check = options.RunCheck == RunCheck.Off ? "off" : proof?.Status ?? "no replay",
+                        Flags = proof?.Flags ?? new List<string>(),
+                        Notes = proof?.Notes ?? new List<string>(),
+                        Game = proof?.Game,
+                        Replay = proof?.ReplayFile,
+                    };
                 }),
             };
             File.WriteAllText(Path.Combine(options.ResultsDirectory, $"{stamp}_round{roundId}_{safeMap}.json"),
@@ -1415,8 +1615,14 @@ public sealed class GameServer : INetEventListener
                     }
                     break;
                 case MessageType.Finish:
-                    OnFinish(p, reader.GetInt(), reader.GetUInt());
+                    OnFinish(p, Msg.GetFinish(reader));
                     break;
+                case MessageType.ReplayChunk:
+                {
+                    var (runId, total, offset, data) = Msg.GetReplayChunk(reader);
+                    OnReplayChunk(p, runId, total, offset, data);
+                    break;
+                }
                 case MessageType.AdminLogin:
                     OnAdminLogin(p, reader.GetString(128));
                     break;
@@ -1545,6 +1751,7 @@ public sealed class GameServer : INetEventListener
         }
         lastPosition[p.Id] = state.Position;
         lastStateAt[p.Id] = Now;
+        p.TickRate.Record(Now);
         pendingStates.Add((p, state));
         if (options.Echo)
         {
