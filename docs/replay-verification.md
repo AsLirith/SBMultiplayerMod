@@ -21,6 +21,7 @@ SBMULTI_VERIFY=/tmp/report.jsonl \
 - Workshop maps are read from `steamapps/workshop/content/2999500` next to the game, or from `SBMULTI_VERIFY_WORKSHOP`.
   The installed map version must be the one the replay was recorded on.
 - `SBMULTI_VERIFY_SHOW=1` keeps the window visible.
+- `SBMULTI_VERIFY_TIMEOUT` (seconds, default 120): a replay the game can't open leaves it in a menu; it's killed after that.
 
 ## Verdicts
 
@@ -28,6 +29,7 @@ SBMULTI_VERIFY=/tmp/report.jsonl \
 |---|---|
 | `valid` | inputs reproduce the recorded trajectory, the goal is reached, re-simulated time = file time |
 | `time-mismatch` | trajectory reproduced, goal reached, but the file claims another time |
+| `penalty-mismatch` | like `valid`, but the file counts more 1 s respawn penalties than the re-simulation (file slower, never faster; seen once, cause unknown) |
 | `desync` | the replayed board left the recorded trajectory (edited or forged file, or another game/physics/map version) |
 | `no-goal` | the file claims a finish but the re-simulation doesn't reach the goal |
 | `dnf` | the file doesn't claim a finish (abandoned attempt): nothing to verify |

@@ -22,6 +22,10 @@ internal static class ReplayVerifier
     /// <summary>Optional: SBMULTI_VERIFY_SHOW=1 keeps the window visible (to watch the re-simulation).</summary>
     private static bool ShowWindow => Environment.GetEnvironmentVariable("SBMULTI_VERIFY_SHOW") == "1";
 
+    /// <summary>Most time one replay may take, game start included (SBMULTI_VERIFY_TIMEOUT, seconds).</summary>
+    private static int ChildTimeoutSeconds =>
+        int.TryParse(Environment.GetEnvironmentVariable("SBMULTI_VERIFY_TIMEOUT"), out int s) && s > 0 ? s : 120;
+
     internal static VerifyTest? Current;
 
     public static void Install(Harmony harmony)
@@ -181,12 +185,27 @@ internal static class ReplayVerifier
             {
                 continue;
             }
-            await child.WaitForExitAsync();
-            if (child.ExitCode != 0)
+            // A replay the game can't open leaves it in a menu forever: kill it after a while.
+            using var watchdog = new CancellationTokenSource(TimeSpan.FromSeconds(ChildTimeoutSeconds));
+            string? failure = null;
+            try
             {
-                // The child crashed, maybe before writing its line.
+                await child.WaitForExitAsync(watchdog.Token);
+                if (child.ExitCode != 0)
+                {
+                    failure = $"process exit code {child.ExitCode}";
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                child.Kill(entireProcessTree: true);
+                failure = $"timeout after {ChildTimeoutSeconds} s (replay not opened?)";
+            }
+            if (failure != null)
+            {
+                // The child crashed or hung, maybe before writing its line.
                 var crashed = new VerifyResult(original, "error", 0, null, null, 0, 0, false, null, null, null,
-                    $"process exit code {child.ExitCode}", 0, null, null, 0);
+                    failure, 0, null, null, 0);
                 File.AppendAllText(report, JsonSerializer.Serialize(crashed, VerifyJson.Default.VerifyResult) + Environment.NewLine);
             }
         }
@@ -264,6 +283,8 @@ internal sealed class VerifyTest : TestReplay, IGoalReached
         {
             // Don't stop at the end of the input stream: the goal is detected by the re-simulated physics.
             s.IgnoreReplayEnding = true;
+            // Replay everything as it was played, respawns included (the game can skip the failed attempts).
+            s.SkipReplayFails = false;
             s.FrameRecorder.HideWindow = !showWindow;
             // The video-conversion settings record audio to a file with a library missing on Linux: no audio at all.
             s.Audio.OutputToFile = false;
@@ -386,7 +407,11 @@ internal sealed class VerifyTest : TestReplay, IGoalReached
         }
         else
         {
-            verdict = resimMs == fileMs ? "valid" : "time-mismatch";
+            // Seen once in 30 finishes: trajectory reproduced, but the file counts one more 1 s respawn penalty than the
+            // re-simulation. The file is then slower, never faster: told apart from a real mismatch.
+            uint penalty = TimeData.CheckpointPenaltyMS((LevelId)levelId);
+            bool penaltyOnly = resimMs is { } r && fileMs > r && (fileMs - r) % penalty == 0 && (fileMs - r) / penalty <= fileRestarts;
+            verdict = resimMs == fileMs ? "valid" : penaltyOnly ? "penalty-mismatch" : "time-mismatch";
         }
         return new VerifyResult(original, verdict, levelId, userId, fileGoal, fileMs, fileRestarts, goal, resimMs, DesyncDetection,
             DesyncMessage ?? FailMessage, headerError ?? Error, updates, goalAtUpdate, streamEndAtUpdate, Math.Round(wallSeconds, 2),
