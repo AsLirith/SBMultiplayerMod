@@ -129,6 +129,8 @@ Everyone can use `/help` in the chat. Chat messages are shown in the server cons
 
 Other console commands: `list` (connected players), `round` (current round), `standings` (match standings), `quit`.
 
+Everything the server writes in its console is also kept in `SBMultiplayer.Server.log`, next to the server (appended across runs, the oldest lines are removed past 16 MB). A game hosted from the game (F8 > Host) writes its server log into the host's own `SBMultiplayer.log` instead, lines starting with `[server]`.
+
 ### Exported results
 
 When `ResultsDirectory` is set, the server writes after every round:

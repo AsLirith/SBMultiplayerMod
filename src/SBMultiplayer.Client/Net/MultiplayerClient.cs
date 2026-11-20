@@ -204,6 +204,7 @@ internal sealed class MultiplayerClient : INetEventListener
         TrackLocalSkin();
         EnsureConnected();
         FlushPendingFinish();
+        LogStatusPeriodically();
         AnnounceConnection();
         if (passwordRefused)
         {
@@ -802,6 +803,66 @@ internal sealed class MultiplayerClient : INetEventListener
         SendFinish(finish.RoundId, ms, lostMs, runMs);
     }
 
+    // ---------- Status in the log ----------
+
+    private const double StatusEverySeconds = 60;
+    private double nextStatusAt;
+    private double framesSince = NetClock.Now;
+    private int frames;
+
+    /// <summary>A status line every minute while connected or hosting: what the player was doing when a problem happened.</summary>
+    private void LogStatusPeriodically()
+    {
+        frames++;
+        double now = NetClock.Now;
+        if (now < nextStatusAt)
+        {
+            return;
+        }
+        if (HasLink || HostedServer.IsRunning)
+        {
+            ModLog.Info("Status: " + DescribeStatus());
+        }
+        nextStatusAt = now + StatusEverySeconds;
+        framesSince = now;
+        frames = 0;
+    }
+
+    /// <summary>Connection, round and game state in one line (status lines, /report).</summary>
+    public string DescribeStatus()
+    {
+        var parts = new List<string>();
+        double elapsed = NetClock.Now - framesSince;
+        if (elapsed > 1)
+        {
+            parts.Add($"{frames / elapsed:0} fps");
+        }
+        NetPeer? peer = server;
+        WsConnection? web = webServer;
+        string transport = web != null ? "web room" : SteamP2P.IsJoining ? "Steam P2P" : "UDP";
+        if (peer != null || web != null)
+        {
+            parts.Add($"{(IsReady ? "connected" : "connecting")} to {serverAddress} ({transport})");
+            if (peer != null)
+            {
+                parts.Add($"ping {peer.Ping} ms, packet loss {peer.Statistics.PacketLossPercent}%");
+            }
+        }
+        else
+        {
+            parts.Add("not connected");
+        }
+        if (HostedServer.IsRunning)
+        {
+            parts.Add($"hosting{(SteamP2P.IsHosting ? " (Steam P2P)" : "")}{(SteamLobby.IsListed ? ", listed publicly" : "")}");
+        }
+        RoundInfo info = Round.Current.Info;
+        parts.Add($"{Players.Count} other player(s), server mod {ServerCapabilities.Version}");
+        parts.Add($"{info.Mode} round {info.RoundId} {info.Phase}{(info.MapKey != "" ? " on " + info.MapKey : "")}");
+        parts.Add($"me: {(mapKey == "" ? "menu" : mapKey)}{(IsSpectating ? ", spectating" : "")}{(IsAdmin ? ", admin" : "")}");
+        return string.Join(" | ", parts);
+    }
+
     public void SendReady(int roundId) => Send(w => Msg.Ready(w, roundId), DeliveryMethod.ReliableOrdered);
 
     public void SendGiveUp(int roundId) => Send(w => Msg.GiveUp(w, roundId), DeliveryMethod.ReliableOrdered);
@@ -888,6 +949,7 @@ internal sealed class MultiplayerClient : INetEventListener
                 {
                     UnsyncedEvents = true,
                     AutoRecycle = true,
+                    EnableStatistics = true, // packet loss in the log's status lines
                     UpdateTime = 5,
                     DisconnectTimeout = 10_000,
                 };

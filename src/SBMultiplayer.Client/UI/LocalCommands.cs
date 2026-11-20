@@ -36,9 +36,20 @@ internal static class LocalCommands
             case "unignore":
                 Ignore(arg, ignore: false);
                 return true;
+            case "report":
+                Report(arg);
+                return true;
             default:
                 return false;
         }
+    }
+
+    /// <summary>/report [what happened]: marks the moment in the log, with the current state, so it's easy to find.</summary>
+    private static void Report(string what)
+    {
+        ModLog.Warn($"===== Problem reported by the player: {(what == "" ? "(no description)" : what)} =====");
+        ModLog.Info("Status: " + Client.DescribeStatus());
+        Reply(Tr.ReportNoted(DateTime.Now.ToString("HH:mm:ss")));
     }
 
     private static void Reply(string text) => ChatLog.AddSystem(text, new Microsoft.Xna.Framework.Color(255, 170, 80));

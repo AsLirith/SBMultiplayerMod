@@ -166,10 +166,45 @@ internal sealed class ModConfig
                 toWrite.PlayerName = fileValues.Name;
             }
             File.WriteAllText(path, JsonSerializer.Serialize(toWrite, JsonOptions));
+            LogChanges();
         }
         catch (Exception e)
         {
             ModLog.Error($"Could not save the configuration ({path})", e);
+        }
+    }
+
+    private static System.Text.Json.Nodes.JsonObject? lastLogged;
+
+    /// <summary>Settings that changed since the last save (passwords hidden), for the log.</summary>
+    private static void LogChanges()
+    {
+        try
+        {
+            var now = (System.Text.Json.Nodes.JsonObject)JsonSerializer.SerializeToNode(Current, JsonOptions)!;
+            now.Remove(nameof(UnknownSettings));
+            foreach (string secret in new[] { nameof(ServerPassword), nameof(AdminPassword) })
+            {
+                now[secret] = Current.GetType().GetProperty(secret)!.GetValue(Current) is string { Length: > 0 } ? "(set)" : "";
+            }
+            if (lastLogged == null)
+            {
+                ModLog.Block("settings", now.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+            }
+            else
+            {
+                var changes = now.Where(kv => !System.Text.Json.Nodes.JsonNode.DeepEquals(kv.Value, lastLogged[kv.Key]))
+                    .Select(kv => $"{kv.Key}: {lastLogged[kv.Key]?.ToJsonString() ?? "-"} -> {kv.Value?.ToJsonString() ?? "-"}").ToList();
+                if (changes.Count > 0)
+                {
+                    ModLog.Info("Settings changed: " + string.Join(", ", changes));
+                }
+            }
+            lastLogged = now;
+        }
+        catch (Exception e)
+        {
+            ModLog.Warn($"Could not log the settings: {e.Message}");
         }
     }
 
@@ -229,6 +264,7 @@ internal sealed class ModConfig
         {
             Current.PlayerName = name;
         }
+        LogChanges(); // the whole configuration, once, at startup
     }
 
     /// <summary>Upgrades a file written by an older version, one format at a time.</summary>

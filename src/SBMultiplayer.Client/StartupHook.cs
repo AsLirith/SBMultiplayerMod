@@ -12,8 +12,14 @@ internal class StartupHook
         try
         {
             string modDir = Path.GetDirectoryName(typeof(StartupHook).Assembly.Location)!;
-            SBMultiplayer.Client.ModLog.Init(Path.Combine(modDir, "SBMultiplayer.log"));
+            // Replay verification (organizers) runs the game once per replay: its own log, the players' one stays readable.
+            bool verifying = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("SBMULTI_VERIFY"));
+            SBMultiplayer.Client.ModLog.Init(Path.Combine(modDir, verifying ? "SBMultiplayer-verify.log" : "SBMultiplayer.log"));
             SBMultiplayer.Client.ModLog.Info($"Startup hook loaded from {modDir}");
+            if (!verifying)
+            {
+                SBMultiplayer.Client.Diagnostics.OnStartup(modDir);
+            }
 
             // 0Harmony.dll is next to our DLL, not in the game folder:
             // help the runtime find it. Must be done BEFORE touching any Harmony type.

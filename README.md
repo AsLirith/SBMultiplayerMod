@@ -85,7 +85,7 @@ Every key of the mod can be changed in **F8 > Keys**.
 - **"Incompatible mod version"**: you or the server runs a version older than 0.19.0. Update to the latest release.
 - **The mod says it's inactive after a game update**: the game changed something the mod relies on. Wait for a mod update (the mod tells you when one is out).
 - **Can't connect to a friend's server**: use Steam P2P (F8 > Join a game), or see the network section of the [hosting guide](docs/hosting.md).
-- **Anything else**: open an [issue](../../issues) with your `SBMultiplayer/SBMultiplayer.log` file.
+- **Anything else**: type `/report` in the chat when the problem happens, then open an [issue](../../issues) with your `SBMultiplayer/SBMultiplayer.log` file (F8 > Settings > Open the log folder). It's the only file needed, whether you were hosting or playing: it keeps your last sessions, your settings, a status line every minute, and the game's own log and crash report when something went wrong.
 
 ## Hosting a server
 

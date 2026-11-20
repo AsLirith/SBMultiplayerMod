@@ -62,6 +62,13 @@ internal static class Tr
     public static string PasswordNeeded(string server) => T($"{server} is protected by a password.", $"{server} est protégé par un mot de passe.");
     public static string Cancel => T("Cancel", "Annuler");
     public static string Close => T("Close", "Fermer");
+    public static string OpenLogFolder => T("Open the log folder", "Ouvrir le dossier du log");
+    public static string LogHint => T(
+        "A problem? Type /report in the chat when it happens, then send SBMultiplayer.log (in this folder).",
+        "Un souci ? Tape /report dans le chat quand il arrive, puis envoie SBMultiplayer.log (dans ce dossier).");
+    public static string ReportNoted(string time) => T(
+        $"Noted in SBMultiplayer.log at {time}: send that file (F8 > Settings > Open the log folder)",
+        $"Noté dans SBMultiplayer.log à {time} : envoie ce fichier (F8 > Paramètres > Ouvrir le dossier du log)");
     public static string NameHint => T("Your name changes at the next connection.", "Ton pseudo change à la prochaine connexion.");
     public static string LanguageField => T("Language", "Langue");
     public static string LanguageName(string language) => language switch
@@ -103,11 +110,11 @@ internal static class Tr
     public static string? CommandReply(string code, string arg) => code switch
     {
         SBMultiplayer.Protocol.CommandResults.Help when arg == "admin" => T(
-            "Commands: /help, /locate <name|all>, /goto <name>, /ignore [name], /unignore <name>, /login <password>, /next, /restart, /pause, /extend [seconds], /map <number>, /kick <name>, /resetmatch, /hunter [name]",
-            "Commandes : /help, /locate <pseudo|all>, /goto <pseudo>, /ignore [pseudo], /unignore <pseudo>, /login <mot de passe>, /next, /restart, /pause, /extend [secondes], /map <numéro>, /kick <pseudo>, /resetmatch, /hunter [pseudo]"),
+            "Commands: /help, /locate <name|all>, /goto <name>, /ignore [name], /unignore <name>, /report [problem], /login <password>, /next, /restart, /pause, /extend [seconds], /map <number>, /kick <name>, /resetmatch, /hunter [name]",
+            "Commandes : /help, /locate <pseudo|all>, /goto <pseudo>, /ignore [pseudo], /unignore <pseudo>, /report [problème], /login <mot de passe>, /next, /restart, /pause, /extend [secondes], /map <numéro>, /kick <pseudo>, /resetmatch, /hunter [pseudo]"),
         SBMultiplayer.Protocol.CommandResults.Help => T(
-            "Commands: /help, /locate <name|all>, /goto <name>, /ignore [name], /unignore <name>, /login <admin password> (admin commands: /next, /restart, /pause, /extend, /map, /kick, /resetmatch, /hunter)",
-            "Commandes : /help, /locate <pseudo|all>, /goto <pseudo>, /ignore [pseudo], /unignore <pseudo>, /login <mot de passe admin> (commandes admin : /next, /restart, /pause, /extend, /map, /kick, /resetmatch, /hunter)"),
+            "Commands: /help, /locate <name|all>, /goto <name>, /ignore [name], /unignore <name>, /report [problem], /login <admin password> (admin commands: /next, /restart, /pause, /extend, /map, /kick, /resetmatch, /hunter)",
+            "Commandes : /help, /locate <pseudo|all>, /goto <pseudo>, /ignore [pseudo], /unignore <pseudo>, /report [problème], /login <mot de passe admin> (commandes admin : /next, /restart, /pause, /extend, /map, /kick, /resetmatch, /hunter)"),
         SBMultiplayer.Protocol.CommandResults.NotAdmin => T("Admin only: log in with /login <password> or F8 > Admin", "Réservé aux admins : connecte-toi avec /login <mot de passe> ou F8 > Admin"),
         SBMultiplayer.Protocol.CommandResults.NoRound => T("No round in progress", "Aucun round en cours"),
         SBMultiplayer.Protocol.CommandResults.Usage => T($"Usage: {arg}", $"Utilisation : {arg}"),

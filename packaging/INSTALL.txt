@@ -32,5 +32,7 @@ The mod's interface follows the game's language (English or French).
 Tournament organizers: SBMultiplayer/verify-replays.sh (Linux) or verify-replays.bat (Windows) re-simulates
 the replays saved by the server with the game, to check the times (see docs/replay-verification.md on GitHub).
 
-Problem? Send the SBMultiplayer/SBMultiplayer.log file.
+Problem? Type /report in the chat when it happens (it marks the moment), then send the
+SBMultiplayer/SBMultiplayer.log file (F8 > Settings > Open the log folder). It's the only file needed, as a
+player or as the host: it keeps your last sessions and includes the game's own log when something went wrong.
 More info: https://github.com/AsLirith/SBMultiplayerMod

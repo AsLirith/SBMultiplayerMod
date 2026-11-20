@@ -112,6 +112,7 @@ foreach (var apply in overrides)
 {
     apply(options);
 }
+ServerLogFile.Start();
 
 if (roomsPort is int webPort)
 {

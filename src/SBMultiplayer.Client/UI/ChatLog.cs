@@ -21,6 +21,7 @@ internal static class ChatLog
 
     public static void AddPlayer(string name, string text)
     {
+        ModLog.Info($"[chat] {name}: {text}");
         if (!LocalCommands.IsIgnored(name))
         {
             Add(new Entry(name, text, Color.White, NetClock.Now));

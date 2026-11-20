@@ -328,7 +328,8 @@ internal static class MultiplayerMenu
                 Button(Tr.DisplayTitle, OpenDisplay),
                 Button(Tr.InterfaceTitle, OpenInterface),
                 Button(Tr.KeysTitle, KeyBindings.Open)),
-            Button(Tr.Back, close));
+            Text(Tr.LogHint),
+            Buttons(Button(Tr.OpenLogFolder, Diagnostics.OpenLogFolder), Button(Tr.Back, close)));
     }, () => Tr.French ? 1 : 0);
 
     // ---------- Display: how other players are shown ----------
