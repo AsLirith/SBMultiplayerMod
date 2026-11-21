@@ -27,6 +27,8 @@ Works on Linux (native version of the game) and Windows.
 - **Host from the game** in one click: you're the admin of your game, no extra program needed.
 - **Steam friends join in one click**, without opening any port (Steam P2P). Tick "Public game (anyone on Steam)" and **anyone can find and join it**.
 - **SBLB lobbies**: create a lobby on the community website [sblb.thefanclub.cc](https://sblb.thefanclub.cc) right from the game and share its code, or join one with a code. Nobody opens a port.
+- **Public SBLB lobbies** are listed in Join a game, and the website's lobby page can make the running game join a lobby in one click.
+- **Tournaments** on SBLB: hosts create and run cups from the game, with a roster locked to Steam accounts, time checks always enforced, standings after every round and a tournament leaderboard.
 - **Dedicated server** (console app, no game needed) for servers that run all the time or for tournaments: map rotation, password, results export (JSON/CSV).
 - **Admin panel in game**: change the mode, maps, timings and points; skip, restart, pause or extend a round; kick players.
 - **Time checks for competitions**: each finish comes with the run's replay and the game settings; the server checks them (right map, same time, standard physics settings, normal game speed) and keeps the replays of the best times. After a tournament, `verify-replays` re-simulates them with the game to prove every time ([details](docs/replay-verification.md)).
