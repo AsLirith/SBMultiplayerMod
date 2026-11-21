@@ -74,7 +74,10 @@ internal static class GameMenuButtons
         }
     }
 
-    /// <summary>Main menu: under "Start", as one more step of the staircase (the buttons below move one step).</summary>
+    /// <summary>
+    /// Main menu: under "Start", as one more step of the staircase (the buttons below move one step). It opens the
+    /// Multiplayer page. The pause menu's button opens the F8 menu, because a level is running there.
+    /// </summary>
     private static void AddToMainMenu(Canvas canvas)
     {
         if (MainMenuButtonType == null || GameAccess.Game == null)
@@ -99,8 +102,14 @@ internal static class GameMenuButtons
         }
         var hoverStyle = new Style { FontColor = PopupMenu.Highlight, TextureColor = PopupMenu.Highlight };
         // (width, index, onClick, text, hoverStyle, onHoverEnter, onBeforeClick, navigationStart, creator, height, favorVerticalNavigation)
-        var button = (Element)Activator.CreateInstance(MainMenuButtonType, 700f, 1, (Action)MultiplayerMenu.Open, Tr.MultiplayerButton,
+        var button = (Element)Activator.CreateInstance(MainMenuButtonType, 700f, 1, (Action)Rooms.MultiplayerRooms.Open, Tr.MultiplayerButton,
             hoverStyle, Sound(HoverSound), Sound(ClickSound), false, null, 90f, true)!;
+        // "Multiplayer" is longer than the game's own labels, so it is shrunk to stay on the button's face. The game's
+        // buttons are 700 wide, and the face is about 600.
+        if (button.GetAllChildren().OfType<Label>().FirstOrDefault() is { } caption)
+        {
+            Rooms.GameScreens.Fit(caption, Tr.MultiplayerButton, GameAccess.UiAssets.FontStrong, 580f);
+        }
         stack.Insert(index, button);
     }
 

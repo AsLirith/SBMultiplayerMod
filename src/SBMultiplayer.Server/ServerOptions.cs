@@ -77,6 +77,10 @@ public sealed class ServerOptions
 
     public double EchoDelaySeconds { get; set; } = 2.0;
 
+    /// <summary>Tournament room settings, given by the room host at runtime. Never read from or written to the config file.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public TournamentSettings? Tournament { get; set; }
+
 
     public MatchSettings ToMatchSettings() => new()
     {
@@ -270,6 +274,7 @@ public sealed class ServerOptions
 [System.Text.Json.Serialization.JsonSerializable(typeof(string))]
 [System.Text.Json.Serialization.JsonSerializable(typeof(CreateRoomRequest))]
 [System.Text.Json.Serialization.JsonSerializable(typeof(List<RoomListEntry>))]
+[System.Text.Json.Serialization.JsonSerializable(typeof(TournamentRoomRequest))]
 internal partial class ServerJson : System.Text.Json.Serialization.JsonSerializerContext
 {
 }

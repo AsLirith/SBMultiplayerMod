@@ -8,6 +8,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="SBMultiplayer.Server.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="../SBMultiplayer.Protocol/SBMultiplayer.Protocol.csproj" />
   </ItemGroup>
 

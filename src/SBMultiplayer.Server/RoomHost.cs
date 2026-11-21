@@ -28,9 +28,10 @@ public sealed class RoomHost
     private readonly int maxRooms;
     private readonly System.Collections.Concurrent.ConcurrentQueue<Action> queue = new();
     private readonly Dictionary<int, Room> rooms = new();
+    private readonly TournamentReporter? reporter;
     private int nextPeerId;
 
-    public RoomHost(int port, string secret, int maxRooms)
+    public RoomHost(int port, string secret, int maxRooms, TournamentReporter? reporter = null)
     {
         if (secret.Length < 32)
         {
@@ -38,6 +39,7 @@ public sealed class RoomHost
         }
         this.secret = secret;
         this.maxRooms = maxRooms;
+        this.reporter = reporter;
         listener.Prefixes.Add($"http://*:{port}/");
     }
 
@@ -196,6 +198,17 @@ public sealed class RoomHost
             return;
         }
 
+        if (body.Tournament != null && (body.Tournament.Settings == null || body.Tournament.Settings.Maps == null))
+        {
+            await ReplyAsync(context, 400, "{\"error\":\"bad tournament settings\"}");
+            return;
+        }
+        if (body.Tournament?.Resume is TournamentSave bad && !TournamentRoomRequest.SaveIsComplete(bad))
+        {
+            await ReplyAsync(context, 400, "{\"error\":\"bad tournament save\"}");
+            return;
+        }
+
         (int status, string error) = await Post(() =>
         {
             if (rooms.ContainsKey(body.Id))
@@ -212,11 +225,32 @@ public sealed class RoomHost
                 Password = body.Password ?? "",
                 AdminPassword = body.AdminPassword ?? "",
                 MaxPlayers = body.MaxPlayers,
-                ResultsDirectory = "",
+                // Tournament rooms keep results and replays, and GameServer adds tournament-{id}. Other rooms keep nothing.
+                ResultsDirectory = body.Tournament != null ? "results" : "",
+                Tournament = body.Tournament?.Settings,
             };
             // No UDP listener: players reach this room only through the website's WebSocket bridge.
             var game = new GameServer(options, listenUdp: false);
             game.Start();
+            if (body.Tournament?.Resume is TournamentSave resume)
+            {
+                try
+                {
+                    game.RestoreTournament(resume);
+                }
+                catch (Exception e)
+                {
+                    // Don't leave a started room unregistered.
+                    Console.Error.WriteLine($"Tournament save refused: {e.GetType().Name}: {e.Message}");
+                    game.Stop();
+                    return (400, "bad tournament save");
+                }
+            }
+            if (body.Tournament != null)
+            {
+                // Every report goes to the website, including the second "started" of a resumed tournament.
+                game.TournamentReported += r => _ = reporter?.SendAsync(r);
+            }
             rooms[body.Id] = new Room { Id = body.Id, Game = game };
             return (201, "");
         });
@@ -273,24 +307,28 @@ public sealed class RoomHost
         }
 
         string password = context.Request.Headers["x-room-password"] ?? "";
-        (int status, Room? room) = await Post(() =>
+        (string? steamId, string? steamName) = SteamHeaders.Read(context.Request.Headers);
+        (int status, Room? room, string? reason) = await Post(() =>
         {
             if (!rooms.TryGetValue(id, out Room? found))
             {
-                return (404, (Room?)null);
+                return (404, (Room?)null, (string?)null);
             }
             // The website has checked the room password already, so only the room's own limits apply here.
-            string? refusal = found.Game.RefuseReason(version, password, checkPassword: false);
-            return refusal == null ? (200, found) : (503, (Room?)null);
+            string? refusal = found.Game.RefuseReason(version, password, checkPassword: false, steamId: steamId);
+            return refusal == null
+                ? (200, found, (string?)null)
+                : (refusal == ServerReasons.TournamentStarted ? 403 : 503, (Room?)null, refusal);
         });
         if (room == null)
         {
-            await ReplyAsync(context, status, status == 404 ? "{\"error\":\"not found\"}" : "{\"error\":\"room full\"}");
+            string error = status == 404 ? "not found" : reason == ServerReasons.TournamentStarted ? "tournament started" : "room full";
+            await ReplyAsync(context, status, $"{{\"error\":\"{error}\"}}");
             return;
         }
 
         WebSocketContext wsContext = await context.AcceptWebSocketAsync(subProtocol: null);
-        var peer = new WebPeer(Interlocked.Increment(ref nextPeerId), wsContext.WebSocket);
+        var peer = new WebPeer(Interlocked.Increment(ref nextPeerId), wsContext.WebSocket, steamId, steamName);
         Enqueue(() =>
         {
             if (rooms.GetValueOrDefault(id) != room)
@@ -299,7 +337,7 @@ public sealed class RoomHost
                 return;
             }
             // Checked again here: several players may have passed the first check while the room had one seat left.
-            if (room.Game.RefuseReason(version, password, checkPassword: false) is string refusal)
+            if (room.Game.RefuseReason(version, password, checkPassword: false, steamId: steamId) is string refusal)
             {
                 peer.Disconnect(refusal);
                 return;
@@ -340,7 +378,45 @@ public sealed class RoomHost
 }
 
 /// <summary>The website's request to open a room (JSON, property names case-insensitive).</summary>
-internal sealed record CreateRoomRequest(int Id, string Name, string? Password, string? AdminPassword, int MaxPlayers);
+internal sealed record CreateRoomRequest(int Id, string Name, string? Password, string? AdminPassword, int MaxPlayers, TournamentRoomRequest? Tournament = null);
+
+/// <summary>Makes a room a tournament room. Resume holds the saved state when the host reopens a paused tournament.</summary>
+internal sealed record TournamentRoomRequest(TournamentSettings Settings, TournamentSave? Resume)
+{
+    /// <summary>A save from JSON may lack parts. Every list and map must exist before a room is started from it.</summary>
+    public static bool SaveIsComplete(TournamentSave s) =>
+        s.Roster != null && s.Standings != null && s.EliminatedOrder != null && s.Wins != null && s.Flagged != null;
+}
+
+/// <summary>The player's verified Steam identity, passed on by the website's gateway in x-sbm-steam-id and x-sbm-steam-name (URI-encoded).</summary>
+internal static class SteamHeaders
+{
+    public static (string? SteamId, string? SteamName) Read(System.Collections.Specialized.NameValueCollection headers)
+    {
+        string? id = headers["x-sbm-steam-id"];
+        if (id == null || id.Length != 17 || !id.All(char.IsAsciiDigit))
+        {
+            id = null;
+        }
+        string? name = headers["x-sbm-steam-name"];
+        if (name != null)
+        {
+            // The gateway URI-encodes the name so that any persona name fits in a header.
+            try
+            {
+                name = Uri.UnescapeDataString(name);
+            }
+            catch (UriFormatException)
+            {
+            }
+        }
+        if (name != null && name.Length > 64)
+        {
+            name = name[..64];
+        }
+        return (id, string.IsNullOrWhiteSpace(name) ? null : name);
+    }
+}
 
 /// <summary>One room in the reply to GET /rooms.</summary>
 internal sealed record RoomListEntry(

@@ -24,6 +24,7 @@ const string Help = """
     Web rooms (for the website; no UDP port per room):
       --rooms <port>        serve web rooms over HTTP on this port (needs SBM_GATEWAY_SECRET, 32+ characters)
       --max-rooms <n>       most rooms open at once (default 20)
+      Tournament reports: set SBM_REPORT_URL to the website's report endpoint (it uses the same secret).
 
     Console commands:
       list, round, standings, next, restart, pause, extend <s>, map <index>, kick <id>, resetmatch, quit
@@ -208,7 +209,23 @@ static int RunRooms(int port, int maxRooms)
         return 1;
     }
 
-    var rooms = new RoomHost(port, secret, maxRooms);
+    TournamentReporter? reporter = null;
+    string? reportUrl = Environment.GetEnvironmentVariable("SBM_REPORT_URL");
+    if (string.IsNullOrWhiteSpace(reportUrl))
+    {
+        Console.WriteLine("Warning: SBM_REPORT_URL is not set, so tournament results will not reach the website.");
+    }
+    else if (Uri.TryCreate(reportUrl, UriKind.Absolute, out Uri? reportUri) && reportUri.Scheme is "http" or "https")
+    {
+        reporter = new TournamentReporter(reportUri, secret);
+    }
+    else
+    {
+        Console.Error.WriteLine("SBM_REPORT_URL must be an http(s) URL.");
+        return 1;
+    }
+
+    var rooms = new RoomHost(port, secret, maxRooms, reporter);
     rooms.Start();
 
     using var cts = new CancellationTokenSource();

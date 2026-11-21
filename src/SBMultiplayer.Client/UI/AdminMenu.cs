@@ -19,7 +19,8 @@ internal static class AdminMenu
 
     private static MultiplayerClient Client => MultiplayerClient.Instance;
 
-    public static void Open() => Show("admin", Build, () => Client.AdminVersion * 31 + (Client.IsReady ? 1 : 0));
+    public static void Open() => Show("admin", Build, () => Client.AdminVersion * 31 + (Client.IsReady ? 1 : 0) + (Client.InTournament ? 2 : 0)
+        + (Client.TournamentStarted ? 4 : 0) + (Client.TournamentOver ? 8 : 0));
 
     private static Element Build(Action close, Screen screen)
     {
@@ -46,6 +47,15 @@ internal static class AdminMenu
         return Stack(
             Title(Tr.AdminTitle),
             Text(StatusLine()),
+            // Start until it has started, End until it's over (ended early or finished); nothing once it's over.
+            Client.InTournament && !Client.TournamentOver ? Section(Tr.AdminTournamentSection) : null,
+            Client.InTournament && !Client.TournamentOver
+                ? Buttons(
+                    Client.TournamentStarted ? null : Button(Tr.AdminStartTournament, () => Confirm(Tr.ConfirmStartTournament,
+                        Tr.AdminStartTournament, () => Client.Admin(AdminCommand.StartTournament))),
+                    Button(Tr.AdminEndTournament, () => Confirm(Tr.ConfirmEndTournament, Tr.AdminEndTournament,
+                        () => Client.Admin(AdminCommand.EndTournament))))
+                : null,
             Section(Tr.AdminRoundSection),
             Buttons(
                 Button(Tr.AdminNext, () => Client.Admin(AdminCommand.NextPhase)),

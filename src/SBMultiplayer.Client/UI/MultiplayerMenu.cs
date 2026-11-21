@@ -207,7 +207,7 @@ internal static class MultiplayerMenu
                 return;
             }
             close();
-            Client.JoinRoom(c, null); // a protected lobby refuses: the password is asked then
+            Client.JoinTypedCode(c); // a tournament's room joins with Steam, and a protected lobby asks for its password
         }
 
         void ConnectTo(string address)
@@ -296,7 +296,7 @@ internal static class MultiplayerMenu
 
     // ---------- Host a game: on this PC, or an SBLB lobby on the community website ----------
 
-    private static void OpenHost() => Show("host", (close, _) => Stack(Title(Tr.HostSection), BuildHostRow(close), Button(Tr.Back, close)));
+    internal static void OpenHost() => Show("host", (close, _) => Stack(Title(Tr.HostSection), BuildHostRow(close), Button(Tr.Back, close)));
 
     private static Element BuildHostRow(Action close)
     {
@@ -366,7 +366,7 @@ internal static class MultiplayerMenu
 
     // ---------- Settings: name, then the themed screens ----------
 
-    private static void OpenSettings() => Show("settings", (close, screen) =>
+    internal static void OpenSettings() => Show("settings", (close, screen) =>
     {
         ModConfig cfg = ModConfig.Current;
         TextInput name = Input(cfg.PlayerName, ProtocolInfo.MaxNameLength);

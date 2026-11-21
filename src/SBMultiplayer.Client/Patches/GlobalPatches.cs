@@ -25,6 +25,7 @@ internal static class GlobalTickPatch
         try
         {
             GameAccess.Game = __instance;
+            SteamTicket.Listen(); // catches the game's Steam tickets at their real length (tournaments)
             MultiplayerClient.Instance.GlobalTick(GameAccess.CurrentScene);
         }
         catch (Exception e)

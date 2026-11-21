@@ -31,6 +31,9 @@ internal static class Tr
 
     private static string T(string en, string fr) => French ? fr : en;
 
+    /// <summary>English only for now: AsLirith adds the French (then it becomes T(en, fr)).</summary>
+    private static string En(string en) => en;
+
     private static string Players(int n) => French
         ? $"{n} autre{(n > 1 ? "s" : "")} joueur{(n > 1 ? "s" : "")}"
         : $"{n} other player{(n > 1 ? "s" : "")}";
@@ -80,6 +83,194 @@ internal static class Tr
     };
     public static string CheckForUpdates => T("Tell me about mod updates", "Signaler les mises à jour du mod");
     public static string MultiplayerButton => T("Multiplayer", "Multijoueur");
+
+    // ---------- Multiplayer page (main menu > Multiplayer) ----------
+    public static string RoomPublicGames => En("public\ngames");
+    public static string RoomSblbLobbies => En("SBLB\nlobbies");
+    public static string ListPublicGames => En("public games");
+    public static string ListSblbLobbies => En("SBLB lobbies");
+    public static string EmptyListTitle => En("nothing yet");
+    public static string RoomTournaments => En("tournaments");
+    public static string RoomHost => En("host");
+    public static string RoomSettings => En("settings");
+    public static string DetailMode => En("Mode");
+    public static string DetailMap => En("Map");
+    public static string DetailPlayers => En("Players");
+    public static string DetailPassword => En("Password");
+    public static string DetailHost => En("Hosted by");
+    public static string DetailVersion => En("Version");
+    public static string DetailCode => En("Code");
+    public static string Yes => En("yes");
+    public static string No => En("no");
+    public static string SteamFriendHost => En("a Steam friend");
+    public static string SteamPublicHost => En("a Steam player");
+    public static string SblbLobbiesUnavailable => En("This website has no public lobby list.");
+    public static string LobbyCodeHint => En("Private lobby? Type its code above");
+    public static string TournamentsUnavailable => En("Tournaments aren't available right now.");
+    public static string NoTournaments => En("No tournament is planned or has been played yet.");
+    public static string StandingsUnavailable => En("The standings of this tournament aren't available.");
+    public static string TournamentNoStandings => En("Ended early by the host: nothing was recorded.");
+
+    /// <summary>"Upcoming, Sat 21 Nov 20:00" (local time), "Open", "Live"... An unknown status is shown as it comes.</summary>
+    public static string TournamentStatus(string status, DateTimeOffset? startsAt) => status switch
+    {
+        "upcoming" => startsAt is { } at ? En($"Upcoming, {LocalTime(at)}") : En("Upcoming"),
+        "open" => En("Open"),
+        "live" => En("Live"),
+        "paused" => En("Paused"),
+        "finished" => En("Finished"),
+        "incomplete" => En("Incomplete"),
+        "cancelled" => En("Cancelled"),
+        "didnt_happen" => En("Didn't happen"),
+        _ => status.Replace("#", ""),
+    };
+
+    /// <summary>A start time in the player's time zone, "Sat 21 Nov 20:00".</summary>
+    public static string LocalTime(DateTimeOffset at)
+    {
+        DateTimeOffset local = at.ToLocalTime();
+        try
+        {
+            var culture = System.Globalization.CultureInfo.GetCultureInfo("en-GB");
+            return local.ToString("ddd d MMM HH:mm", culture);
+        }
+        catch (Exception)
+        {
+            return local.ToString("yyyy-MM-dd HH:mm", System.Globalization.CultureInfo.InvariantCulture); // no culture data
+        }
+    }
+
+    /// <summary>The website's date ("2026-11-21T02:49:49.117Z") as <see cref="LocalTime"/>. If it isn't a date, it's shown as it comes.</summary>
+    public static string TournamentDate(string iso) =>
+        DateTimeOffset.TryParse(iso, System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.AssumeUniversal, out DateTimeOffset at)
+            ? LocalTime(at)
+            : iso;
+
+    /// <summary>The line above the list: the status, what's known (date, players, rounds), then the host.</summary>
+    public static string TournamentHeader(string status, string date, int players, int rounds, string host)
+    {
+        var parts = new List<string> { status };
+        if (date != "")
+        {
+            parts.Add(date);
+        }
+        if (players > 0)
+        {
+            parts.Add(En($"{players} players"));
+        }
+        if (rounds > 0)
+        {
+            parts.Add(En($"{rounds} rounds"));
+        }
+        if (host != "")
+        {
+            parts.Add(En($"hosted by {host}"));
+        }
+        return string.Join("  -  ", parts);
+    }
+
+    public static string TournamentScore(int points, int wins) => En($"{points} pts  {wins}W");
+
+    /// <summary>After a player's points in the standings: how many of their finishes failed the time checks.</summary>
+    public static string TournamentFlagged(int n) => En($"{n} time{(n > 1 ? "s" : "")} flagged");
+
+    /// <summary>How long a tournament lasts, from <see cref="SBMultiplayer.Protocol.TournamentLength.Estimate"/>.</summary>
+    /// <param name="cupPoints">Cup: the points that reach the final (the length isn't known in advance).</param>
+    public static string TournamentLength(SBMultiplayer.Protocol.LengthEstimate length, int cupPoints)
+    {
+        if (length.Minutes is int minutes)
+        {
+            int maps = length.Rounds ?? 0;
+            return En($"{maps} map{(maps > 1 ? "s" : "")}, {minutes} min in all");
+        }
+        if (length.Rounds is int rounds)
+        {
+            return length.Fixed
+                ? En($"{rounds} round{(rounds > 1 ? "s" : "")}")
+                : En($"about {rounds} round{(rounds > 1 ? "s" : "")}");
+        }
+        return cupPoints > 0
+            ? En($"final at {cupPoints} points")
+            : En("no fixed length");
+    }
+
+    public static string DetailMaps => En("Maps");
+    public static string DetailLength => En("Length");
+    public static string RejoinButton => En("Rejoin");
+    public static string CreateTournamentButton => En("Create tournament");
+    public static string MyTournamentsButton => En("My tournaments");
+    public static string TournamentAlreadyStarted => En("This tournament has already started.");
+    public static string TournamentSteamUnreachable => En("Your Steam account couldn't be checked right now");
+    public static string TournamentTicketRefused => En("The website refused your Steam ticket, getting a new one");
+    public static string AdminTournamentSection => En("Tournament");
+    public static string AdminStartTournament => En("Start tournament");
+    public static string AdminEndTournament => En("End tournament (not recorded)");
+    public static string ConfirmStartTournament => En("Start the tournament now? The players here now are its players: nobody else can join after this.");
+    public static string ConfirmEndTournament => En("End the tournament now? Nothing will be recorded: no standings, and it can't be started again.");
+    public static string TournamentHostError => En("The website couldn't do that right now. Try again in a moment.");
+    public static string TournamentNeedsSteam => En("Steam didn't confirm who you are. Is Steam running?");
+    public static string TournamentTooBig => En("This tournament has too many maps. Remove some and try again.");
+
+    // ---------- Tournaments: the host's screens ----------
+    public static string EditTournamentTitle => En("Edit tournament");
+    public static string TournamentNameField => En("Name");
+    public static string TournamentStartsAt => En("Starts at");
+    public static string TournamentLocalTimeHint => En("The start time is in your local time; everyone sees it in theirs.");
+    public static string StepPrevious => "<";
+    public static string StepNext => ">";
+
+    /// <summary>A start day in the host's time zone, "Sat 22 Nov".</summary>
+    public static string TournamentDay(DateTime day)
+    {
+        try
+        {
+            return day.ToString("ddd d MMM", System.Globalization.CultureInfo.GetCultureInfo("en-GB"));
+        }
+        catch (Exception)
+        {
+            return day.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture); // no culture data
+        }
+    }
+
+    public static string TournamentChangeMaps => En("Change maps");
+    public static string TournamentMapsTitle => En("Tournament maps");
+    public static string TournamentMinutesPerMap => En("Minutes per map");
+    public static string TournamentCupPoints => En("Points to reach the final");
+    public static string TournamentKnockedOut => En("Knocked out per round");
+    public static string TournamentWithPlayers(int players) => En($"with {players} players");
+    public static string TournamentCreate => En("Create");
+    public static string TournamentSave => En("Save");
+    public static string TournamentSending => En("Asking the website...");
+    public static string TournamentNameNeeded => En("Give the tournament a name.");
+    public static string TournamentStartInPast => En("Pick a start time in the future.");
+    public static string TournamentNoMaps => En("Add at least one map.");
+    public static string TournamentMaxMaps(int max) => En($"A tournament has {max} maps at most.");
+    public static string TournamentCreated(string name) => En($"Tournament created: {name}");
+    public static string TournamentSaved(string name) => En($"Tournament saved: {name}");
+    public static string NoOwnTournaments => En("You haven't created any tournament yet.");
+    public static string OwnTournamentsUnavailable => En("Your tournaments couldn't be loaded. Try Refresh in a moment.");
+    public static string TournamentEditButton => En("Edit");
+    public static string TournamentCancelButton => En("Cancel");
+    public static string TournamentOpenRoom => En("Open waiting room");
+    public static string TournamentResume => En("Resume");
+    public static string ConfirmCancelTournament(string name) => En($"Cancel {name}? Nobody will be able to play it.");
+    public static string CancelTournamentYes => En("Cancel it");
+    public static string KeepTournament => En("Keep it");
+    public static string TournamentCancelled(string name) => En($"Tournament cancelled: {name}");
+    public static string TournamentCloseRoom => En("Close waiting room");
+    public static string ConfirmCloseWaitingRoom(string name) => En($"Close the waiting room of {name}? Everyone in it is disconnected. You can open it again later.");
+    public static string CloseWaitingRoomYes => En("Close it");
+    public static string KeepWaitingRoom => En("Keep it open");
+    public static string WaitingRoomClosed(string name) => En($"Waiting room closed: {name}");
+    public static string TournamentReplaced => En("You joined this tournament from another game, so this one was disconnected.");
+    public static string MorePlayers(int n) => En($"... and {n} more");
+    public static string TournamentLeaderboard => En("Tournament leaderboard");
+    public static string LeaderboardAllModes => En("All");
+    public static string LeaderboardHeader => En("Points for each finished tournament: 25, 18, 15, 12, 10, 8, 6, 4, 2, 1 for 1st to 10th");
+    public static string LeaderboardEmpty => En("No tournament has finished yet.");
+    public static string LeaderboardEmptyMode(string mode) => En($"No {mode} tournament has finished yet.");
+    public static string LeaderboardUnavailable => En("The tournament leaderboard isn't available right now.");
     public static string GameMenuButtonSetting => T("Button in the game's menus", "Bouton dans les menus du jeu");
     public static string GeneralSection => T("General", "Général");
     public static string ConfirmResetMatch => T("Reset every player's match points?", "Remettre à zéro les points de match de tous les joueurs ?");
@@ -201,6 +392,9 @@ internal static class Tr
         SBMultiplayer.Protocol.ServerEvents.MouseForfeit => T($"{arg} left their hiding place", $"{arg} a quitté sa cachette"),
         SBMultiplayer.Protocol.ServerEvents.HuntersWin => T($"Every mouse was found: {arg} wins the round!", $"Toutes les souris ont été trouvées : victoire de {arg} !"),
         SBMultiplayer.Protocol.ServerEvents.MiceSurvived => T($"Time's up! Surviving mice: {arg}", $"Temps écoulé ! Souris survivantes : {arg}"),
+        SBMultiplayer.Protocol.ServerEvents.TournamentStarted => En($"Tournament started by {arg}: good luck!"),
+        SBMultiplayer.Protocol.ServerEvents.TournamentFinished => En($"Tournament over! Winner: {arg}"),
+        SBMultiplayer.Protocol.ServerEvents.TournamentEnded => En($"Tournament ended early by {arg}: nothing is recorded"),
         _ => null,
     };
 
@@ -357,6 +551,7 @@ internal static class Tr
     public static string PlayButton => T("Play again", "Rejouer");
     public static string YouAreSpectating => T("You're spectating: invisible to the others, not counted in rounds", "Tu es spectateur : invisible pour les autres, hors des manches");
     public static string YouAreBackInGame => T("You're back in the game", "Tu es de retour dans la partie");
+    public static string TournamentWatchOnly => En("You weren't racing when the tournament started: you can watch, not race");
     public static string PlayerSpectating(string name) => T($"{name} is spectating", $"{name} est spectateur");
     public static string PlayerBackInGame(string name) => T($"{name} is back in the game", $"{name} est de retour dans la partie");
     public static string SpectatorTitle => T("SPECTATOR", "SPECTATEUR");

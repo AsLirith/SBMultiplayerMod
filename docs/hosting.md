@@ -189,6 +189,18 @@ dotnet SBMultiplayer.Server.dll --rooms 9000 --max-rooms 20
 | `--rooms <port>` | (off) | Serve web rooms over HTTP on this port. Without it, the server runs as a normal UDP server |
 | `--max-rooms <n>` | 20 | Most rooms open at once |
 
+**Tournaments**: the website can also open tournament rooms. A room starts as a waiting room, then locks a roster of
+verified Steam accounts and runs a fixed match. Set `SBM_REPORT_URL` to the website's tournament report endpoint, for example
+`http://127.0.0.1:8080/multiplayer/internal/tournament-report`; the room host posts the standings there when the tournament starts, after
+each round and at the end, with the same gateway secret. It tries 3 times, then gives up, and the website keeps the last
+save. Without it the host prints a warning and tournament results never reach the website. Tournament rooms keep their results and
+replays in `results/tournament-<id>` (next to where the server runs), so the owner can check the times with
+`verify-replays` afterwards. They count toward `--max-rooms`.
+
+Don't restart the website (SBLB) during a live tournament: it forgets its rooms, so within a minute it marks the
+tournament Paused and deletes its room. If it happens anyway, the host presses Resume in My tournaments within 1 hour,
+and play continues from the last finished round (after an hour the tournament is abandoned and nothing is recorded).
+
 Each room is a game server of its own, with the same settings as a UDP server. The room's password is checked by the
 website, not by the room host.
 

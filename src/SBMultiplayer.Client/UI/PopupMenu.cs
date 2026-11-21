@@ -43,6 +43,9 @@ internal static class PopupMenu
         /// <summary>Rebuilds the screen in place (after a click that changes what it shows).</summary>
         public void Refresh() => RefreshRequested = true;
 
+        /// <summary>Escape doesn't close the screen, e.g. while it waits for an answer it must show. Set by each build.</summary>
+        public bool HoldEscape { get; set; }
+
         internal void Tick()
         {
             foreach (Action tick in ticks.ToArray())
@@ -67,6 +70,7 @@ internal static class PopupMenu
             leaving.Clear();
             ticks.Clear();
             RefreshRequested = false;
+            HoldEscape = false;
         }
     }
 
@@ -191,7 +195,7 @@ internal static class PopupMenu
             }
             // The end-of-game screen takes Escape first (closed by the global tick, before or after this update).
             bool endScreenTakesIt = escapeUsedElsewhere || (GlobalOverlay.EndScreenVisible && Net.ModConfig.Current.CloseEndScreenKey == "Escape");
-            if (escapeDown && !escapeWasDown && !KeyBindings.BlocksEscape && !endScreenTakesIt)
+            if (escapeDown && !escapeWasDown && !KeyBindings.BlocksEscape && !endScreenTakesIt && !screen.HoldEscape)
             {
                 close();
                 return;
@@ -283,7 +287,7 @@ internal static class PopupMenu
     }
 
     /// <summary>After a rebuild, once the new elements are laid out: selects the one where the selection was.</summary>
-    private static void RestoreSelection(Screen screen)
+    internal static void RestoreSelection(Screen screen)
     {
         if (screen.PendingRestore is not { } restore)
         {
@@ -374,14 +378,17 @@ internal static class PopupMenu
     public static Element Stack(params Element?[] children) =>
         new PanelStack(26f).Add(new Label("", MenuWidth, 1f, setSizeToText: false)).AddMaybeNull(children);
 
-    public static Element Title(string text) => new Label(text).SetStyle(Ui.StrongStyle);
+    /// <summary>The screen's title. A long one (a long room or tournament name) is shrunk to the screen's width.</summary>
+    /// The bold style sits on a wrapper, because Fit gives the label a style of its own and the game's style is shared.
+    public static Element Title(string text) =>
+        new PanelStack(0f).Add(Rooms.GameScreens.Fit(new Label(text), text, Ui.FontStrong, MenuWidth)).SetStyle(Ui.StrongStyle);
 
     /// <summary>
     /// Section header: regular font, like the rest of the text, with some space above it to separate the groups.
-    /// (The game's small bold font is hard to read.)
+    /// The game's small bold font is hard to read. Wrapped at the screen's width.
     /// </summary>
     public static Element Section(string text) =>
-        new Label(text) { Padding = Padding.GetTop(18f) }.SetStyle(new Style { Font = Ui.FontSmall });
+        new Label(text, MenuWidth) { Padding = Padding.GetTop(18f) }.SetStyle(new Style { Font = Ui.FontSmall });
 
     /// <summary>Plain text, wrapped at the screen's width.</summary>
     public static Element Text(string text) => new Label(text, MenuWidth);
