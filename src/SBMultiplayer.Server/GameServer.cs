@@ -13,7 +13,7 @@ namespace SBMultiplayer.Server;
 /// board states, and runs the rounds (imposed map, timer, leaderboard, match points, admin commands).
 /// Everything runs on a single thread (<see cref="Poll"/>).
 /// </summary>
-public sealed class GameServer : INetEventListener
+public sealed partial class GameServer : INetEventListener
 {
     private const int EchoIdOffset = 1_000_000;
 
@@ -52,7 +52,10 @@ public sealed class GameServer : INetEventListener
     private readonly NetDataWriter writer = new();
     private readonly Dictionary<int, Player> players = new();
     private readonly Queue<(double Due, int PeerId, PlayerState State)> echoQueue = new();
-    private readonly Stopwatch clock = Stopwatch.StartNew();
+    private readonly Stopwatch stopwatch = Stopwatch.StartNew();
+
+    /// <summary>Clock given by the caller (tests), in seconds. Null means the stopwatch.</summary>
+    private readonly Func<double>? clock;
 
     // ---------- Round state ----------
     private RoundPhase phase = RoundPhase.Free;
@@ -128,10 +131,12 @@ public sealed class GameServer : INetEventListener
     /// <summary>Start of the hunt: the mice are frozen, the hunter is released.</summary>
     private double SeekStart => (startAt ?? double.MaxValue / 2) + options.HideSeconds;
 
-    public GameServer(ServerOptions options, string? configPath = null, bool listenUdp = true)
+    public GameServer(ServerOptions options, string? configPath = null, bool listenUdp = true, Func<double>? clock = null)
     {
         this.options = options;
         this.configPath = configPath;
+        this.clock = clock;
+        ApplyTournamentSettings();
         if (listenUdp)
         {
             net = new NetManager(this)
@@ -149,7 +154,7 @@ public sealed class GameServer : INetEventListener
 
     private string CurrentMap => phase == RoundPhase.Free ? "" : options.Maps[mapIndex];
 
-    private double Now => clock.Elapsed.TotalSeconds;
+    private double Now => clock?.Invoke() ?? stopwatch.Elapsed.TotalSeconds;
 
     public void Start()
     {
@@ -268,6 +273,7 @@ public sealed class GameServer : INetEventListener
             if (phase != RoundPhase.Free)
             {
                 Log("Nobody left: rotation paused");
+                RememberTournamentPosition();
                 phase = RoundPhase.Free;
                 mapIndex = -1;
                 paused = false;
@@ -277,7 +283,18 @@ public sealed class GameServer : INetEventListener
 
         if (phase == RoundPhase.Free)
         {
-            StartRound((mapIndex + 1) % options.Maps.Count, newMap: true);
+            if (IsTournament)
+            {
+                // A waiting room or a finished tournament has no rounds. Otherwise players are back in an empty room.
+                if (TournamentRunning)
+                {
+                    StartTournamentRound();
+                }
+            }
+            else
+            {
+                StartRound((mapIndex + 1) % options.Maps.Count, newMap: true);
+            }
         }
         else if (paused)
         {
@@ -317,6 +334,14 @@ public sealed class GameServer : INetEventListener
     /// <summary>After the results: next round on the same map (Rounds mode), or next map.</summary>
     private void AdvanceAfterResults()
     {
+        if (IsTournament && !TournamentRunning)
+        {
+            // The tournament is over. The room holds after the final results.
+            phase = RoundPhase.Free;
+            paused = false;
+            BroadcastRound();
+            return;
+        }
         if (matchOver)
         {
             // Cup or Elimination won: new match, from the next map.
@@ -358,6 +383,7 @@ public sealed class GameServer : INetEventListener
         hunters.Clear();
         mice.Clear();
         found.Clear();
+        SnapshotTournamentPoints();
         if (IsRoundsMode)
         {
             phase = RoundPhase.Preparing;
@@ -610,6 +636,13 @@ public sealed class GameServer : INetEventListener
     /// <summary>A player becomes a spectator (or comes back): out of the ready wait and the current race.</summary>
     private void OnSpectate(Player p, bool spectating)
     {
+        if (!spectating && IsWatcher(p))
+        {
+            // Tournament: not on the roster, so they can't race. Their game is told it is still spectating.
+            Log($"{p.Name} (#{p.Id}) can't race: not on the tournament's roster");
+            p.Peer.Send(Msg.Spectate(writer, p.Id, true), DeliveryMethod.ReliableOrdered);
+            return;
+        }
         if (p.IsSpectator == spectating)
         {
             return;
@@ -650,8 +683,9 @@ public sealed class GameServer : INetEventListener
         AwardPoints(); // Cup / Elimination: may decide a winner (matchOver)
 
         // End of a game: each Time Attack round (end of the timer), the end of the rotation in Rounds mode,
-        // or a Cup / Elimination winner.
-        if ((options.Mode is GameMode.Rounds or GameMode.HideAndSeek) && mapIndex == options.Maps.Count - 1 && roundInMap >= Math.Max(1, options.RoundsPerMap))
+        // or a Cup / Elimination winner. A Time Attack tournament is one game across the map list.
+        bool endsRotation = options.Mode is GameMode.Rounds or GameMode.HideAndSeek || (IsTournament && options.Mode == GameMode.TimeAttack);
+        if (endsRotation && mapIndex == options.Maps.Count - 1 && roundInMap >= (IsRoundsMode ? Math.Max(1, options.RoundsPerMap) : 1))
         {
             matchOver = true;
             string? winner = SortedStandings().FirstOrDefault().Name;
@@ -661,12 +695,13 @@ public sealed class GameServer : INetEventListener
                 BroadcastEvent(ServerEvents.MatchWon, winner);
             }
         }
-        matchEnded = options.Mode == GameMode.TimeAttack || matchOver;
+        matchEnded = (options.Mode == GameMode.TimeAttack && !IsTournament) || matchOver;
         phaseEnd = Now + (matchEnded ? Math.Max(options.ResultsSeconds, options.MatchEndSeconds) : options.ResultsSeconds);
         BroadcastRound();
         BroadcastStandings();
         LogResults();
         ExportResults();
+        OnTournamentRoundEnded();
     }
 
     private int PointsForRank(int rank) => rank < options.PointsTable.Count ? options.PointsTable[rank] : 0;
@@ -751,10 +786,12 @@ public sealed class GameServer : INetEventListener
 
         // Didn't finish, worst first: stalled (game in the background), then by give-up order, then still racing at the end.
         int Rank(Player p) => IsStalled(p.Id) ? -1 : gaveUpOrder.IndexOf(p.Id) is int i and >= 0 ? i : int.MaxValue;
-        var dnf = racers.Where(p => !finishers.Contains(p.Name)).OrderBy(Rank).Select(p => p.Name).ToList();
+        // Tournament: roster players who didn't race, disconnected or spectating, count as the slowest of all.
+        var missing = NonRacingRosterPlayers(racers.Select(r => r.Name));
+        var dnf = missing.Concat(racers.Where(p => !finishers.Contains(p.Name)).OrderBy(Rank).Select(p => p.Name)).ToList();
 
         var out_ = new List<string>();
-        int maxOut = racers.Count - 1; // at least one survivor
+        int maxOut = racers.Count + missing.Count - 1; // at least one survivor
         if (options.DnfFillsQuota)
         {
             out_.AddRange(dnf.Concat(Enumerable.Reverse(finishers)).Take(Math.Min(options.EliminatedPerRound, maxOut)));
@@ -767,10 +804,12 @@ public sealed class GameServer : INetEventListener
         }
 
         // In the match but not in the race (missed the start, back from spectating...): eliminated, outside the quota.
-        var absent = players.Values.Where(p => p.IsPlaying && !eliminated.Contains(p.Name) && !participants.Contains(p.Id))
-            .Select(p => p.Name).ToList();
+        // Tournament: they are in `missing` instead, and count inside the quota.
+        var absent = IsTournament
+            ? new List<string>()
+            : players.Values.Where(p => p.IsPlaying && !eliminated.Contains(p.Name) && !participants.Contains(p.Id)).Select(p => p.Name).ToList();
 
-        foreach (string name in racers.Select(r => r.Name).Concat(absent))
+        foreach (string name in racers.Select(r => r.Name).Concat(missing).Concat(absent))
         {
             standings.TryGetValue(name, out StandingEntry previous);
             bool isOut = out_.Contains(name) || absent.Contains(name);
@@ -778,21 +817,25 @@ public sealed class GameServer : INetEventListener
             {
                 eliminated.Add(name);
             }
-            standings[name] = new StandingEntry(name, previous.Points + (isOut ? 0 : 1), previous.RoundsPlayed + (absent.Contains(name) ? 0 : 1),
+            bool raced = !absent.Contains(name) && !missing.Contains(name);
+            standings[name] = new StandingEntry(name, previous.Points + (isOut ? 0 : 1), previous.RoundsPlayed + (raced ? 1 : 0),
                 isOut ? StandingStatus.Eliminated : StandingStatus.Normal);
         }
         var allOut = out_.Concat(absent).ToList();
+        RecordKnockOuts(absent, dnf, out_, finishers);
         if (allOut.Count > 0)
         {
             Log($"Eliminated: {string.Join(", ", out_)}{(absent.Count > 0 ? $" - missed the start: {string.Join(", ", absent)}" : "")}");
             BroadcastEvent(ServerEvents.Eliminated, string.Join(", ", allOut));
         }
 
-        var remaining = players.Values.Where(p => p.IsPlaying && !eliminated.Contains(p.Name)).ToList();
+        var remaining = IsTournament
+            ? RosterNamesStillIn()
+            : players.Values.Where(p => p.IsPlaying && !eliminated.Contains(p.Name)).Select(p => p.Name).ToList();
         if (remaining.Count <= 1 && !matchOver)
         {
             matchOver = true;
-            string winner = remaining.FirstOrDefault()?.Name ?? racers.Select(r => r.Name).First(n => !out_.Contains(n));
+            string winner = remaining.FirstOrDefault() ?? racers.Select(r => r.Name).First(n => !out_.Contains(n));
             standings.TryGetValue(winner, out StandingEntry w);
             standings[winner] = w with { Name = winner, Status = StandingStatus.Winner };
             Log($"{winner} wins the elimination!");
@@ -805,6 +848,7 @@ public sealed class GameServer : INetEventListener
         standings.Clear();
         eliminated.Clear();
         matchOver = false;
+        ResetTournamentMatch();
         BroadcastStandings();
     }
 
@@ -834,8 +878,8 @@ public sealed class GameServer : INetEventListener
     private void BroadcastStandings() =>
         Broadcast(Msg.Standings(writer, SortedStandings()), DeliveryMethod.ReliableOrdered, except: null);
 
-    private void BroadcastEvent(string code, string argument) =>
-        Broadcast(Msg.Event(writer, code, argument), DeliveryMethod.ReliableOrdered, except: null);
+    private void BroadcastEvent(string code, string argument, string fallback = "") =>
+        Broadcast(Msg.Event(writer, code, argument, fallback), DeliveryMethod.ReliableOrdered, except: null);
 
     private void OnFinish(Player p, Msg.FinishInfo finish)
     {
@@ -900,6 +944,10 @@ public sealed class GameServer : INetEventListener
         {
             if (!replayComing)
             {
+                if (run.Flags.Count == 0)
+                {
+                    CountFlaggedRun(p); // no replay counts as a failed check, and RejectTime counts flagged runs
+                }
                 RejectTime(p, run, "this mod version doesn't send the run's replay (update the mod)");
             }
             else if (run.Flags.Count > 0)
@@ -944,6 +992,10 @@ public sealed class GameServer : INetEventListener
 
     private void RejectTime(Player p, RunProof run, string reason)
     {
+        if (run.Flags.Count > 0)
+        {
+            CountFlaggedRun(p);
+        }
         Log($"Time rejected for {p.Name} ({Msg.FormatTime(run.TimeMs)}): {reason}");
         p.Peer.Send(Msg.Reply(writer, CommandResults.TimeRejected, Shorten(reason, 240), Shorten($"Your time doesn't count: {reason}", 500)),
             DeliveryMethod.ReliableOrdered);
@@ -1011,6 +1063,7 @@ public sealed class GameServer : INetEventListener
         else if (run.Flags.Count > 0)
         {
             string reasons = string.Join("; ", run.Flags);
+            CountFlaggedRun(p);
             Log($"Time flagged for {p.Name} ({Msg.FormatTime(run.TimeMs)}): {reasons}");
             foreach (Player admin in players.Values.Where(o => o.IsAdmin))
             {
@@ -1157,6 +1210,13 @@ public sealed class GameServer : INetEventListener
         }
     }
 
+    /// <summary>Tells an admin they are one, with the rotation and the settings. Used at login and when a tournament connection is replaced.</summary>
+    private void SendAdminStatus(Player p)
+    {
+        p.Peer.Send(Msg.AdminStatus(writer, true, options.Maps), DeliveryMethod.ReliableOrdered);
+        p.Peer.Send(Msg.Settings(writer, options.ToMatchSettings(), saveToFile: false), DeliveryMethod.ReliableOrdered);
+    }
+
     /// <summary>An admin changed the match settings in game.</summary>
     private void OnSettings(Player p, string patchJson, bool saveToFile)
     {
@@ -1183,6 +1243,10 @@ public sealed class GameServer : INetEventListener
         {
             Reply(p, CommandResults.InvalidSettings, error);
             return;
+        }
+        if (IsTournament)
+        {
+            options.RunCheck = RunCheck.Enforce; // tournaments always enforce time checks
         }
         Log($"Settings changed by {p.Name}");
         LogSettings();
@@ -1212,7 +1276,7 @@ public sealed class GameServer : INetEventListener
         if (options.Mode != oldMode || !options.Maps.SequenceEqual(oldMaps))
         {
             ResetMatch();
-            if (HasRotation)
+            if (HasRotation && (!IsTournament || TournamentRunning))
             {
                 StartRound(0, newMap: true);
             }
@@ -1268,7 +1332,7 @@ public sealed class GameServer : INetEventListener
                 break;
 
             case AdminCommand.RestartRound:
-                if (!inRound)
+                if (!inRound || (IsTournament && !TournamentRunning))
                 {
                     return (CommandResults.NoRound, "");
                 }
@@ -1317,6 +1381,10 @@ public sealed class GameServer : INetEventListener
                 break;
 
             case AdminCommand.GotoMap:
+                if (IsTournament && !TournamentRunning)
+                {
+                    return (CommandResults.NoRound, "");
+                }
                 if (argument < 0 || argument >= options.Maps.Count)
                 {
                     return (CommandResults.BadMap, options.Maps.Count.ToString(CultureInfo.InvariantCulture));
@@ -1352,6 +1420,21 @@ public sealed class GameServer : INetEventListener
                 }
                 nextHunter = chosen.Name;
                 break;
+
+            case AdminCommand.StartTournament:
+            case AdminCommand.EndTournament:
+            {
+                if (!IsTournament)
+                {
+                    return (CommandResults.Unknown, command.ToString());
+                }
+                var result = command == AdminCommand.StartTournament ? StartTournament(by) : EndTournament(by);
+                if (result.Code != CommandResults.Done)
+                {
+                    return result;
+                }
+                break;
+            }
 
             default:
                 return (CommandResults.Unknown, command.ToString());
@@ -1510,7 +1593,8 @@ public sealed class GameServer : INetEventListener
     /// Why a join must be refused, or null to accept it. Shared by the UDP listener and the web room host,
     /// so both transports give the same answers. The website checks room passwords itself, so web joins skip that step.
     /// </summary>
-    public string? RefuseReason(string key, string password, bool checkPassword = true)
+    /// <param name="steamId">Steam ID verified by the website (tournament rooms). Once the tournament starts, only the roster gets in.</param>
+    public string? RefuseReason(string key, string password, bool checkPassword = true, string? steamId = null)
     {
         if (players.Count >= options.MaxPlayers)
         {
@@ -1519,6 +1603,10 @@ public sealed class GameServer : INetEventListener
         if (key != ProtocolInfo.ConnectionKey)
         {
             return $"{ServerReasons.VersionMismatch}:{ProtocolInfo.Version}";
+        }
+        if (roster is { Locked: true } && !CanEnterTournament(steamId))
+        {
+            return ServerReasons.TournamentStarted;
         }
         if (checkPassword && options.Password != "" && password != options.Password)
         {
@@ -1689,12 +1777,20 @@ public sealed class GameServer : INetEventListener
         }
         var (name, skin, capabilities) = Msg.GetHello(reader);
         p.Name = Msg.SanitizeName(name);
+        if (!AdmitToTournament(p, name))
+        {
+            return;
+        }
         p.Skin = skin;
         p.Capabilities = capabilities;
         p.HasSaidHello = true;
 
         var others = players.Values.Where(o => o.HasSaidHello && o != p).Select(o => o.Info).ToList();
         p.Peer.Send(Msg.Welcome(writer, p.Id, others, ProtocolInfo.OwnCapabilities), DeliveryMethod.ReliableOrdered);
+        if (p.IsSpectator)
+        {
+            p.Peer.Send(Msg.Spectate(writer, p.Id, true), DeliveryMethod.ReliableOrdered); // tournament watcher
+        }
         Broadcast(Msg.PlayerJoined(writer, p.Info), DeliveryMethod.ReliableOrdered, except: p);
 
         if (options.Echo)
@@ -1716,6 +1812,10 @@ public sealed class GameServer : INetEventListener
         if (standings.Count > 0)
         {
             p.Peer.Send(Msg.Standings(writer, SortedStandings()), DeliveryMethod.ReliableOrdered);
+        }
+        if (p.IsAdmin)
+        {
+            SendAdminStatus(p); // tournament: this connection replaced an admin's
         }
     }
 

@@ -35,7 +35,20 @@ public sealed class WebPeer : IPeer
         _ = Task.Run(SendLoop);
     }
 
+    /// <param name="steamId">Steam ID the website verified for this connection (tournament rooms).</param>
+    /// <param name="steamName">Steam persona name the website looked up.</param>
+    public WebPeer(int id, WebSocket socket, string? steamId, string? steamName)
+        : this(id, socket)
+    {
+        SteamId = steamId;
+        SteamName = steamName;
+    }
+
     public int Id { get; }
+
+    public string? SteamId { get; }
+
+    public string? SteamName { get; }
 
     /// <summary>Round-trip time. Not measured over WebSocket yet, so it's 0.</summary>
     public int Ping => 0;

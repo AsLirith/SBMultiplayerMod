@@ -65,6 +65,26 @@ message carries one game message, in the same format. Only the connection differ
 - Refusals use the HTTP status of the handshake (401 wrong password, 404 no room, 426 version, 429 rate limit, 503 full),
   or a WebSocket close reason. The client translates them with the same codes as UDP.
 - New reason codes: `ROOM_NOT_FOUND`, `RATE_LIMITED`, `UNREACHABLE`. An older client shows the code as plain text.
+- Public lobbies (lobbies without a password) are read from the website's `GET /multiplayer/api/lobbies`, outside the
+  game protocol. Each entry has `code`, `mode`, `modeId` (a `GameMode` name), `map` (a map key), `players` and
+  `maxPlayers`; read them leniently, since the website may add fields. A website without the list answers 404, and the
+  mod then hides the section.
+
+## Tournaments
+
+These additions follow the allowed changes above, so `ProtocolInfo.Version` stays 13. Every new event and reply carries
+an English fallback. An older mod can't reach a tournament room anyway, because the website requires a Steam ticket
+to join one.
+
+- Admin commands `StartTournament` (9: locks the roster to the players present and not spectating, and starts the first
+  round; spectators stay and watch, and the server answers their `Spectate(false)` with `Spectate(own id, true)`) and
+  `EndTournament` (10: ends it early, nothing is recorded). Only in tournament rooms; elsewhere the reply is `UNKNOWN`.
+- Reason codes `TOURNAMENT_STARTED` (the tournament started and this Steam account isn't on its roster),
+  `TOURNAMENT_NEEDS_STEAM` (the connection carries no verified Steam account) and `REPLACED` (the same Steam account
+  connected again; the older connection is closed and doesn't retry).
+- Events `TOURNAMENT_STARTED` (argument: the host), `TOURNAMENT_FINISHED` (argument: the winner) and
+  `TOURNAMENT_ENDED` (argument: the host), with an English fallback.
+- In a tournament room the player's name comes from their Steam account (verified by the website), not from `Hello`.
 
 ## Breaking changes (to avoid)
 

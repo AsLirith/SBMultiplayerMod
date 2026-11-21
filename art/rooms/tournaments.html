@@ -1,0 +1,102 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><style>html,body{margin:0;padding:0;background:#141212;overflow:hidden}svg{display:block}</style></head>
+<body>
+<!-- Room art for the Tournaments tab. Rendered with headless Edge (see render.bat). -->
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1250" viewBox="0 190 800 1250">
+  <defs>
+    <filter id="grit" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="3" seed="7" result="n"/>
+      <feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.55 -0.18" result="a"/>
+      <feComposite in="a" in2="SourceGraphic" operator="in"/>
+    </filter>
+    <filter id="rough"><feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="3"/><feDisplacementMap in="SourceGraphic" scale="6"/></filter>
+    <pattern id="dots" width="22" height="22" patternUnits="userSpaceOnUse" patternTransform="rotate(30)">
+      <circle cx="11" cy="11" r="6.5" fill="#a8641a"/>
+    </pattern>
+    <pattern id="dotsBg" width="30" height="30" patternUnits="userSpaceOnUse" patternTransform="rotate(30)">
+      <circle cx="15" cy="15" r="5" fill="#2a2525"/>
+    </pattern>
+    <pattern id="dotsRed" width="18" height="18" patternUnits="userSpaceOnUse" patternTransform="rotate(30)">
+      <circle cx="9" cy="9" r="5" fill="#8f1d1d"/>
+    </pattern>
+    <radialGradient id="glow" cx="50%" cy="42%" r="55%">
+      <stop offset="0" stop-color="#3a2f2a"/><stop offset="1" stop-color="#141212"/>
+    </radialGradient>
+    <clipPath id="bowlClip"><path d="M175 470 L625 470 Q640 760 470 880 L330 880 Q160 760 175 470 Z"/></clipPath>
+    <clipPath id="baseClip"><path d="M215 1180 L585 1180 L620 1360 L180 1360 Z"/></clipPath>
+  </defs>
+
+  <!-- background -->
+  <rect width="800" height="1800" fill="url(#glow)"/>
+  <rect width="800" height="1800" fill="url(#dotsBg)" opacity="0.6"/>
+  <g stroke="#0a0909" stroke-width="40" opacity="0.55">
+    <line x1="-100" y1="300" x2="900" y2="-60"/><line x1="-100" y1="1700" x2="900" y2="1340"/>
+  </g>
+  <!-- burst behind the cup -->
+  <g fill="#e8452c" opacity="0.92" filter="url(#rough)">
+    <path d="M400 640 L470 250 L500 600 L700 330 L560 650 L790 640 L560 720 L720 960 L500 780 L430 1060 L380 790 L150 980 L310 720 L20 700 L300 640 L110 360 L340 590 Z"/>
+  </g>
+  <g fill="url(#dotsRed)" opacity="0.8">
+    <path d="M400 640 L500 600 L700 330 L560 650 L790 640 L560 720 L720 960 L500 780 Z"/>
+  </g>
+
+  <g filter="url(#rough)" stroke="#0b0a0a" stroke-linejoin="round" stroke-linecap="round">
+    <!-- handles -->
+    <path d="M190 520 C40 520 40 760 300 800" fill="none" stroke-width="58"/>
+    <path d="M190 520 C40 520 40 760 300 800" fill="none" stroke="#f2b632" stroke-width="30"/>
+    <path d="M610 520 C760 520 760 760 500 800" fill="none" stroke-width="58"/>
+    <path d="M610 520 C760 520 760 760 500 800" fill="none" stroke="#f2b632" stroke-width="30"/>
+
+    <!-- bowl -->
+    <path d="M175 470 L625 470 Q640 760 470 880 L330 880 Q160 760 175 470 Z" fill="#f6c03a" stroke-width="16"/>
+    <g clip-path="url(#bowlClip)" stroke="none">
+      <path d="M430 470 L640 470 L640 900 L400 900 Q560 760 430 470 Z" fill="#d68d1f"/>
+      <path d="M470 470 L640 470 L640 900 L430 900 Q590 760 470 470 Z" fill="url(#dots)"/>
+      <path d="M225 500 L270 500 Q250 700 330 830 L300 840 Q205 720 225 500 Z" fill="#fff6d6"/>
+    </g>
+    <path d="M175 470 L625 470 Q640 760 470 880 L330 880 Q160 760 175 470 Z" fill="none" stroke-width="16"/>
+    <!-- rim -->
+    <rect x="150" y="430" width="500" height="64" rx="10" fill="#f6c03a" stroke-width="16"/>
+    <rect x="460" y="438" width="182" height="48" fill="#d68d1f" stroke="none"/>
+    <line x1="190" y1="452" x2="330" y2="452" stroke="#fff6d6" stroke-width="12"/>
+
+    <!-- star on the bowl -->
+    <path d="M400 560 L425 625 L494 628 L440 670 L459 737 L400 698 L341 737 L360 670 L306 628 L375 625 Z" fill="#e8452c" stroke-width="12"/>
+
+    <!-- stem -->
+    <path d="M345 880 L455 880 L440 1040 L360 1040 Z" fill="#f6c03a" stroke-width="16"/>
+    <path d="M410 884 L452 884 L438 1036 L405 1036 Z" fill="#d68d1f" stroke="none"/>
+    <ellipse cx="400" cy="960" rx="78" ry="26" fill="#f6c03a" stroke-width="14"/>
+    <!-- neck plate -->
+    <path d="M280 1040 L520 1040 L560 1110 L240 1110 Z" fill="#f6c03a" stroke-width="16"/>
+    <path d="M430 1044 L518 1044 L554 1106 L455 1106 Z" fill="#d68d1f" stroke="none"/>
+
+    <!-- base -->
+    <rect x="200" y="1110" width="400" height="72" fill="#2b2626" stroke-width="16"/>
+    <path d="M215 1180 L585 1180 L620 1360 L180 1360 Z" fill="#3a3333" stroke-width="16"/>
+    <g clip-path="url(#baseClip)" stroke="none"><rect x="440" y="1180" width="200" height="190" fill="url(#dotsBg)"/></g>
+    <path d="M215 1180 L585 1180 L620 1360 L180 1360 Z" fill="none" stroke-width="16"/>
+    <!-- plaque -->
+    <rect x="285" y="1215" width="230" height="110" rx="8" fill="#f6c03a" stroke-width="12"/>
+  </g>
+  <text x="400" y="1300" text-anchor="middle" font-family="Impact, 'Arial Black', sans-serif" font-size="92" fill="#0b0a0a" transform="rotate(-4 400 1270)">#1</text>
+
+  <!-- skateboard leaning on the base -->
+  <g filter="url(#rough)" transform="translate(10 -175) scale(0.85) rotate(-62 640 1420)" stroke="#0b0a0a" stroke-linejoin="round">
+    <rect x="470" y="1385" width="360" height="74" rx="37" fill="#f4efe6" stroke-width="14"/>
+    <rect x="520" y="1400" width="250" height="16" rx="8" fill="#e8452c" stroke="none"/>
+    <circle cx="540" cy="1478" r="26" fill="#e8452c" stroke-width="12"/>
+    <circle cx="760" cy="1478" r="26" fill="#e8452c" stroke-width="12"/>
+  </g>
+
+  <!-- sparkles -->
+  <g fill="#fff6d6" stroke="#0b0a0a" stroke-width="8" stroke-linejoin="round">
+    <path d="M150 300 L165 345 L210 360 L165 375 L150 420 L135 375 L90 360 L135 345 Z"/>
+    <path d="M660 1000 L670 1030 L700 1040 L670 1050 L660 1080 L650 1050 L620 1040 L650 1030 Z"/>
+    <path d="M620 230 L628 255 L653 263 L628 271 L620 296 L612 271 L587 263 L612 255 Z"/>
+  </g>
+
+  <!-- paper grit over everything -->
+  <rect width="800" height="1800" fill="#000" filter="url(#grit)"/>
+</svg>
+</body></html>

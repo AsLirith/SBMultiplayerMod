@@ -21,6 +21,11 @@
     <Reference Include="Steamworks.NET" HintPath="$(GameLibDir)/Steamworks.NET.dll" Private="false" />
   </ItemGroup>
 
+  <!-- Pictures of the Multiplayer page, inside the DLL (no extra file to install). Sources: art/rooms. -->
+  <ItemGroup>
+    <EmbeddedResource Include="Rooms/Art/*.jpg" LogicalName="SBMultiplayer.Rooms.%(Filename).jpg" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="../SBMultiplayer.Protocol/SBMultiplayer.Protocol.csproj" />
     <!-- The game can host a game itself (listen server): same server code as the dedicated server. -->

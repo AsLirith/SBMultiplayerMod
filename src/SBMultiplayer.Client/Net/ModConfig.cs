@@ -31,6 +31,21 @@ internal sealed class ModConfig
     /// <summary>Website that hosts rooms ("Create a room" and room codes), e.g. https://playsbm.thefanclub.cc.</summary>
     public string RoomSite { get; set; } = "https://playsbm.thefanclub.cc";
 
+    /// <summary>
+    /// Where the Tournaments screen reads the tournament history ({base}/tournaments). Empty means the room site's
+    /// /multiplayer/api. The SBMULTI_TOURNAMENTS_API environment variable overrides it, e.g. for a local test server.
+    /// </summary>
+    public string TournamentsApi { get; set; } = "";
+
+    /// <summary>
+    /// "Join in game" on the website's lobby page: the mod answers on 127.0.0.1 (this computer only) so the page can
+    /// ask it to join a lobby. false turns it off.
+    /// </summary>
+    public bool WebJoin { get; set; } = true;
+
+    /// <summary>Other websites whose lobby page may ask the game to join (besides <see cref="RoomSite"/>).</summary>
+    public List<string> WebJoinSites { get; set; } = new() { "https://sblb.thefanclub.cc" };
+
     /// <summary>Displayed name. Empty = Steam name.</summary>
     public string PlayerName { get; set; } = "";
 
@@ -293,6 +308,14 @@ internal sealed class ModConfig
             }
         }
         // Next format: if (c.ConfigVersion < 3) { ... }
+    }
+
+    /// <summary>Base address of the tournament API, without a trailing slash.</summary>
+    public string TournamentsApiBase()
+    {
+        string api = Environment.GetEnvironmentVariable("SBMULTI_TOURNAMENTS_API") is { Length: > 0 } env ? env : TournamentsApi;
+        api = api.Trim().TrimEnd('/');
+        return api != "" ? api : RoomSite.Trim().TrimEnd('/') + "/multiplayer/api";
     }
 
     /// <summary>The WebSocket address of a room: the room site with wss:// (or ws://) and /multiplayer/ws/CODE.</summary>

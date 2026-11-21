@@ -42,6 +42,29 @@ internal sealed class MultiplayerClient : INetEventListener
     private sealed record PendingRoom(string Code, string Password, string AdminPassword);
     private volatile PendingRoom? pendingRoom;
     private volatile string? pendingRoomError;
+
+    /// <summary>A tournament join whose Steam ticket has arrived, waiting to be joined on the game thread.</summary>
+    private sealed record PendingTournament(string Code, string? AdminPassword, string Ticket);
+    private volatile PendingTournament? pendingTournament;
+    private volatile bool pendingTournamentNoSteam;
+
+    /// <summary>A typed room code that the website said isn't a tournament's (or couldn't say). It waits to be joined on the game thread.</summary>
+    private volatile string? pendingCodeJoin;
+
+    /// <summary>
+    /// Our Steam ticket (hex) for the tournament room we're in. It is sent as x-steam-ticket with every (re)connection.
+    /// Null while a new one is being fetched after the website refused the old one. The connection waits for it.
+    /// </summary>
+    private volatile string? tournamentTicket;
+    private int fetchingTicket;
+
+    /// <summary>Refused tickets in a row. The first refusal gets a new ticket and retries. The second stops.</summary>
+    private int ticketRefusals;
+
+    /// <summary>Tournament joins in a row that the website couldn't check with Steam (503). They are retried slowly, then given up.</summary>
+    private int steamUncheckedTries;
+    private const double SteamUncheckedRetrySeconds = 20;
+    private const int SteamUncheckedMaxTries = 6;
     private double lastConnectAttempt = double.NegativeInfinity;
     private string mapKey = "";
     private string playerName = "Joueur";
@@ -49,6 +72,18 @@ internal sealed class MultiplayerClient : INetEventListener
 
     /// <summary>The room the player is in (its code, shown in the menu). Null when not in a room.</summary>
     public string? RoomCode { get; private set; }
+
+    /// <summary>The room we're in (or joining) is a tournament room, joined through <see cref="JoinTournament"/>.</summary>
+    public bool InTournament { get; private set; }
+
+    /// <summary>
+    /// The tournament room's state as far as we've seen it, from its TOURNAMENT_STARTED / ENDED / FINISHED events: started,
+    /// and over (ended early or finished). Reset when we change rooms. Someone who joins after the start never saw the
+    /// event, so for them it stays false. The server ignores a second Start.
+    /// </summary>
+    public bool TournamentStarted { get; private set; }
+
+    public bool TournamentOver { get; private set; }
 
     /// <summary>Disconnection requested from the menu: no automatic reconnection.</summary>
     private bool userDisconnected;
@@ -201,6 +236,7 @@ internal sealed class MultiplayerClient : INetEventListener
         {
             SteamLobby.Tick();
         }
+        WebJoin.Tick(this);
         TrackLocalSkin();
         EnsureConnected();
         FlushPendingFinish();
@@ -596,7 +632,69 @@ internal sealed class MultiplayerClient : INetEventListener
         JoinRoomNow(code, ModConfig.Current.RoomSocketUri(code).ToString(), password, null);
     }
 
-    private void JoinRoomNow(string code, string url, string? password, string? adminPassword)
+    /// <summary>
+    /// Joins a room by a code the player typed. The website is asked first. A tournament's room is joined with our Steam
+    /// ticket (<see cref="JoinTournament"/>), so it never comes back as a password prompt. Any other room is joined as
+    /// before (<see cref="JoinRoom"/>, on the game thread), and so is a room when the website gives no answer (an older
+    /// website, a network error).
+    /// </summary>
+    public void JoinTypedCode(string code)
+    {
+        code = code.Trim().ToUpperInvariant();
+        string url = ModConfig.Current.RoomSite.Trim().TrimEnd('/') + "/multiplayer/api/rooms/" + Uri.EscapeDataString(code);
+        Task.Run(async () =>
+        {
+            bool tournament = false;
+            try
+            {
+                using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(8) };
+                using HttpResponseMessage response = await http.GetAsync(url);
+                if (response.IsSuccessStatusCode)
+                {
+                    using JsonDocument doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+                    tournament = doc.RootElement.ValueKind == JsonValueKind.Object
+                        && doc.RootElement.TryGetProperty("tournament", out JsonElement v) && v.ValueKind == JsonValueKind.True;
+                }
+            }
+            catch (Exception e)
+            {
+                ModLog.Warn($"Room lookup failed, joining as a plain room: {e.Message}");
+            }
+            if (tournament)
+            {
+                JoinTournament(code, null);
+            }
+            else
+            {
+                pendingCodeJoin = code;
+            }
+        });
+    }
+
+    /// <summary>
+    /// Joins a tournament's room (its waiting room, or back into it while live). It works like a room, plus our Steam
+    /// ticket, which the website checks before letting us in. Getting the ticket runs off the game thread, and the join
+    /// happens in <see cref="EnsureConnected"/>. The host passes the room's admin password.
+    /// </summary>
+    public void JoinTournament(string code, string? adminPassword)
+    {
+        code = code.Trim().ToUpperInvariant();
+        Task.Run(async () =>
+        {
+            string? ticket = await SteamTicket.GetHexAsync();
+            if (ticket == null)
+            {
+                pendingTournamentNoSteam = true;
+            }
+            else
+            {
+                pendingTournament = new PendingTournament(code, adminPassword, ticket);
+            }
+        });
+    }
+
+    /// <param name="steamTicket">Our Steam ticket for a tournament room; null for any other room.</param>
+    private void JoinRoomNow(string code, string url, string? password, string? adminPassword, string? steamTicket = null)
     {
         if (HostedServer.IsRunning)
         {
@@ -610,6 +708,12 @@ internal sealed class MultiplayerClient : INetEventListener
         roomUrl = url;
         roomPassword = string.IsNullOrEmpty(password) ? null : password;
         hostAdminPassword = adminPassword; // the creator of a room is its admin
+        InTournament = steamTicket != null;
+        tournamentTicket = steamTicket;
+        ticketRefusals = 0;
+        steamUncheckedTries = 0;
+        TournamentStarted = false;
+        TournamentOver = false;
         ConnectNow();
     }
 
@@ -620,6 +724,10 @@ internal sealed class MultiplayerClient : INetEventListener
         roomUrl = null;
         roomPassword = null;
         hostAdminPassword = null;
+        InTournament = false;
+        tournamentTicket = null;
+        TournamentStarted = false;
+        TournamentOver = false;
     }
 
     /// <summary>(Re)connects with the configured address and name.</summary>
@@ -661,6 +769,10 @@ internal sealed class MultiplayerClient : INetEventListener
         {
             DropConnection("manual disconnection");
             Notifications.Info(Tr.DisconnectedByUser);
+        }
+        if (InTournament)
+        {
+            ClearRoom(); // leaving a tournament: getting back in goes through the Tournaments screen, with a new ticket
         }
     }
 
@@ -924,6 +1036,24 @@ internal sealed class MultiplayerClient : INetEventListener
             pendingRoomError = null;
             Notifications.Warn(Tr.RoomCreateFailed(createError));
         }
+        if (pendingTournament is { } tournament)
+        {
+            pendingTournament = null;
+            JoinRoomNow(tournament.Code, ModConfig.Current.RoomSocketUri(tournament.Code).ToString(), null, tournament.AdminPassword,
+                tournament.Ticket);
+            return;
+        }
+        if (pendingTournamentNoSteam)
+        {
+            pendingTournamentNoSteam = false;
+            Notifications.Warn(Tr.TournamentNeedsSteam);
+        }
+        if (pendingCodeJoin is { } typedCode)
+        {
+            pendingCodeJoin = null;
+            JoinRoom(typedCode, null); // a protected lobby refuses: the password is asked then
+            return;
+        }
         if (!ModConfig.Current.AutoConnect && lastConnectAttempt == double.NegativeInfinity && !userDisconnected)
         {
             // AutoConnect = false: wait for the player to connect from the menu.
@@ -1001,6 +1131,15 @@ internal sealed class MultiplayerClient : INetEventListener
             if (roomPassword != null)
             {
                 headers["x-room-password"] = roomPassword;
+            }
+            if (InTournament)
+            {
+                if (tournamentTicket is not { } ticket)
+                {
+                    ModLog.Info("Waiting for a new Steam ticket before joining the tournament");
+                    return; // a new ticket is on its way (OnTournamentTicketRefused). Try again after the reconnection delay
+                }
+                headers["x-steam-ticket"] = ticket;
             }
             var connection = new WsConnection(new Uri(roomUrl!), headers, OnWebOpen, OnWebMessage, OnWebClosed);
             webServer = connection;
@@ -1163,6 +1302,9 @@ internal sealed class MultiplayerClient : INetEventListener
         ServerReasons.Kicked => Tr.Kicked,
         ServerReasons.RoomNotFound => Tr.RoomNotFound,
         ServerReasons.RateLimited => Tr.RateLimited,
+        ServerReasons.TournamentStarted => Tr.TournamentAlreadyStarted,
+        ServerReasons.NeedsSteam => Tr.TournamentNeedsSteam,
+        ServerReasons.Replaced => Tr.TournamentReplaced,
         _ when code.StartsWith(ServerReasons.VersionMismatch + ":") => Tr.VersionMismatch(code[(ServerReasons.VersionMismatch.Length + 1)..]),
         _ => code, // older server: plain-text message
     };
@@ -1239,6 +1381,23 @@ internal sealed class MultiplayerClient : INetEventListener
                 {
                     int id = reader.GetInt();
                     bool spectating = reader.GetBool();
+                    if (id == LocalId)
+                    {
+                        // Tournament room, not on the player list: the server keeps us watching.
+                        if (spectating)
+                        {
+                            Notifications.Info(Tr.TournamentWatchOnly);
+                            if (!IsSpectating)
+                            {
+                                IsSpectating = true;
+                                if (GameAccess.IsIngameScene(GameAccess.CurrentScene))
+                                {
+                                    GameAccess.RetryCurrentLevel(); // frozen on the start line, like any spectator
+                                }
+                            }
+                        }
+                        break;
+                    }
                     if (Players.TryGetValue(id, out RemotePlayer? p))
                     {
                         p.IsSpectator = spectating;
@@ -1285,6 +1444,7 @@ internal sealed class MultiplayerClient : INetEventListener
                 case MessageType.ServerEvent:
                 {
                     var (code, arg, fallback) = Msg.GetCodedText(reader);
+                    TrackTournament(code);
                     if ((Tr.ServerEvent(code, arg) ?? NonEmpty(fallback)) is { } text)
                     {
                         Notifications.Show(text, new Microsoft.Xna.Framework.Color(255, 210, 90));
@@ -1388,6 +1548,8 @@ internal sealed class MultiplayerClient : INetEventListener
             return;
         }
         ModLog.Info($"Connected to room {serverAddress}");
+        ticketRefusals = 0; // the website took our ticket, so a later refusal gets a new one again
+        steamUncheckedTries = 0;
         int skin = localSkin;
         Send(w => Msg.Hello(w, playerName, skin, ProtocolInfo.OwnCapabilities), DeliveryMethod.ReliableOrdered);
     }
@@ -1406,6 +1568,11 @@ internal sealed class MultiplayerClient : INetEventListener
         {
             return; // closed on purpose (Connect/Disconnect from the menu)
         }
+        if (InTournament && closeReason is "HTTP_STATUS:401" or "HTTP_STATUS:503")
+        {
+            OnTournamentTicketRefused(closeReason == "HTTP_STATUS:401");
+            return;
+        }
         string code = NormalizeCloseReason(closeReason);
         string reason = code switch
         {
@@ -1413,7 +1580,8 @@ internal sealed class MultiplayerClient : INetEventListener
             ServerReasons.Unreachable => Tr.ServerUnreachable(serverAddress),
             _ => TranslateReasonCode(code),
         };
-        if (code is ServerReasons.BadPassword or ServerReasons.Kicked or ServerReasons.RoomNotFound
+        if (code is ServerReasons.BadPassword or ServerReasons.Kicked or ServerReasons.RoomNotFound or ServerReasons.Replaced
+                or ServerReasons.TournamentStarted or ServerReasons.NeedsSteam
             || code.StartsWith(ServerReasons.VersionMismatch, StringComparison.Ordinal))
         {
             // Retrying would be pointless: wait for the player to act (password prompt, F8 menu).
@@ -1429,6 +1597,94 @@ internal sealed class MultiplayerClient : INetEventListener
         }
         webServer = null;
         ResetSessionState();
+    }
+
+    /// <summary>
+    /// The website refused to let us into the tournament room before the connection opened. Two cases. A 401 means our
+    /// Steam ticket is missing or bad: a new one is fetched and tried once, and a second refusal stops. A 503 means Steam
+    /// couldn't check it: we try again after the usual delay. Network thread.
+    /// </summary>
+    private void OnTournamentTicketRefused(bool badTicket)
+    {
+        webServer = null;
+        ResetSessionState();
+        if (!badTicket)
+        {
+            if (++steamUncheckedTries >= SteamUncheckedMaxTries)
+            {
+                userDisconnected = true; // Steam has been unreachable for a while. Wait for the player to join again
+                ModLog.Warn($"Tournament join: Steam couldn't check our ticket {SteamUncheckedMaxTries} times in a row, giving up");
+                NotifyDisconnect(Tr.TournamentNeedsSteam);
+                return;
+            }
+            // The next attempt waits SteamUncheckedRetrySeconds instead of the usual delay.
+            lastConnectAttempt = NetClock.Now + SteamUncheckedRetrySeconds - ReconnectDelaySeconds;
+            ModLog.Warn($"Tournament join: Steam couldn't check our ticket. Retrying in {SteamUncheckedRetrySeconds} s.");
+            NotifyDisconnect(Tr.RetryingEvery(Tr.TournamentSteamUnreachable, (int)SteamUncheckedRetrySeconds));
+            return;
+        }
+        SteamTicket.Invalidate();
+        if (++ticketRefusals >= 2)
+        {
+            userDisconnected = true; // retrying would be pointless. Wait for the player (Steam running, then join again)
+            ModLog.Warn("Tournament join: our Steam ticket was refused again");
+            NotifyDisconnect(Tr.TournamentNeedsSteam);
+            return;
+        }
+        ModLog.Warn($"Tournament join: our Steam ticket was refused, getting a new one. Retrying in {ReconnectDelaySeconds} s.");
+        NotifyDisconnect(Tr.RetryingEvery(Tr.TournamentTicketRefused, (int)ReconnectDelaySeconds));
+        tournamentTicket = null;
+        if (Interlocked.Exchange(ref fetchingTicket, 1) == 1)
+        {
+            return;
+        }
+        Task.Run(async () =>
+        {
+            try
+            {
+                string? ticket = await SteamTicket.GetHexAsync();
+                if (!InTournament)
+                {
+                    return; // left meanwhile
+                }
+                if (ticket == null)
+                {
+                    userDisconnected = true;
+                    NotifyDisconnect(Tr.TournamentNeedsSteam);
+                }
+                else
+                {
+                    tournamentTicket = ticket;
+                }
+            }
+            finally
+            {
+                Interlocked.Exchange(ref fetchingTicket, 0);
+            }
+        });
+    }
+
+    /// <summary>Follows the tournament room's state from its events (network thread), for the admin menu.</summary>
+    private void TrackTournament(string eventCode)
+    {
+        if (!InTournament)
+        {
+            return;
+        }
+        switch (eventCode)
+        {
+            case ServerEvents.TournamentStarted:
+                TournamentStarted = true;
+                break;
+            case ServerEvents.TournamentEnded:
+            case ServerEvents.TournamentFinished:
+                TournamentStarted = true;
+                TournamentOver = true;
+                break;
+            default:
+                return;
+        }
+        AdminVersion++; // the admin menu shows the tournament buttons by this state
     }
 
     public void OnNetworkError(IPEndPoint endPoint, SocketError socketError) =>

@@ -1,0 +1,76 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><style>html,body{margin:0;padding:0;background:#141212;overflow:hidden}svg{display:block}</style></head>
+<body>
+<!-- Picture of the "settings" room: two gears. Rendered with headless Edge (see render.bat). -->
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1250" viewBox="0 190 800 1250">
+  <defs>
+    <filter id="grit" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="3" seed="7" result="n"/>
+      <feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.55 -0.18" result="a"/>
+      <feComposite in="a" in2="SourceGraphic" operator="in"/>
+    </filter>
+    <filter id="rough"><feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="13"/><feDisplacementMap in="SourceGraphic" scale="6"/></filter>
+    <pattern id="dotsBg" width="30" height="30" patternUnits="userSpaceOnUse" patternTransform="rotate(30)">
+      <circle cx="15" cy="15" r="5" fill="#2a2525"/>
+    </pattern>
+    <pattern id="dotsGold" width="22" height="22" patternUnits="userSpaceOnUse" patternTransform="rotate(30)">
+      <circle cx="11" cy="11" r="6.5" fill="#a8641a"/>
+    </pattern>
+    <pattern id="dotsRed" width="18" height="18" patternUnits="userSpaceOnUse" patternTransform="rotate(30)">
+      <circle cx="9" cy="9" r="5" fill="#8f1d1d"/>
+    </pattern>
+    <radialGradient id="glow" cx="50%" cy="45%" r="55%">
+      <stop offset="0" stop-color="#3a2f2a"/><stop offset="1" stop-color="#141212"/>
+    </radialGradient>
+    <!-- a gear: 10 teeth around a ring, centered on 0 0 -->
+    <path id="gear" d="M-34 -200 L34 -200 L44 -150 Q70 -142 92 -128 L134 -156 L182 -108 L154 -66 Q168 -44 176 -18 L226 -8 L226 60 L176 70 Q168 96 154 118 L182 160 L134 208 L92 180 Q70 194 44 202 L34 252 L-34 252 L-44 202 Q-70 194 -92 180 L-134 208 L-182 160 L-154 118 Q-168 96 -176 70 L-226 60 L-226 -8 L-176 -18 Q-168 -44 -154 -66 L-182 -108 L-134 -156 L-92 -128 Q-70 -142 -44 -150 Z" transform="translate(0 -26)"/>
+    <clipPath id="bigClip"><use href="#gear" transform="translate(360 700)"/></clipPath>
+    <clipPath id="smallClip"><use href="#gear" transform="translate(500 1080) scale(0.62) rotate(18)"/></clipPath>
+  </defs>
+
+  <!-- background -->
+  <rect width="800" height="1800" fill="url(#glow)"/>
+  <rect width="800" height="1800" fill="url(#dotsBg)" opacity="0.6"/>
+  <g stroke="#0a0909" stroke-width="40" opacity="0.55">
+    <line x1="-100" y1="300" x2="900" y2="-60"/><line x1="-100" y1="1700" x2="900" y2="1340"/>
+  </g>
+  <!-- burst -->
+  <g fill="#e8452c" opacity="0.92" filter="url(#rough)">
+    <path d="M400 860 L450 470 L510 790 L720 520 L580 860 L800 880 L580 940 L730 1200 L490 1010 L420 1320 L370 1010 L110 1200 L270 940 L0 900 L250 850 L80 540 L330 790 Z"/>
+  </g>
+  <g fill="url(#dotsRed)" opacity="0.8">
+    <path d="M400 860 L510 790 L720 520 L580 860 L800 880 L580 940 L730 1200 L490 1010 Z"/>
+  </g>
+
+  <g filter="url(#rough)" stroke="#0b0a0a" stroke-linejoin="round">
+    <!-- big gold gear -->
+    <use href="#gear" transform="translate(360 700)" fill="#f6c03a" stroke-width="16"/>
+    <g clip-path="url(#bigClip)" stroke="none">
+      <rect x="400" y="430" width="260" height="560" fill="#d68d1f"/>
+      <rect x="440" y="430" width="220" height="560" fill="url(#dotsGold)"/>
+    </g>
+    <use href="#gear" transform="translate(360 700)" fill="none" stroke-width="16"/>
+    <circle cx="360" cy="700" r="92" fill="#2b2626" stroke-width="16"/>
+    <circle cx="360" cy="700" r="44" fill="#141212" stroke-width="12"/>
+    <path d="M220 560 Q260 500 330 480" fill="none" stroke="#fff6d6" stroke-width="16" stroke-linecap="round"/>
+
+    <!-- small cream gear -->
+    <use href="#gear" transform="translate(500 1080) scale(0.62) rotate(18)" fill="#fff6d6" stroke-width="26"/>
+    <g clip-path="url(#smallClip)" stroke="none">
+      <rect x="520" y="900" width="200" height="360" fill="#d9cfbe"/>
+    </g>
+    <use href="#gear" transform="translate(500 1080) scale(0.62) rotate(18)" fill="none" stroke-width="26"/>
+    <circle cx="500" cy="1064" r="56" fill="#e8452c" stroke-width="14"/>
+    <circle cx="500" cy="1064" r="22" fill="#141212" stroke-width="10"/>
+  </g>
+
+  <!-- sparkles -->
+  <g fill="#fff6d6" stroke="#0b0a0a" stroke-width="8" stroke-linejoin="round">
+    <path d="M640 330 L654 372 L696 386 L654 400 L640 442 L626 400 L584 386 L626 372 Z"/>
+    <path d="M150 1110 L160 1140 L190 1150 L160 1160 L150 1190 L140 1160 L110 1150 L140 1140 Z"/>
+  </g>
+
+  <!-- paper grit over everything -->
+  <rect width="800" height="1800" fill="#000" filter="url(#grit)"/>
+</svg>
+</body></html>

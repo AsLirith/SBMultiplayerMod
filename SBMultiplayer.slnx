@@ -4,4 +4,7 @@
     <Project Path="src/SBMultiplayer.Protocol/SBMultiplayer.Protocol.csproj" />
     <Project Path="src/SBMultiplayer.Server/SBMultiplayer.Server.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/SBMultiplayer.Server.Tests/SBMultiplayer.Server.Tests.csproj" />
+  </Folder>
 </Solution>

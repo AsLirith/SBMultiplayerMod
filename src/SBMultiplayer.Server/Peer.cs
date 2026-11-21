@@ -19,6 +19,12 @@ public interface IPeer
 
     /// <summary>Closes the connection and tells the player why.</summary>
     void Disconnect(string reason);
+
+    /// <summary>Steam ID verified by the website for this connection (tournament rooms), or null.</summary>
+    string? SteamId => null;
+
+    /// <summary>Steam persona name looked up by the website for this connection, or null.</summary>
+    string? SteamName => null;
 }
 
 /// <summary>A player connected through the LiteNetLib UDP listener.</summary>

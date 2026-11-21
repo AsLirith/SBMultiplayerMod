@@ -84,6 +84,15 @@ public static class ServerReasons
 
     /// <summary>Web rooms: the website could not reach the room's game server.</summary>
     public const string Unreachable = "UNREACHABLE";
+
+    /// <summary>Tournament rooms: the tournament has started and this Steam account isn't on its roster.</summary>
+    public const string TournamentStarted = "TOURNAMENT_STARTED";
+
+    /// <summary>Tournament rooms: the connection carries no verified Steam account.</summary>
+    public const string NeedsSteam = "TOURNAMENT_NEEDS_STEAM";
+
+    /// <summary>Tournament rooms: the same Steam account connected again. This older connection was closed.</summary>
+    public const string Replaced = "REPLACED";
 }
 
 /// <summary>
@@ -122,6 +131,12 @@ public static class ServerEvents
     public const string HuntersWin = "HUNTERS_WIN";
     /// <summary>Hide and Seek: time is up. Argument = names of the surviving mice, comma-separated.</summary>
     public const string MiceSurvived = "MICE_SURVIVED";
+    /// <summary>Tournament: the host started it and the roster is locked. Argument: the host's name.</summary>
+    public const string TournamentStarted = "TOURNAMENT_STARTED";
+    /// <summary>Tournament: the mode's end was reached. Argument: name of the winner (first place).</summary>
+    public const string TournamentFinished = "TOURNAMENT_FINISHED";
+    /// <summary>Tournament: the host ended it early and nothing is recorded. Argument: the host's name.</summary>
+    public const string TournamentEnded = "TOURNAMENT_ENDED";
 }
 
 /// <summary>Replies to chat commands, sent to the issuer only and translated by the client. Argument depends on the code.</summary>
@@ -164,6 +179,10 @@ public enum AdminCommand : byte
     ResetMatch = 7,
     /// <summary>Hide and Seek: argument = id of the player who will be the next hunter (-1 = random).</summary>
     SetHunter = 8,
+    /// <summary>Tournament rooms: locks the roster to the players present and starts the first round.</summary>
+    StartTournament = 9,
+    /// <summary>Tournament rooms: ends the tournament early. Nothing is recorded.</summary>
+    EndTournament = 10,
 }
 
 public enum MessageType : byte
