@@ -59,6 +59,7 @@ internal static class Plugin
             ModLog.Info($"Patched: {method.DeclaringType?.FullName}.{method.Name}");
         }
         Net.UpdateCheck.Start();
+        Net.LeaderboardUploads.Start();
         Net.WebJoin.Start();
     }
 

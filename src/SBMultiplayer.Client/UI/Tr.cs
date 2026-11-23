@@ -89,6 +89,14 @@ internal static class Tr
         _ => T("Auto (the game's)", "Auto (celle du jeu)"),
     };
     public static string CheckForUpdates => T("Tell me about mod updates", "Signaler les mises à jour du mod");
+    public static string SubmitToLeaderboards => T("Upload my times to leaderboards", "Envoyer mes temps aux classements");
+    public static string SubmitToLeaderboardsHint => T(
+        "Allowed by the game's developers. Not in Hide and Seek, nor after using the spectator camera on a map.",
+        "Autorisé par les développeurs du jeu. Pas en Cache-cache, ni après la caméra spectateur sur une map.");
+    public static string UploadsOffInSettings => T("uploads off in its settings", "envoi désactivé dans ses réglages");
+    public static string UploadsOffRemotely => T("uploads paused by the developers", "envoi suspendu par les développeurs");
+    public static string OtherHarmonyMod => T("another Harmony mod", "un autre mod Harmony");
+    public static string UploadsSpectatorCamera => T("spectator camera used, restart the map", "caméra spectateur utilisée, recommence la map");
     public static string MultiplayerButton => T("Multiplayer", "Multijoueur");
 
     // ---------- Multiplayer page (main menu > Multiplayer) ----------

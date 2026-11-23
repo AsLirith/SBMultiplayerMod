@@ -26,7 +26,7 @@ Line numbers refer to `_decompiled/STUNTBOOST/SE/` and change with every game up
 
 - Run submission is blocked if any of these assemblies is loaded: `0Harmony`, `BepInEx*`, `MelonLoader`, `MonoMod.*`. Same if `SaveState.Gameplay.ModdingMode` (official "Modding Mode" option) is on, or if some gameplay settings differ from their defaults.
 - Used by `GlobalGame.SubmitRunIfRecord`. When blocked, the run is **neither uploaded nor saved locally** ("run not stored or uploaded").
-- Consequence: with Harmony loaded, the official leaderboards are protected automatically (which is what we want). Players don't keep their personal records though, so the mod tracks its own times.
+- Since 1.4.0 (agreed with the developers), the mod's postfix removes the "mod: 0Harmony" reason when `Net/LeaderboardUploads.BlockReason()` has nothing against the run: uploads on in the mod's settings, remote switch `leaderboards.json` (allowRunUploads, minimumVersion) allowing it, every Harmony patch owned by the mod, no Hide and Seek round, free camera not unlocked by the spectator mode since the last fresh start. Otherwise it's replaced by the mod's reason. The game's other reasons are never touched. The notice is built once per level scene (and on Modding Mode changes); submission calls `GetReasons` again at the finish.
 
 ## Game loop
 

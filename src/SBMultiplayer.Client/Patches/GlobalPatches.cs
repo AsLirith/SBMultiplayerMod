@@ -64,8 +64,9 @@ internal static class LevelFinishedPatch
 
 /// <summary>
 /// The game lists what disqualifies a run from the official leaderboards (shown in the "modded" notice in the
-/// top-left corner). It detects our Harmony library as "mod: 0Harmony": we show the mod's name and version instead.
-/// The list stays non-empty, so runs are still never uploaded.
+/// top-left corner), and refuses the run (no upload, no local save) if that list isn't empty. It detects our Harmony
+/// library as "mod: 0Harmony": the developers allow runs with the mod, so that reason is removed when
+/// <see cref="LeaderboardUploads.BlockReason"/> has nothing against the run, and replaced by the mod's own reason otherwise.
 /// </summary>
 [HarmonyPatch(typeof(RunUploadBlockers), nameof(RunUploadBlockers.GetReasons))]
 internal static class ModdedNoticePatch
@@ -73,11 +74,17 @@ internal static class ModdedNoticePatch
     private static void Postfix(List<string> __result)
     {
         int index = __result.IndexOf("mod: 0Harmony");
-        if (index >= 0)
+        if (index < 0)
         {
-            __result[index] = Compatibility.IsCompatible
-                ? $"mod: SBMultiplayer v{SBMultiplayer.Client.UI.MultiplayerMenu.Version}"
-                : SBMultiplayer.Client.UI.Tr.IncompatibleNotice(SBMultiplayer.Client.UI.MultiplayerMenu.Version);
+            return; // the game skipped its mod check ("submit with cheats", dev_ accounts)
+        }
+        if (LeaderboardUploads.BlockReason() is string reason)
+        {
+            __result[index] = reason;
+        }
+        else
+        {
+            __result.RemoveAt(index);
         }
     }
 }

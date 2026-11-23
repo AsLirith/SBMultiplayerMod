@@ -111,6 +111,15 @@ internal sealed class ModConfig
     /// <summary>Checks GitHub at startup for a newer version of the mod (reads the public release page only).</summary>
     public bool CheckForUpdates { get; set; } = true;
 
+    /// <summary>Lets the game upload runs to the official leaderboards (and save personal records) with the mod loaded.</summary>
+    public bool SubmitToLeaderboards { get; set; } = true;
+
+    /// <summary>Last answer of the developers' remote switch (<see cref="LeaderboardUploads.SwitchUrl"/>): kept while offline.</summary>
+    public bool LeaderboardUploadsDisabledRemotely { get; set; }
+
+    /// <summary>Message that came with the remote switch.</summary>
+    public string LeaderboardRemoteMessage { get; set; } = "";
+
     /// <summary>Hosting: list the game publicly in F8 > Public games (anyone on Steam can join it).</summary>
     public bool PublicGame { get; set; }
 

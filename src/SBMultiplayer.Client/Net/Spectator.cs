@@ -147,11 +147,17 @@ internal static class Spectator
         {
             flyToggler = toggler; // new level scene: remember its own setting
             flyWasAllowed = toggler != null && (bool)CanFlyProperty.GetValue(toggler)!;
+            LeaderboardUploads.FreeCameraGranted = false;
         }
         if (toggler != null)
         {
             // Hide and Seek: no free camera for the players of the round (frozen mice get it from the freeze).
-            CanFlyProperty.SetValue(toggler, !HideSeek.BlocksFreeCamera && (watching || flyWasAllowed));
+            bool canFly = !HideSeek.BlocksFreeCamera && (watching || flyWasAllowed);
+            CanFlyProperty.SetValue(toggler, canFly);
+            if (canFly && !flyWasAllowed)
+            {
+                LeaderboardUploads.FreeCameraGranted = true; // runs of this level stay off the leaderboards until a fresh start
+            }
         }
     }
 

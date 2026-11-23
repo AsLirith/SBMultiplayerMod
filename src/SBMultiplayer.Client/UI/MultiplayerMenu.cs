@@ -434,6 +434,8 @@ internal static class MultiplayerMenu
             })),
             Check(Tr.GameMenuButtonSetting, ModSettings.GameMenuButton),
             Check(Tr.CheckForUpdates, ModSettings.CheckForUpdates),
+            Check(Tr.SubmitToLeaderboards, ModSettings.SubmitToLeaderboards),
+            Text(Tr.SubmitToLeaderboardsHint),
             Button(Tr.Back, close)
         );
     });

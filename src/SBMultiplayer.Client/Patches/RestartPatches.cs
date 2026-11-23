@@ -72,6 +72,10 @@ internal static class LoadCheckpointPatch
         {
             bool first = cpInfo is FirstCheckpoint;
             StartGate.OnLoadCheckpoint(__instance, first, TimerRef(__instance));
+            if (first && !Spectator.IsWatching)
+            {
+                LeaderboardUploads.FreeCameraGranted = false; // fresh start, free camera back to the level's own setting
+            }
             HideSeek.OnRespawn();
         }
         catch (Exception e)

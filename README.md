@@ -4,7 +4,7 @@ Unofficial multiplayer mod for [STUNTBOOST](https://store.steampowered.com/app/2
 
 Works on Linux (native version of the game) and Windows.
 
-⚠️ **While the mod is loaded, the game does not save any time**: not on the official leaderboards (the game blocks submissions by itself when a mod is detected), and not locally either. Remove the launch option to play normally again.
+✅ **Your times still count**: with the agreement of STUNTBOOST's developers, runs made with the mod are uploaded to the official leaderboards and saved as personal records, like without it. Exceptions: Hide and Seek, runs after using the spectator camera on a map (restart the map), and any other Harmony mod loaded alongside. The game's own checks (Modding Mode, changed gameplay settings...) still apply. Turn it off in F8 > Settings > Interface. The developers can pause uploads for the mod at any time through [leaderboards.json](leaderboards.json), read by the mod from GitHub every 15 minutes (nothing about you is sent).
 
 ## Features
 
