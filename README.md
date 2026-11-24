@@ -43,19 +43,8 @@ Works on Linux (native version of the game) and Windows.
 
 ## Installation
 
-1. Download `SBMultiplayer-<version>.zip` from the latest [release](../../releases/latest).
-2. Copy the `SBMultiplayer` folder into the game folder (Steam > STUNTBOOST > right click > Manage > Browse local files).
-3. In Steam > STUNTBOOST > Properties > Launch options, paste the line for your system and replace the path with the real path to your game folder:
-   - **Linux**:
-     ```
-     DOTNET_STARTUP_HOOKS="/path/to/STUNTBOOST/SBMultiplayer/SBMultiplayer.Client.dll" %command%
-     ```
-   - **Windows** (no space before `&&`):
-     ```
-     cmd /c "set DOTNET_STARTUP_HOOKS=C:\path\to\STUNTBOOST\SBMultiplayer\SBMultiplayer.Client.dll&& %command%"
-     ```
-     With a default Steam install, `C:\path\to\STUNTBOOST` is `C:\Program Files (x86)\Steam\steamapps\common\STUNTBOOST`.
-4. Start the game. The game's "modded" notice shows "SBMultiplayer" with its version: the mod is loaded.
+1. Copy the `SBMultiplayer-<version>.zip` from the latest [release](../../releases/latest) into the game folder <br> (Steam > STUNTBOOST > right click > Manage > Browse local files).
+3. Start the game. The game's "modded" notice shows "SBMultiplayer" with its version: the mod is loaded.
 
 **Updating**: overwrite the files in the `SBMultiplayer` folder; your settings are kept. Since 0.19.0, newer versions play with older ones: a feature the other side doesn't have yet is simply hidden.
 
