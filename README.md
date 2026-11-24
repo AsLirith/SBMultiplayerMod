@@ -46,9 +46,9 @@ Works on Linux (native version of the game) and Windows.
 1. Copy the `SBMultiplayer-<version>.zip` from the latest [release](../../releases/latest) into the game folder <br> (Steam > STUNTBOOST > right click > Manage > Browse local files).
 3. Start the game. The game's "modded" notice shows "SBMultiplayer" with its version: the mod is loaded.
 
-**Updating**: overwrite the files in the `SBMultiplayer` folder; your settings are kept. Since 0.19.0, newer versions play with older ones: a feature the other side doesn't have yet is simply hidden.
+**Updating**: copy the latest [release zip](../../releases/latest) into the game folder again. Your settings are kept. Since 0.19.0, newer versions play with older ones: a feature the other side doesn't have yet is simply hidden.
 
-**Uninstalling**: remove the launch option (and the `SBMultiplayer` folder if you like).
+**Uninstalling**: remove or rename the `SBMultiplayer` folder from the game folder.
 
 ## Getting started
 
